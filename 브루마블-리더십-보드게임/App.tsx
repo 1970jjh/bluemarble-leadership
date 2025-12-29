@@ -117,6 +117,79 @@ const App: React.FC = () => {
     return () => unsubscribe();
   }, [currentSessionId]);
 
+  // --- Firebase: 게임 상태 실시간 구독 ---
+  useEffect(() => {
+    if (!currentSessionId) return;
+
+    const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+    if (!isFirebaseConfigured) return;
+
+    const unsubscribe = firestoreService.subscribeToGameState(currentSessionId, (state) => {
+      if (state) {
+        // 게임 상태 동기화 (다른 사용자가 변경한 경우에만)
+        if (state.lastUpdated && Date.now() - state.lastUpdated < 5000) {
+          setGamePhase(state.phase as GamePhase);
+          setCurrentTurnIndex(state.currentTeamIndex);
+          setDiceValue(state.diceValue || [1, 1]);
+          setActiveCard(state.currentCard);
+          setSharedSelectedChoice(state.selectedChoice);
+          setSharedReasoning(state.reasoning || '');
+          setAiEvaluationResult(state.aiResult);
+          setIsAiProcessing(state.isAiProcessing || false);
+          if (state.gameLogs?.length) {
+            setGameLogs(state.gameLogs);
+          }
+          // 카드가 있으면 모달 표시
+          if (state.currentCard && state.phase === GamePhase.Decision) {
+            setShowCardModal(true);
+          }
+          // 결과가 이미 있으면 모달 닫힌 상태로 (이미 완료된 턴)
+          if (state.aiResult && state.phase !== GamePhase.Decision) {
+            setShowCardModal(false);
+          }
+        }
+      }
+    });
+
+    return () => unsubscribe();
+  }, [currentSessionId]);
+
+  // --- Firebase: 게임 상태 저장 (변경 시) ---
+  const saveGameStateToFirebase = useCallback(async () => {
+    if (!currentSessionId) return;
+
+    const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+    if (!isFirebaseConfigured) return;
+
+    try {
+      await firestoreService.updateGameState(currentSessionId, {
+        sessionId: currentSessionId,
+        phase: gamePhase,
+        currentTeamIndex: currentTurnIndex,
+        currentTurn: 0,
+        diceValue: diceValue,
+        currentCard: activeCard,
+        selectedChoice: sharedSelectedChoice,
+        reasoning: sharedReasoning,
+        aiResult: aiEvaluationResult,
+        isSubmitted: !!aiEvaluationResult,
+        isAiProcessing: isAiProcessing,
+        gameLogs: gameLogs,
+        lastUpdated: Date.now()
+      });
+    } catch (error) {
+      console.error('Firebase 게임 상태 저장 실패:', error);
+    }
+  }, [currentSessionId, gamePhase, currentTurnIndex, diceValue, activeCard, sharedSelectedChoice, sharedReasoning, aiEvaluationResult, isAiProcessing, gameLogs]);
+
+  // 게임 상태 변경 시 Firebase에 저장
+  useEffect(() => {
+    // 중요한 상태가 변경될 때만 저장
+    if (currentSessionId && (activeCard || aiEvaluationResult || gamePhase !== GamePhase.Idle)) {
+      saveGameStateToFirebase();
+    }
+  }, [activeCard, sharedSelectedChoice, sharedReasoning, aiEvaluationResult, isAiProcessing, gamePhase, currentSessionId, saveGameStateToFirebase]);
+
   // --- Session Logic ---
 
   const handleCreateSession = async (name: string, version: GameVersion, teamCount: number) => {
@@ -292,9 +365,23 @@ const App: React.FC = () => {
     return () => clearInterval(interval);
   }, [gamePhase, turnTimeLeft]);
 
-  const addLog = (message: string) => {
-    setGameLogs(prev => [...prev, message]);
-  };
+  const addLog = useCallback(async (message: string) => {
+    const timestamp = new Date().toLocaleTimeString('ko-KR');
+    const logEntry = `[${timestamp}] ${message}`;
+    setGameLogs(prev => [...prev, logEntry]);
+
+    // Firebase에도 로그 저장
+    if (currentSessionId) {
+      const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+      if (isFirebaseConfigured) {
+        try {
+          await firestoreService.addGameLog(currentSessionId, logEntry);
+        } catch (error) {
+          console.error('Firebase 로그 저장 실패:', error);
+        }
+      }
+    }
+  }, [currentSessionId]);
 
   const nextTurn = useCallback(() => {
     if (!currentSession) return;
@@ -357,8 +444,8 @@ const App: React.FC = () => {
   const handleLandOnSquare = (team: Team, squareIndex: number) => {
     const square = BOARD_SQUARES.find(s => s.index === squareIndex);
     if (!square) return;
-    
-    addLog(`${team.name} LANDED ON ${square.name}`);
+
+    addLog(`📍 [도착] ${team.name} → ${square.name} (${square.type})`);
 
     // Helper to pick random card
     const pickRandomCard = (type: string, fallbackId: string = 'E-001') => {
@@ -372,42 +459,42 @@ const App: React.FC = () => {
 
     if (square.type === SquareType.City) {
       const relevantCards = SAMPLE_CARDS.filter(c => c.type === square.module);
-      selectedCard = relevantCards.length > 0 
-        ? relevantCards[Math.floor(Math.random() * relevantCards.length)] 
+      selectedCard = relevantCards.length > 0
+        ? relevantCards[Math.floor(Math.random() * relevantCards.length)]
         : SAMPLE_CARDS[0];
-      addLog(`Event: ${selectedCard.title}`);
-    } 
+      addLog(`🎴 [카드 선택] ${selectedCard.title} (${square.module})`);
+    }
     else if (square.type === SquareType.GoldenKey) {
       selectedCard = pickRandomCard('Event');
-      addLog(`Chance: ${selectedCard.title}`);
+      addLog(`🗝️ [찬스 카드] ${selectedCard.title}`);
     }
     else if (square.type === SquareType.Fund) {
-      const fundCards = SAMPLE_CARDS.filter(c => c.title.includes("사내 벤처") || c.type === 'Event'); 
+      const fundCards = SAMPLE_CARDS.filter(c => c.title.includes("사내 벤처") || c.type === 'Event');
       selectedCard = fundCards[Math.floor(Math.random() * fundCards.length)];
-      addLog(`Innovation: ${selectedCard.title}`);
+      addLog(`💰 [혁신 카드] ${selectedCard.title}`);
     }
     else if (square.type === SquareType.Space) {
       // Changed to Challenge (Open-Ended)
       selectedCard = pickRandomCard('Challenge', 'C-001');
-      addLog(`Challenge: ${selectedCard.title}`);
+      addLog(`🚀 [도전 카드] ${selectedCard.title}`);
     }
     else if (square.type === SquareType.WorldTour) {
       // Changed to Core Value
       selectedCard = pickRandomCard('CoreValue', 'V-001');
-      addLog(`Core Value: ${selectedCard.title}`);
+      addLog(`🌍 [핵심가치 카드] ${selectedCard.title}`);
     }
     else if (square.type === SquareType.Island) {
       selectedCard = pickRandomCard('Burnout', 'B-001');
-      addLog(`BURNOUT ZONE: ${selectedCard.title}`);
+      addLog(`⚠️ [번아웃 카드] ${selectedCard.title}`);
     }
     else if (square.type === SquareType.Start) {
       updateTeamResources(team.id, { capital: 50 });
-      addLog("Passed Start. +50 Capital.");
+      addLog(`🏁 [출발] ${team.name} +50 자본`);
       nextTurn();
       return;
     }
     else {
-      addLog("Just passing through...");
+      addLog(`👣 [통과] ${team.name} - 특별 이벤트 없음`);
       nextTurn();
       return;
     }
@@ -453,10 +540,10 @@ const App: React.FC = () => {
   const performMove = (die1: number, die2: number) => {
     setDiceValue([die1, die2]);
     setIsRolling(false);
-    
+
     if (!currentTeam) return;
 
-    addLog(`${currentTeam.name} rolled [${die1}, ${die2}]. Moving ${die1+die2} steps.`);
+    addLog(`🎲 [주사위] ${currentTeam.name}: [${die1}] + [${die2}] = ${die1 + die2}칸 이동`);
     moveTeamLogic(currentTeam, die1 + die2);
   };
 
@@ -498,9 +585,16 @@ const App: React.FC = () => {
     const isOpenEnded = !activeCard.choices || activeCard.choices.length === 0;
     if (isOpenEnded && !sharedReasoning) return;
     if (!isOpenEnded && (!sharedSelectedChoice || !sharedReasoning)) return;
-    
+
     setIsAiProcessing(true);
-    addLog(`[DECISION] Team: ${currentTeam.name} | Choice: ${isOpenEnded ? 'Open Answer' : sharedSelectedChoice?.id} | Content: ${sharedReasoning}`);
+    addLog(`📝 [응답 제출] ${currentTeam.name}`);
+    addLog(`   카드: ${activeCard.title} (${activeCard.type})`);
+    addLog(`   상황: ${activeCard.situation.substring(0, 50)}...`);
+    if (!isOpenEnded && sharedSelectedChoice) {
+      addLog(`   선택: [${sharedSelectedChoice.id}] ${sharedSelectedChoice.text}`);
+    }
+    addLog(`   응답: "${sharedReasoning.substring(0, 100)}${sharedReasoning.length > 100 ? '...' : ''}"`);
+    addLog(`🤖 AI 평가 시작...`);
 
     if (!process.env.API_KEY) {
        alert("API Key missing");
@@ -575,7 +669,10 @@ const App: React.FC = () => {
       };
 
       setAiEvaluationResult(result);
-      addLog(`[AI EVAL] Generated. Waiting for confirmation.`);
+      addLog(`✅ [AI 평가 완료] ${currentTeam.name}`);
+      addLog(`   피드백: "${result.feedback.substring(0, 80)}..."`);
+      const scores = result.scoreChanges;
+      addLog(`   점수: C:${scores.capital || 0} E:${scores.energy || 0} T:${scores.trust || 0} Co:${scores.competency || 0} I:${scores.insight || 0}`);
       
     } catch (e) {
       console.error(e);
@@ -589,7 +686,7 @@ const App: React.FC = () => {
     if (aiEvaluationResult && currentTeam && activeCard) {
       // 1. Update Team Resources
       updateTeamResources(currentTeam.id, aiEvaluationResult.scoreChanges);
-      
+
       // 2. Log to Team History
       const turnRecord: TurnRecord = {
         turnNumber: currentSession?.teams[currentTurnIndex].history.length! + 1,
@@ -604,9 +701,15 @@ const App: React.FC = () => {
         timestamp: Date.now()
       };
       updateTeamHistory(currentTeam.id, turnRecord);
-      addLog(`[TURN COMPLETE] Score Applied. Capital Change: ${aiEvaluationResult.scoreChanges.capital}`);
+
+      const scores = aiEvaluationResult.scoreChanges;
+      addLog(`🎯 [점수 적용] ${currentTeam.name}`);
+      addLog(`   자본: ${scores.capital || 0}, 에너지: ${scores.energy || 0}, 신뢰: ${scores.trust || 0}`);
+      addLog(`   역량: ${scores.competency || 0}, 통찰: ${scores.insight || 0}`);
     }
-    
+
+    addLog(`⏭️ [턴 종료] 다음 팀으로 이동`);
+
     // 3. Next Turn
     nextTurn();
   };
@@ -720,6 +823,7 @@ const App: React.FC = () => {
 
     // 팀 게임 화면
     const isMyTurn = participantSession?.teams[currentTurnIndex]?.id === participantTeamId;
+    const activeTeamForViewer = participantSession?.teams[currentTurnIndex];
 
     return (
       <div className="min-h-screen bg-gray-900">
@@ -742,6 +846,24 @@ const App: React.FC = () => {
           aiResult={aiEvaluationResult}
           isProcessing={isAiProcessing}
         />
+
+        {/* 다른 팀 턴 뷰어 모드: 현재 진행 중인 카드가 있고 내 턴이 아니면 읽기 전용 모달 표시 */}
+        {!isMyTurn && activeCard && gamePhase === GamePhase.Decision && (
+          <CardModal
+            card={activeCard}
+            visible={true}
+            timeLeft={turnTimeLeft}
+            selectedChoice={sharedSelectedChoice}
+            reasoning={sharedReasoning}
+            onSelectionChange={() => {}} // 읽기 전용
+            onReasoningChange={() => {}} // 읽기 전용
+            onSubmit={async () => {}} // 읽기 전용
+            result={aiEvaluationResult}
+            isProcessing={isAiProcessing}
+            readOnly={true}
+            teamName={activeTeamForViewer?.name}
+          />
+        )}
       </div>
     );
   }
@@ -852,9 +974,9 @@ const App: React.FC = () => {
 
       {/* Admin Modal (Controlled by Shared State) */}
       {activeCard && showCardModal && (
-        <CardModal 
-          card={activeCard} 
-          visible={true} 
+        <CardModal
+          card={activeCard}
+          visible={true}
           timeLeft={turnTimeLeft}
           // Shared State Props
           selectedChoice={sharedSelectedChoice}
@@ -864,7 +986,8 @@ const App: React.FC = () => {
           onSubmit={handleSharedSubmit}
           result={aiEvaluationResult}
           isProcessing={isAiProcessing}
-          onClose={handleApplyResult} // Changed from nextTurn to handleApplyResult
+          onClose={handleApplyResult}
+          teamName={currentTeam?.name}
         />
       )}
 

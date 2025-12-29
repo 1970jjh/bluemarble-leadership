@@ -151,19 +151,48 @@ export async function addTurnRecord(sessionId: string, teamId: string, record: T
 
 export interface GameState {
   sessionId: string;
-  phase: GamePhase;
+  phase: string; // GamePhase
   currentTeamIndex: number;
   currentTurn: number;
-  lastDiceValue: number;
+  diceValue: [number, number];
+  // 현재 턴의 카드 및 응답 정보
   currentCard: any | null;
-  showMobileView: boolean;
-  showReport: boolean;
+  selectedChoice: { id: string; text: string } | null;
+  reasoning: string;
+  aiResult: {
+    feedback: string;
+    scoreChanges: {
+      capital?: number;
+      energy?: number;
+      reputation?: number;
+      trust?: number;
+      competency?: number;
+      insight?: number;
+    };
+  } | null;
+  isSubmitted: boolean; // 제출 완료 여부
+  isAiProcessing: boolean;
+  // 로그
+  gameLogs: string[];
+  lastUpdated: number;
 }
 
 // 게임 상태 저장/업데이트
 export async function saveGameState(state: GameState): Promise<void> {
   const stateRef = doc(db, GAME_STATE_COLLECTION, state.sessionId);
-  await setDoc(stateRef, state);
+  await setDoc(stateRef, {
+    ...state,
+    lastUpdated: Date.now()
+  }, { merge: true });
+}
+
+// 게임 상태 부분 업데이트
+export async function updateGameState(sessionId: string, updates: Partial<GameState>): Promise<void> {
+  const stateRef = doc(db, GAME_STATE_COLLECTION, sessionId);
+  await updateDoc(stateRef, {
+    ...updates,
+    lastUpdated: Date.now()
+  });
 }
 
 // 게임 상태 가져오기
@@ -175,6 +204,15 @@ export async function getGameState(sessionId: string): Promise<GameState | null>
     return snapshot.data() as GameState;
   }
   return null;
+}
+
+// 게임 로그 추가
+export async function addGameLog(sessionId: string, log: string): Promise<void> {
+  const state = await getGameState(sessionId);
+  const currentLogs = state?.gameLogs || [];
+  await updateGameState(sessionId, {
+    gameLogs: [...currentLogs, `[${new Date().toLocaleTimeString()}] ${log}`]
+  });
 }
 
 // ========================
