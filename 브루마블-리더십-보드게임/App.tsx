@@ -84,6 +84,8 @@ const App: React.FC = () => {
   const [sharedReasoning, setSharedReasoning] = useState('');
   const [aiEvaluationResult, setAiEvaluationResult] = useState<AIEvaluationResult | null>(null);
   const [isAiProcessing, setIsAiProcessing] = useState(false);
+  const [isTeamSaved, setIsTeamSaved] = useState(false);  // 팀이 입력을 저장했는지
+  const [isSaving, setIsSaving] = useState(false);        // 저장 중 여부
 
   // Ref to track local operations in progress (to prevent Firebase from overriding local state)
   const localOperationInProgress = useRef(false);
@@ -267,8 +269,10 @@ const App: React.FC = () => {
         setActiveCard(state.currentCard);
         setSharedSelectedChoice(state.selectedChoice);
         setSharedReasoning(state.reasoning || '');
-        setAiEvaluationResult(state.aiResult);
+        // AI 결과는 관리자 로컬에서만 관리 (Firebase에서 동기화하지 않음)
+        // setAiEvaluationResult(state.aiResult);
         setIsAiProcessing(state.isAiProcessing || false);
+        setIsTeamSaved(state.isSubmitted || false);  // 팀 저장 완료 여부
         setIsRolling(state.phase === GamePhase.Rolling);
 
         // gameLogs는 길이가 다를 때만 업데이트 (배열 참조 비교로 인한 무한 루프 방지)
@@ -631,7 +635,7 @@ const App: React.FC = () => {
 
   const nextTurn = useCallback(() => {
     if (!currentSession) return;
-    
+
     // Reset Shared State
     setShowCardModal(false);
     setActiveCard(null);
@@ -639,6 +643,8 @@ const App: React.FC = () => {
     setSharedReasoning('');
     setAiEvaluationResult(null);
     setIsAiProcessing(false);
+    setIsTeamSaved(false);
+    setIsSaving(false);
 
     setGamePhase(GamePhase.Idle);
     setTurnTimeLeft(120);
@@ -885,39 +891,58 @@ const App: React.FC = () => {
     }, 1000);
   };
 
-  // --- AI Evaluation & Submission ---
+  // --- 팀 입력 저장 (AI 호출 없이) ---
 
-  const handleSharedSubmit = async () => {
+  const handleTeamSaveOnly = async () => {
     if (!currentTeam || !activeCard) return;
-    // 이미 처리 중이면 중복 제출 방지
-    if (isAiProcessing) return;
+    if (isSaving || isTeamSaved) return;
 
-    // Check constraints based on open-ended vs choice
     const isOpenEnded = !activeCard.choices || activeCard.choices.length === 0;
     if (isOpenEnded && !sharedReasoning) return;
     if (!isOpenEnded && (!sharedSelectedChoice || !sharedReasoning)) return;
 
-    setIsAiProcessing(true);
+    setIsSaving(true);
 
-    // 즉시 Firebase에 AI 처리 중 상태 저장 (다른 팀원들이 제출 못하도록)
+    // Firebase에 팀 입력 저장 (AI 결과 없이)
     const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
     if (isFirebaseConfigured && currentSessionId) {
-      firestoreService.updateGameState(currentSessionId, {
-        sessionId: currentSessionId,
-        phase: gamePhase,
-        currentTeamIndex: currentTurnIndex,
-        currentTurn: 0,
-        diceValue: diceValue,
-        currentCard: activeCard,
-        selectedChoice: sharedSelectedChoice,
-        reasoning: sharedReasoning,
-        aiResult: null,
-        isSubmitted: true,
-        isAiProcessing: true,
-        gameLogs: gameLogsRef.current,
-        lastUpdated: Date.now()
-      }).catch(err => console.error('Firebase 상태 저장 실패:', err));
+      try {
+        await firestoreService.updateGameState(currentSessionId, {
+          sessionId: currentSessionId,
+          phase: gamePhase,
+          currentTeamIndex: currentTurnIndex,
+          currentTurn: 0,
+          diceValue: diceValue,
+          currentCard: activeCard,
+          selectedChoice: sharedSelectedChoice,
+          reasoning: sharedReasoning,
+          aiResult: null,
+          isSubmitted: true,      // 팀이 저장 완료
+          isAiProcessing: false,  // AI는 아직 실행 안됨
+          gameLogs: gameLogsRef.current,
+          lastUpdated: Date.now()
+        });
+      } catch (err) {
+        console.error('Firebase 팀 입력 저장 실패:', err);
+        setIsSaving(false);
+        return;
+      }
     }
+
+    setIsTeamSaved(true);
+    setIsSaving(false);
+  };
+
+  // --- 관리자용 AI 평가 실행 ---
+
+  const handleAdminAISubmit = async () => {
+    if (!currentTeam || !activeCard) return;
+    if (isAiProcessing) return;
+    if (!isTeamSaved) return;  // 팀이 먼저 저장해야 함
+
+    const isOpenEnded = !activeCard.choices || activeCard.choices.length === 0;
+
+    setIsAiProcessing(true);
 
     // 리포트용 구조화된 로그 기록
     addLog(`[턴] ${currentTeam.name} | 카드: ${activeCard.title} (${activeCard.type})`);
@@ -1002,25 +1027,8 @@ const App: React.FC = () => {
       setAiEvaluationResult(result);
       setIsAiProcessing(false);
 
-      // 즉시 Firebase에 AI 결과 저장 (모든 팀원에게 결과 표시)
-      const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
-      if (isFirebaseConfigured && currentSessionId) {
-        firestoreService.updateGameState(currentSessionId, {
-          sessionId: currentSessionId,
-          phase: gamePhase,
-          currentTeamIndex: currentTurnIndex,
-          currentTurn: 0,
-          diceValue: diceValue,
-          currentCard: activeCard,
-          selectedChoice: sharedSelectedChoice,
-          reasoning: sharedReasoning,
-          aiResult: result,
-          isSubmitted: true,
-          isAiProcessing: false,
-          gameLogs: gameLogsRef.current,
-          lastUpdated: Date.now()
-        }).catch(err => console.error('Firebase 결과 저장 실패:', err));
-      }
+      // AI 결과는 관리자만 로컬에서 확인 (Firebase에 저장하지 않음)
+      // ACCEPT & CONTINUE 시 점수가 적용되고 로그에 기록됨
 
       // 리포트용 AI 평가 결과 로그
       const scores = result.scoreChanges;
@@ -1448,9 +1456,9 @@ const App: React.FC = () => {
             setSharedSelectedChoice(choice);
             setSharedReasoning(reason);
           }}
-          onSubmit={handleSharedSubmit}
-          aiResult={aiEvaluationResult}
-          isProcessing={isAiProcessing}
+          onSubmit={handleTeamSaveOnly}
+          isTeamSaved={isTeamSaved}
+          isSaving={isSaving}
         />
 
         {/* 다른 팀 턴 뷰어 모드: 현재 진행 중인 카드가 있고 내 턴이 아니면 읽기 전용 모달 표시 */}
@@ -1561,8 +1569,8 @@ const App: React.FC = () => {
            </div>
            {monitoredTeam && (
              <div className="w-full max-w-md h-full overflow-y-auto rounded-3xl border-8 border-gray-900 bg-black shadow-2xl">
-               <MobileTeamView 
-                 team={monitoredTeam} 
+               <MobileTeamView
+                 team={monitoredTeam}
                  activeTeamName={currentTeam?.name || ''}
                  isMyTurn={currentTeam?.id === monitoredTeam.id}
                  gamePhase={gamePhase}
@@ -1576,9 +1584,9 @@ const App: React.FC = () => {
                    setSharedSelectedChoice(choice);
                    setSharedReasoning(reason);
                  }}
-                 onSubmit={handleSharedSubmit}
-                 aiResult={aiEvaluationResult}
-                 isProcessing={isAiProcessing}
+                 onSubmit={handleTeamSaveOnly}
+                 isTeamSaved={isTeamSaved}
+                 isSaving={isSaving}
                />
              </div>
            )}
@@ -1596,11 +1604,15 @@ const App: React.FC = () => {
           reasoning={sharedReasoning}
           onSelectionChange={setSharedSelectedChoice}
           onReasoningChange={setSharedReasoning}
-          onSubmit={handleSharedSubmit}
+          onSubmit={handleTeamSaveOnly}
           result={aiEvaluationResult}
           isProcessing={isAiProcessing}
           onClose={handleApplyResult}
           teamName={currentTeam?.name}
+          // 관리자 뷰 전용 props
+          isAdminView={true}
+          isTeamSaved={isTeamSaved}
+          onAISubmit={handleAdminAISubmit}
         />
       )}
 

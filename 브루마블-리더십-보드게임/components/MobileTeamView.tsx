@@ -1,6 +1,6 @@
 import React from 'react';
-import { Team, GamePhase, GameCard, Choice, AIEvaluationResult } from '../types';
-import { Battery, Coins, Handshake, Lightbulb, TrendingUp, MapPin, Dice5, Send, Sparkles, Eye, MessageSquare, LogOut } from 'lucide-react';
+import { Team, GamePhase, GameCard, Choice } from '../types';
+import { Battery, Coins, Handshake, Lightbulb, TrendingUp, MapPin, Dice5, Save, CheckCircle, Eye, MessageSquare, LogOut } from 'lucide-react';
 import { BOARD_SQUARES } from '../constants';
 
 interface MobileTeamViewProps {
@@ -16,8 +16,8 @@ interface MobileTeamViewProps {
   activeInput: { choice: Choice | null, reasoning: string };
   onInputChange: (choice: Choice, reason: string) => void;
   onSubmit: () => void;
-  aiResult: AIEvaluationResult | null;
-  isProcessing: boolean;
+  isTeamSaved: boolean;  // 팀이 저장했는지 여부
+  isSaving: boolean;     // 저장 중 여부
 }
 
 const MobileTeamView: React.FC<MobileTeamViewProps> = ({
@@ -31,8 +31,8 @@ const MobileTeamView: React.FC<MobileTeamViewProps> = ({
   activeInput,
   onInputChange,
   onSubmit,
-  aiResult,
-  isProcessing
+  isTeamSaved,
+  isSaving
 }) => {
   const currentSquare = BOARD_SQUARES.find(s => s.index === team.position);
   const isOpenEnded = activeCard && (!activeCard.choices || activeCard.choices.length === 0);
@@ -91,7 +91,7 @@ const MobileTeamView: React.FC<MobileTeamViewProps> = ({
       </div>
 
       {/* --- DECISION CARD VIEW (Active or Spectator) --- */}
-      {activeCard && !aiResult && (
+      {activeCard && (
         <div className="mb-6 animate-in slide-in-from-bottom-5">
            {/* Header depends on Turn */}
            {isMyTurn ? (
@@ -108,64 +108,87 @@ const MobileTeamView: React.FC<MobileTeamViewProps> = ({
                </div>
              </div>
            )}
-           
+
            <div className="bg-white border-4 border-black p-4 mb-4">
              <p className="font-medium text-gray-800 mb-4 text-sm">"{activeCard.situation}"</p>
-             
-             {/* Choices (Only if not open ended) */}
-             {!isOpenEnded && activeCard.choices && (
-                <div className="space-y-2 mb-4">
-                  {activeCard.choices.map(choice => (
-                    <button
-                      key={choice.id}
-                      onClick={() => isMyTurn && onInputChange(choice, activeInput.reasoning)}
-                      disabled={!isMyTurn}
-                      className={`w-full text-left p-3 border-2 font-bold text-sm flex gap-2 transition-all
-                        ${activeInput.choice?.id === choice.id 
-                            ? 'bg-blue-600 text-white border-black transform -translate-y-1' 
-                            : 'bg-gray-50 border-gray-300'}
-                        ${!isMyTurn && activeInput.choice?.id !== choice.id ? 'opacity-50' : ''}
-                      `}
-                    >
-                      <span className={`px-2 bg-black text-white text-xs flex items-center`}>{choice.id}</span>
-                      {choice.text}
-                    </button>
-                  ))}
-                </div>
-             )}
 
-             {/* Open Ended Indicator */}
-             {isOpenEnded && (
-                <div className="flex items-center gap-2 text-purple-900 font-bold bg-purple-100 p-3 border-2 border-purple-900 mb-4 text-sm">
-                  <MessageSquare size={16} />
-                  <span>주관식 답변: 자유롭게 작성하세요.</span>
-                </div>
-             )}
-
-             {/* Reasoning Input (Read-only if spectator) */}
-             {(isMyTurn || activeInput.choice || isOpenEnded) && (
+             {/* 저장 완료 상태 */}
+             {isTeamSaved ? (
+               <div className="bg-green-100 border-4 border-green-600 p-6 text-center">
+                 <CheckCircle className="mx-auto mb-3 text-green-600" size={48} />
+                 <h3 className="text-lg font-black text-green-800 mb-2">저장 완료!</h3>
+                 <p className="text-sm text-green-700 font-medium">
+                   관리자가 AI 분석을 진행 중입니다.<br/>
+                   잠시만 기다려주세요.
+                 </p>
+               </div>
+             ) : (
                <>
-                 <textarea
-                   value={activeInput.reasoning}
-                   onChange={(e) => isMyTurn && onInputChange(activeInput.choice!, e.target.value)}
-                   disabled={!isMyTurn}
-                   placeholder={isMyTurn ? (isOpenEnded ? "답변을 입력하세요..." : "선택 사유를 입력하세요...") : "다른 팀이 사유를 입력중입니다..."}
-                   className="w-full p-2 border-2 border-black font-medium text-sm focus:outline-none focus:bg-yellow-50 mb-3 h-24 resize-none disabled:bg-gray-100 disabled:text-gray-500"
-                 />
-                 
-                 {isMyTurn ? (
-                   <button
-                     onClick={onSubmit}
-                     disabled={!activeInput.reasoning.trim() || isProcessing}
-                     className="w-full py-3 bg-black text-white font-black uppercase flex items-center justify-center gap-2 hover:bg-gray-800 disabled:opacity-50"
-                   >
-                     {isProcessing ? <Sparkles className="animate-spin" /> : <Send size={16} />}
-                     {isProcessing ? 'Evaluating...' : 'Submit to AI'}
-                   </button>
-                 ) : (
-                    <div className="w-full py-3 bg-gray-200 text-gray-500 font-bold uppercase text-center border-2 border-transparent">
-                       {isProcessing ? 'AI Evaluating...' : 'Waiting for Team...'}
+                 {/* Choices (Only if not open ended) */}
+                 {!isOpenEnded && activeCard.choices && (
+                    <div className="space-y-2 mb-4">
+                      {activeCard.choices.map(choice => (
+                        <button
+                          key={choice.id}
+                          onClick={() => isMyTurn && onInputChange(choice, activeInput.reasoning)}
+                          disabled={!isMyTurn}
+                          className={`w-full text-left p-3 border-2 font-bold text-sm flex gap-2 transition-all
+                            ${activeInput.choice?.id === choice.id
+                                ? 'bg-blue-600 text-white border-black transform -translate-y-1'
+                                : 'bg-gray-50 border-gray-300'}
+                            ${!isMyTurn && activeInput.choice?.id !== choice.id ? 'opacity-50' : ''}
+                          `}
+                        >
+                          <span className={`px-2 bg-black text-white text-xs flex items-center`}>{choice.id}</span>
+                          {choice.text}
+                        </button>
+                      ))}
                     </div>
+                 )}
+
+                 {/* Open Ended Indicator */}
+                 {isOpenEnded && (
+                    <div className="flex items-center gap-2 text-purple-900 font-bold bg-purple-100 p-3 border-2 border-purple-900 mb-4 text-sm">
+                      <MessageSquare size={16} />
+                      <span>주관식 답변: 자유롭게 작성하세요.</span>
+                    </div>
+                 )}
+
+                 {/* Reasoning Input (Read-only if spectator) */}
+                 {(isMyTurn || activeInput.choice || isOpenEnded) && (
+                   <>
+                     <textarea
+                       value={activeInput.reasoning}
+                       onChange={(e) => isMyTurn && onInputChange(activeInput.choice!, e.target.value)}
+                       disabled={!isMyTurn}
+                       placeholder={isMyTurn ? (isOpenEnded ? "답변을 입력하세요..." : "선택 사유를 입력하세요...") : "다른 팀이 사유를 입력중입니다..."}
+                       className="w-full p-2 border-2 border-black font-medium text-sm focus:outline-none focus:bg-yellow-50 mb-3 h-24 resize-none disabled:bg-gray-100 disabled:text-gray-500"
+                     />
+
+                     {isMyTurn ? (
+                       <button
+                         onClick={onSubmit}
+                         disabled={!activeInput.reasoning.trim() || isSaving}
+                         className="w-full py-3 bg-blue-600 text-white font-black uppercase flex items-center justify-center gap-2 hover:bg-blue-700 disabled:opacity-50"
+                       >
+                         {isSaving ? (
+                           <>
+                             <Save className="animate-pulse" size={16} />
+                             저장 중...
+                           </>
+                         ) : (
+                           <>
+                             <Save size={16} />
+                             저장하기
+                           </>
+                         )}
+                       </button>
+                     ) : (
+                        <div className="w-full py-3 bg-gray-200 text-gray-500 font-bold uppercase text-center border-2 border-transparent">
+                           팀 입력 대기 중...
+                        </div>
+                     )}
+                   </>
                  )}
                </>
              )}
@@ -173,17 +196,8 @@ const MobileTeamView: React.FC<MobileTeamViewProps> = ({
         </div>
       )}
 
-      {/* --- AI RESULT VIEW (ForAll) --- */}
-      {aiResult && (
-         <div className="mb-6 bg-yellow-100 border-4 border-black p-4 animate-in zoom-in shadow-hard-sm">
-            <h3 className="font-black uppercase mb-2 flex items-center gap-2"><Sparkles size={16}/> AI Feedback</h3>
-            <p className="text-sm font-medium mb-4 whitespace-pre-wrap leading-relaxed">{aiResult.feedback}</p>
-            <div className="text-center font-bold text-xs text-gray-500 uppercase">Check Dashboard for Details</div>
-         </div>
-      )}
-
       {/* --- IDLE STATE (Your Board Info) --- */}
-      {!activeCard && !aiResult && (
+      {!activeCard && (
         <div className="mb-8">
           <div className="mb-4 relative">
              <div className="bg-white border-4 border-black p-6 pt-8 text-center shadow-hard">
