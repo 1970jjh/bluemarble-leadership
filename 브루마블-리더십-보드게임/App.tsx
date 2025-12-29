@@ -60,14 +60,14 @@ const App: React.FC = () => {
   const [diceValue, setDiceValue] = useState<[number, number]>([1, 1]);
   const [isRolling, setIsRolling] = useState(false);
   const [gameLogs, setGameLogs] = useState<string[]>([]);
-  const [turnTimeLeft, setTurnTimeLeft] = useState(120); 
+  const [turnTimeLeft, setTurnTimeLeft] = useState(120);
   const [showReport, setShowReport] = useState(false);
 
   // --- Active Card & Decision State (Shared between Admin & Mobile) ---
   const [activeCard, setActiveCard] = useState<GameCard | null>(null);
   const [showCardModal, setShowCardModal] = useState(false);
   const [previewCard, setPreviewCard] = useState<GameCard | null>(null);
-  
+
   // Shared Input State
   const [sharedSelectedChoice, setSharedSelectedChoice] = useState<Choice | null>(null);
   const [sharedReasoning, setSharedReasoning] = useState('');
@@ -82,12 +82,46 @@ const App: React.FC = () => {
   // --- AI Client Initialization ---
   const genAI = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
 
+  // --- LocalStorage: 참가자 세션 복구 ---
+  useEffect(() => {
+    const savedSession = localStorage.getItem('bluemarble_participant_session');
+    if (savedSession) {
+      try {
+        const parsed = JSON.parse(savedSession);
+        if (parsed.sessionId && parsed.teamId && parsed.name) {
+          setCurrentSessionId(parsed.sessionId);
+          setParticipantTeamId(parsed.teamId);
+          setParticipantName(parsed.name);
+          setIsJoinedTeam(true);
+          setView('participant');
+        }
+      } catch (e) {
+        console.error('세션 복구 실패:', e);
+        localStorage.removeItem('bluemarble_participant_session');
+      }
+    }
+  }, []);
+
+  // --- LocalStorage: 참가자 세션 저장 ---
+  useEffect(() => {
+    if (isJoinedTeam && currentSessionId && participantTeamId && participantName) {
+      localStorage.setItem('bluemarble_participant_session', JSON.stringify({
+        sessionId: currentSessionId,
+        teamId: participantTeamId,
+        name: participantName,
+        timestamp: Date.now()
+      }));
+    }
+  }, [isJoinedTeam, currentSessionId, participantTeamId, participantName]);
+
   // --- URL 파라미터 확인 (접속 코드) ---
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const joinCode = urlParams.get('join');
     if (joinCode) {
       setInitialAccessCode(joinCode);
+      // URL로 접속한 경우 저장된 세션 무시
+      localStorage.removeItem('bluemarble_participant_session');
     }
   }, []);
 
@@ -127,29 +161,34 @@ const App: React.FC = () => {
     const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
     if (!isFirebaseConfigured) return;
 
+    console.log('[Firebase] 게임 상태 구독 시작:', currentSessionId);
+
     const unsubscribe = firestoreService.subscribeToGameState(currentSessionId, (state) => {
       if (state) {
-        // 게임 상태 동기화 (다른 사용자가 변경한 경우에만)
-        if (state.lastUpdated && Date.now() - state.lastUpdated < 5000) {
-          setGamePhase(state.phase as GamePhase);
-          setCurrentTurnIndex(state.currentTeamIndex);
-          setDiceValue(state.diceValue || [1, 1]);
-          setActiveCard(state.currentCard);
-          setSharedSelectedChoice(state.selectedChoice);
-          setSharedReasoning(state.reasoning || '');
-          setAiEvaluationResult(state.aiResult);
-          setIsAiProcessing(state.isAiProcessing || false);
-          if (state.gameLogs?.length) {
-            setGameLogs(state.gameLogs);
-          }
-          // 카드가 있으면 모달 표시
-          if (state.currentCard && state.phase === GamePhase.Decision) {
-            setShowCardModal(true);
-          }
-          // 결과가 이미 있으면 모달 닫힌 상태로 (이미 완료된 턴)
-          if (state.aiResult && state.phase !== GamePhase.Decision) {
-            setShowCardModal(false);
-          }
+        console.log('[Firebase] 게임 상태 수신:', state.phase, 'card:', !!state.currentCard);
+
+        // 항상 게임 상태 동기화 (시간 제한 제거)
+        setGamePhase(state.phase as GamePhase);
+        setCurrentTurnIndex(state.currentTeamIndex);
+        setDiceValue(state.diceValue || [1, 1]);
+        setActiveCard(state.currentCard);
+        setSharedSelectedChoice(state.selectedChoice);
+        setSharedReasoning(state.reasoning || '');
+        setAiEvaluationResult(state.aiResult);
+        setIsAiProcessing(state.isAiProcessing || false);
+        setIsRolling(state.phase === GamePhase.Rolling);
+
+        if (state.gameLogs?.length) {
+          setGameLogs(state.gameLogs);
+        }
+
+        // 카드가 있으면 모달 표시
+        if (state.currentCard && state.phase === GamePhase.Decision) {
+          setShowCardModal(true);
+        }
+        // 결과가 이미 있으면 모달 닫힌 상태로 (이미 완료된 턴)
+        if (state.aiResult && state.phase !== GamePhase.Decision) {
+          setShowCardModal(false);
         }
       }
     });
@@ -900,6 +939,31 @@ const App: React.FC = () => {
     const participantSession = currentSession;
     const participantTeam = participantSession?.teams.find(t => t.id === participantTeamId);
 
+    // 세션 로딩 중 (localStorage에서 복구됐지만 Firebase에서 아직 로드 안됨)
+    if (isJoinedTeam && participantTeamId && !participantSession) {
+      return (
+        <div className="min-h-screen bg-blue-900 flex flex-col items-center justify-center p-4">
+          <div className="max-w-md w-full bg-white border-4 border-black shadow-[8px_8px_0_0_#000] p-8 text-center">
+            <h1 className="text-2xl font-black mb-4">게임 로딩 중...</h1>
+            <div className="animate-spin w-8 h-8 border-4 border-black border-t-transparent rounded-full mx-auto mb-4"></div>
+            <p className="text-gray-500 text-sm">잠시만 기다려주세요</p>
+            <button
+              onClick={() => {
+                localStorage.removeItem('bluemarble_participant_session');
+                setView('intro');
+                setCurrentSessionId(null);
+                setParticipantTeamId(null);
+                setIsJoinedTeam(false);
+              }}
+              className="mt-4 text-sm text-gray-400 underline"
+            >
+              처음부터 다시 시작
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     // 팀 선택 화면
     if (!participantTeamId) {
       return (
@@ -931,7 +995,13 @@ const App: React.FC = () => {
             </div>
 
             <button
-              onClick={() => { setView('intro'); setCurrentSessionId(null); }}
+              onClick={() => {
+                localStorage.removeItem('bluemarble_participant_session');
+                setView('intro');
+                setCurrentSessionId(null);
+                setParticipantTeamId(null);
+                setIsJoinedTeam(false);
+              }}
               className="w-full py-3 bg-gray-200 border-4 border-black font-bold"
             >
               나가기
@@ -990,6 +1060,28 @@ const App: React.FC = () => {
               className="w-full py-3 bg-gray-200 border-4 border-black font-bold"
             >
               다른 팀 선택
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // 팀이 없으면 (세션에서 팀이 삭제된 경우) 처리
+    if (!participantTeam) {
+      return (
+        <div className="min-h-screen bg-blue-900 flex flex-col items-center justify-center p-4">
+          <div className="max-w-md w-full bg-white border-4 border-black shadow-[8px_8px_0_0_#000] p-8 text-center">
+            <h1 className="text-2xl font-black mb-4">팀을 찾을 수 없습니다</h1>
+            <p className="text-gray-500 mb-4">세션이 변경되었을 수 있습니다.</p>
+            <button
+              onClick={() => {
+                localStorage.removeItem('bluemarble_participant_session');
+                setParticipantTeamId(null);
+                setIsJoinedTeam(false);
+              }}
+              className="w-full py-3 bg-blue-500 text-white border-4 border-black font-bold"
+            >
+              다시 팀 선택하기
             </button>
           </div>
         </div>

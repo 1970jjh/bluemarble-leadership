@@ -186,13 +186,14 @@ export async function saveGameState(state: GameState): Promise<void> {
   }, { merge: true });
 }
 
-// 게임 상태 부분 업데이트
+// 게임 상태 부분 업데이트 (문서가 없으면 생성)
 export async function updateGameState(sessionId: string, updates: Partial<GameState>): Promise<void> {
   const stateRef = doc(db, GAME_STATE_COLLECTION, sessionId);
-  await updateDoc(stateRef, {
+  // setDoc with merge: true 사용하여 문서가 없으면 생성, 있으면 업데이트
+  await setDoc(stateRef, {
     ...updates,
     lastUpdated: Date.now()
-  });
+  }, { merge: true });
 }
 
 // 게임 상태 가져오기
