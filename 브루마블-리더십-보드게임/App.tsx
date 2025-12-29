@@ -106,6 +106,23 @@ const App: React.FC = () => {
   const teams = currentSession ? currentSession.teams : [];
   const currentTeam = teams[currentTurnIndex];
 
+  // 게임 모드에 따른 카드 타입 매핑
+  // 각 모드에서는 해당 모드의 관점에서 작성된 카드만 선택됨
+  const getCardTypeForGameMode = (version: GameVersion | undefined): string => {
+    switch (version) {
+      case GameVersion.Self:      // Self-Leadership → 초급사원 관점 카드
+        return 'Self';
+      case GameVersion.Follower:  // Followership → 팔로워 관점 카드
+        return 'Follower';
+      case GameVersion.Leader:    // Leadership → 관리자 관점 카드
+        return 'Leader';
+      case GameVersion.Team:      // Teamship → 팀 전체 관점 카드
+        return 'Team';
+      default:
+        return 'Self';
+    }
+  };
+
   // 참가자 접속 URL 생성
   const getJoinUrl = (accessCode: string) => {
     const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
@@ -704,7 +721,10 @@ const App: React.FC = () => {
     let selectedCard: GameCard | null = null;
 
     if (square.type === SquareType.City) {
-      const relevantCards = SAMPLE_CARDS.filter(c => c.type === square.module);
+      // 게임 모드에 따라 해당 관점의 카드만 선택 (칸의 module 무시)
+      // 예: Self-Leadership 모드 → Self 카드만 (초급사원 관점)
+      const modeCardType = getCardTypeForGameMode(currentSession?.version);
+      const relevantCards = SAMPLE_CARDS.filter(c => c.type === modeCardType);
       selectedCard = relevantCards.length > 0
         ? relevantCards[Math.floor(Math.random() * relevantCards.length)]
         : SAMPLE_CARDS[0];
@@ -1074,7 +1094,9 @@ const App: React.FC = () => {
 
     switch (square.type) {
       case SquareType.City:
-        cardToPreview = findCard(c => c.type === square.module);
+        // 미리보기도 게임 모드에 맞는 카드만 표시
+        const previewCardType = getCardTypeForGameMode(currentSession?.version);
+        cardToPreview = findCard(c => c.type === previewCardType);
         break;
       case SquareType.GoldenKey:
         // Exclude ventures, keep general events or chance
