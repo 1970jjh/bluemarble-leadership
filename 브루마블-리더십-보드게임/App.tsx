@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import GameBoard from './components/GameBoard';
 import TeamStatus from './components/TeamStatus';
 import ControlPanel from './components/ControlPanel';
@@ -84,6 +84,10 @@ const App: React.FC = () => {
   const [sharedReasoning, setSharedReasoning] = useState('');
   const [aiEvaluationResult, setAiEvaluationResult] = useState<AIEvaluationResult | null>(null);
   const [isAiProcessing, setIsAiProcessing] = useState(false);
+
+  // Ref to track local operations in progress (to prevent Firebase from overriding local state)
+  const localOperationInProgress = useRef(false);
+  const localOperationTimestamp = useRef(0);
 
   // Helper to get current session object
   const currentSession = sessions.find(s => s.id === currentSessionId);
@@ -202,9 +206,32 @@ const App: React.FC = () => {
 
     const unsubscribe = firestoreService.subscribeToGameState(currentSessionId, (state) => {
       if (state) {
-        console.log('[Firebase] 게임 상태 수신:', state.phase, 'card:', !!state.currentCard);
+        console.log('[Firebase] 게임 상태 수신:', state.phase, 'card:', !!state.currentCard, 'localOp:', localOperationInProgress.current);
 
-        // 항상 게임 상태 동기화 (시간 제한 제거)
+        // 로컬 작업 진행 중이면 Firebase 상태 무시 (로컬 상태가 우선)
+        // 단, Firebase 데이터가 더 최신이면 적용 (lastUpdated 비교)
+        if (localOperationInProgress.current) {
+          // 로컬 작업 중에는 중요한 상태(phase, isRolling)를 Firebase에서 덮어쓰지 않음
+          console.log('[Firebase] 로컬 작업 진행 중 - 중요 상태 업데이트 스킵');
+
+          // 덜 중요한 상태만 업데이트 (다른 팀원의 입력 등)
+          if (state.currentCard && state.phase === GamePhase.Decision) {
+            setActiveCard(state.currentCard);
+            setSharedSelectedChoice(state.selectedChoice);
+            setSharedReasoning(state.reasoning || '');
+            setShowCardModal(true);
+          }
+          return;
+        }
+
+        // 로컬 작업이 끝난 후 일정 시간 동안도 보호 (Firebase 지연 응답 방지)
+        const timeSinceLocalOp = Date.now() - localOperationTimestamp.current;
+        if (timeSinceLocalOp < 2000 && state.lastUpdated < localOperationTimestamp.current) {
+          console.log('[Firebase] 오래된 Firebase 데이터 무시:', timeSinceLocalOp, 'ms');
+          return;
+        }
+
+        // 정상적인 Firebase 상태 동기화
         setGamePhase(state.phase as GamePhase);
         setCurrentTurnIndex(state.currentTeamIndex);
         setDiceValue(state.diceValue || [1, 1]);
@@ -673,10 +700,15 @@ const App: React.FC = () => {
 
   const handleRollDice = () => {
     if (isRolling || gamePhase === GamePhase.Rolling) return;
+
+    // 로컬 작업 시작 - Firebase가 이 상태를 덮어쓰지 않도록 보호
+    localOperationInProgress.current = true;
+    localOperationTimestamp.current = Date.now();
+
     setIsRolling(true);
     setGamePhase(GamePhase.Rolling);
 
-    // 즉시 Firebase에 Rolling 상태 저장 (다른 팀원들이 주사위 클릭 못하도록)
+    // Firebase에 Rolling 상태 저장 시도 (실패해도 로컬 게임은 계속 진행)
     const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
     if (isFirebaseConfigured && currentSessionId) {
       firestoreService.updateGameState(currentSessionId, {
@@ -693,7 +725,7 @@ const App: React.FC = () => {
         isAiProcessing: false,
         gameLogs: gameLogs,
         lastUpdated: Date.now()
-      }).catch(err => console.error('Firebase 상태 저장 실패:', err));
+      }).catch(err => console.warn('[Firebase] Rolling 상태 저장 실패 (게임은 계속 진행):', err.message));
     }
 
     let rollCount = 0;
@@ -722,10 +754,15 @@ const App: React.FC = () => {
   const performMove = (die1: number, die2: number) => {
     setDiceValue([die1, die2]);
     setIsRolling(false);
+    setGamePhase(GamePhase.Moving);
+
+    // 로컬 작업 완료 - Firebase 동기화 다시 허용
+    localOperationInProgress.current = false;
+    localOperationTimestamp.current = Date.now();
 
     if (!currentTeam) return;
 
-    // Firebase에 주사위 결과와 Moving 상태 저장
+    // Firebase에 주사위 결과와 Moving 상태 저장 (실패해도 로컬 게임은 계속 진행)
     const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
     if (isFirebaseConfigured && currentSessionId) {
       firestoreService.updateGameState(currentSessionId, {
@@ -742,7 +779,7 @@ const App: React.FC = () => {
         isAiProcessing: false,
         gameLogs: gameLogs,
         lastUpdated: Date.now()
-      }).catch(err => console.error('Firebase 상태 저장 실패:', err));
+      }).catch(err => console.warn('[Firebase] Moving 상태 저장 실패 (게임은 계속 진행):', err.message));
     }
 
     // 주사위 로그는 리포트에 불필요하므로 제거
