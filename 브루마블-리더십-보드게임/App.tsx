@@ -1149,6 +1149,17 @@ const App: React.FC = () => {
     const isMyTurn = participantSession?.teams[currentTurnIndex]?.id === participantTeamId;
     const activeTeamForViewer = participantSession?.teams[currentTurnIndex];
 
+    // 참가자 로그아웃 핸들러
+    const handleParticipantLogout = () => {
+      localStorage.removeItem('bluemarble_participant_session');
+      setCurrentSessionId(null);
+      setParticipantTeamId(null);
+      setParticipantName('');
+      setIsJoinedTeam(false);
+      setNameInput('');
+      setView('intro');
+    };
+
     return (
       <div className="min-h-screen bg-gray-900">
         <MobileTeamView
@@ -1157,6 +1168,7 @@ const App: React.FC = () => {
           isMyTurn={isMyTurn}
           gamePhase={gamePhase}
           onRollDice={handleRollDice}
+          onLogout={handleParticipantLogout}
           activeCard={activeCard}
           activeInput={{
             choice: sharedSelectedChoice,
