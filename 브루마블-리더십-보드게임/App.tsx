@@ -7,11 +7,11 @@ import ReportView from './components/ReportView';
 import Intro from './components/Intro';
 import Lobby from './components/Lobby';
 import MobileTeamView from './components/MobileTeamView';
-import { 
-  Team, 
-  GamePhase, 
-  SquareType, 
-  GameCard, 
+import {
+  Team,
+  GamePhase,
+  SquareType,
+  GameCard,
   Choice,
   GameVersion,
   Session,
@@ -20,14 +20,17 @@ import {
   AIEvaluationResult,
   TurnRecord
 } from './types';
-import { 
-  BOARD_SQUARES, 
+import {
+  BOARD_SQUARES,
   SAMPLE_CARDS,
   BOARD_SIZE,
   INITIAL_RESOURCES
 } from './constants';
 import { Smartphone, Monitor } from 'lucide-react';
 import { GoogleGenAI, Type } from "@google/genai";
+
+// Firebase 연동
+import * as firestoreService from './lib/firestore';
 
 type AppView = 'intro' | 'lobby' | 'game';
 type AdminViewMode = 'dashboard' | 'mobile_monitor';
@@ -70,16 +73,29 @@ const App: React.FC = () => {
   // --- AI Client Initialization ---
   const genAI = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
 
+  // --- Firebase: 세션 실시간 구독 ---
+  useEffect(() => {
+    // Firebase가 설정되어 있으면 실시간으로 세션 목록 구독
+    const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+
+    if (isFirebaseConfigured) {
+      const unsubscribe = firestoreService.subscribeToAllSessions((firebaseSessions) => {
+        setSessions(firebaseSessions);
+      });
+      return () => unsubscribe();
+    }
+  }, []);
+
   // --- Session Logic ---
 
-  const handleCreateSession = (name: string, version: GameVersion, teamCount: number) => {
+  const handleCreateSession = async (name: string, version: GameVersion, teamCount: number) => {
     const newSessionId = `sess_${Date.now()}`;
     const accessCode = Math.floor(100000 + Math.random() * 900000).toString();
-    
+
     // Generate initial teams based on count
     const newTeams: Team[] = [];
     const colors = Object.values(TeamColor);
-    
+
     for (let i = 0; i < teamCount; i++) {
       newTeams.push({
         id: `t_${newSessionId}_${i}`,
@@ -90,7 +106,7 @@ const App: React.FC = () => {
         isBurnout: false,
         burnoutCounter: 0,
         lapCount: 0,
-        members: [], 
+        members: [],
         currentMemberIndex: 0,
         history: [] // Init history
       });
@@ -107,14 +123,41 @@ const App: React.FC = () => {
       teams: newTeams
     };
 
+    // Firebase에 저장 (설정되어 있으면)
+    const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+    if (isFirebaseConfigured) {
+      try {
+        await firestoreService.createSession(newSession);
+      } catch (error) {
+        console.error('Firebase 세션 생성 실패:', error);
+      }
+    }
+
+    // 로컬 상태 업데이트 (Firebase 미설정 시 또는 백업용)
     setSessions(prev => [newSession, ...prev]);
   };
 
-  const handleDeleteSession = (sessionId: string) => {
+  const handleDeleteSession = async (sessionId: string) => {
+    const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+    if (isFirebaseConfigured) {
+      try {
+        await firestoreService.deleteSession(sessionId);
+      } catch (error) {
+        console.error('Firebase 세션 삭제 실패:', error);
+      }
+    }
     setSessions(prev => prev.filter(s => s.id !== sessionId));
   };
 
-  const handleUpdateSessionStatus = (sessionId: string, status: SessionStatus) => {
+  const handleUpdateSessionStatus = async (sessionId: string, status: SessionStatus) => {
+    const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+    if (isFirebaseConfigured) {
+      try {
+        await firestoreService.updateSessionStatus(sessionId, status);
+      } catch (error) {
+        console.error('Firebase 세션 상태 업데이트 실패:', error);
+      }
+    }
     setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, status } : s));
   };
 
@@ -127,8 +170,19 @@ const App: React.FC = () => {
     setView('game');
   };
 
-  const updateTeamsInSession = (updatedTeams: Team[]) => {
+  const updateTeamsInSession = async (updatedTeams: Team[]) => {
     if (!currentSessionId) return;
+
+    // Firebase에 저장 (설정되어 있으면)
+    const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+    if (isFirebaseConfigured) {
+      try {
+        await firestoreService.updateTeams(currentSessionId, updatedTeams);
+      } catch (error) {
+        console.error('Firebase 팀 업데이트 실패:', error);
+      }
+    }
+
     setSessions(prev => prev.map(s => {
       if (s.id === currentSessionId) {
         return { ...s, teams: updatedTeams };
