@@ -445,7 +445,7 @@ const App: React.FC = () => {
     const square = BOARD_SQUARES.find(s => s.index === squareIndex);
     if (!square) return;
 
-    addLog(`📍 [도착] ${team.name} → ${square.name} (${square.type})`);
+    // 도착 로그는 리포트에 불필요하므로 제거 - 카드 이벤트만 기록
 
     // Helper to pick random card
     const pickRandomCard = (type: string, fallbackId: string = 'E-001') => {
@@ -462,39 +462,29 @@ const App: React.FC = () => {
       selectedCard = relevantCards.length > 0
         ? relevantCards[Math.floor(Math.random() * relevantCards.length)]
         : SAMPLE_CARDS[0];
-      addLog(`🎴 [카드 선택] ${selectedCard.title} (${square.module})`);
     }
     else if (square.type === SquareType.GoldenKey) {
       selectedCard = pickRandomCard('Event');
-      addLog(`🗝️ [찬스 카드] ${selectedCard.title}`);
     }
     else if (square.type === SquareType.Fund) {
       const fundCards = SAMPLE_CARDS.filter(c => c.title.includes("사내 벤처") || c.type === 'Event');
       selectedCard = fundCards[Math.floor(Math.random() * fundCards.length)];
-      addLog(`💰 [혁신 카드] ${selectedCard.title}`);
     }
     else if (square.type === SquareType.Space) {
-      // Changed to Challenge (Open-Ended)
       selectedCard = pickRandomCard('Challenge', 'C-001');
-      addLog(`🚀 [도전 카드] ${selectedCard.title}`);
     }
     else if (square.type === SquareType.WorldTour) {
-      // Changed to Core Value
       selectedCard = pickRandomCard('CoreValue', 'V-001');
-      addLog(`🌍 [핵심가치 카드] ${selectedCard.title}`);
     }
     else if (square.type === SquareType.Island) {
       selectedCard = pickRandomCard('Burnout', 'B-001');
-      addLog(`⚠️ [번아웃 카드] ${selectedCard.title}`);
     }
     else if (square.type === SquareType.Start) {
       updateTeamResources(team.id, { capital: 50 });
-      addLog(`🏁 [출발] ${team.name} +50 자본`);
       nextTurn();
       return;
     }
     else {
-      addLog(`👣 [통과] ${team.name} - 특별 이벤트 없음`);
       nextTurn();
       return;
     }
@@ -543,7 +533,7 @@ const App: React.FC = () => {
 
     if (!currentTeam) return;
 
-    addLog(`🎲 [주사위] ${currentTeam.name}: [${die1}] + [${die2}] = ${die1 + die2}칸 이동`);
+    // 주사위 로그는 리포트에 불필요하므로 제거
     moveTeamLogic(currentTeam, die1 + die2);
   };
 
@@ -587,14 +577,22 @@ const App: React.FC = () => {
     if (!isOpenEnded && (!sharedSelectedChoice || !sharedReasoning)) return;
 
     setIsAiProcessing(true);
-    addLog(`📝 [응답 제출] ${currentTeam.name}`);
-    addLog(`   카드: ${activeCard.title} (${activeCard.type})`);
-    addLog(`   상황: ${activeCard.situation.substring(0, 50)}...`);
-    if (!isOpenEnded && sharedSelectedChoice) {
-      addLog(`   선택: [${sharedSelectedChoice.id}] ${sharedSelectedChoice.text}`);
+
+    // 리포트용 구조화된 로그 기록
+    const logData = {
+      team: currentTeam.name,
+      cardType: activeCard.type,
+      cardTitle: activeCard.title,
+      situation: activeCard.situation,
+      choice: !isOpenEnded && sharedSelectedChoice ? `[${sharedSelectedChoice.id}] ${sharedSelectedChoice.text}` : null,
+      response: sharedReasoning
+    };
+    addLog(`[턴] ${currentTeam.name} | 카드: ${activeCard.title} (${activeCard.type})`);
+    addLog(`[상황] ${activeCard.situation}`);
+    if (logData.choice) {
+      addLog(`[선택] ${logData.choice}`);
     }
-    addLog(`   응답: "${sharedReasoning.substring(0, 100)}${sharedReasoning.length > 100 ? '...' : ''}"`);
-    addLog(`🤖 AI 평가 시작...`);
+    addLog(`[응답] ${sharedReasoning}`);
 
     if (!process.env.API_KEY) {
        alert("API Key missing");
@@ -669,10 +667,11 @@ const App: React.FC = () => {
       };
 
       setAiEvaluationResult(result);
-      addLog(`✅ [AI 평가 완료] ${currentTeam.name}`);
-      addLog(`   피드백: "${result.feedback.substring(0, 80)}..."`);
+
+      // 리포트용 AI 평가 결과 로그
       const scores = result.scoreChanges;
-      addLog(`   점수: C:${scores.capital || 0} E:${scores.energy || 0} T:${scores.trust || 0} Co:${scores.competency || 0} I:${scores.insight || 0}`);
+      addLog(`[AI평가] ${result.feedback}`);
+      addLog(`[점수변화] 자본:${scores.capital || 0} | 에너지:${scores.energy || 0} | 신뢰:${scores.trust || 0} | 역량:${scores.competency || 0} | 통찰:${scores.insight || 0}`);
       
     } catch (e) {
       console.error(e);
@@ -702,13 +701,9 @@ const App: React.FC = () => {
       };
       updateTeamHistory(currentTeam.id, turnRecord);
 
-      const scores = aiEvaluationResult.scoreChanges;
-      addLog(`🎯 [점수 적용] ${currentTeam.name}`);
-      addLog(`   자본: ${scores.capital || 0}, 에너지: ${scores.energy || 0}, 신뢰: ${scores.trust || 0}`);
-      addLog(`   역량: ${scores.competency || 0}, 통찰: ${scores.insight || 0}`);
+      addLog(`[턴완료] ${currentTeam.name} 턴 종료 - 점수 적용됨`);
+      addLog(`---`); // 턴 구분선
     }
-
-    addLog(`⏭️ [턴 종료] 다음 팀으로 이동`);
 
     // 3. Next Turn
     nextTurn();
