@@ -22,6 +22,8 @@ interface CardModalProps {
   readOnly?: boolean;
   // 추가: 현재 팀 이름 표시
   teamName?: string;
+  // 추가: 미리보기 모드 (게임에 반영 안됨)
+  isPreviewMode?: boolean;
 }
 
 const CardModal: React.FC<CardModalProps> = ({
@@ -37,7 +39,8 @@ const CardModal: React.FC<CardModalProps> = ({
   isProcessing,
   onClose,
   readOnly = false,
-  teamName
+  teamName,
+  isPreviewMode = false
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   
@@ -99,8 +102,15 @@ const CardModal: React.FC<CardModalProps> = ({
         {/* Header */}
         <div className={`p-6 ${getTypeColor(card.type)} border-b-4 border-black flex justify-between items-center shrink-0`}>
           <div>
-            <div className="inline-block bg-black text-white px-2 py-1 text-xs font-bold uppercase mb-2">
-              {card.type === 'CoreValue' ? 'CORE VALUE' : card.type}
+            <div className="flex items-center gap-2 mb-2">
+              <div className="inline-block bg-black text-white px-2 py-1 text-xs font-bold uppercase">
+                {card.type === 'CoreValue' ? 'CORE VALUE' : card.type}
+              </div>
+              {isPreviewMode && (
+                <div className="inline-block bg-orange-500 text-white px-2 py-1 text-xs font-bold uppercase animate-pulse">
+                  PREVIEW MODE
+                </div>
+              )}
             </div>
             <h2 className="text-2xl md:text-3xl font-black uppercase tracking-tight">{card.title}</h2>
           </div>
@@ -124,8 +134,17 @@ const CardModal: React.FC<CardModalProps> = ({
           {!result ? (
             /* Input Phase */
             <div className="space-y-6">
+              {/* 미리보기 모드 안내 */}
+              {isPreviewMode && (
+                <div className="bg-orange-100 border-4 border-orange-500 p-4 text-center">
+                  <span className="font-bold text-orange-800">
+                    🔍 미리보기 모드 - AI 평가 결과는 게임에 반영되지 않습니다
+                  </span>
+                </div>
+              )}
+
               {/* 읽기 전용 모드 안내 */}
-              {readOnly && (
+              {readOnly && !isPreviewMode && (
                 <div className="bg-yellow-100 border-4 border-yellow-500 p-4 text-center">
                   <span className="font-bold text-yellow-800">
                     {teamName ? `${teamName}의 턴입니다. 관람 모드로 시청 중...` : '다른 팀의 턴입니다.'}
@@ -269,8 +288,22 @@ const CardModal: React.FC<CardModalProps> = ({
                  </div>
                </div>
 
-               {/* 읽기 전용 모드가 아닐 때만 버튼 표시 */}
-               {!readOnly && onClose && (
+               {/* 미리보기 모드일 때 */}
+               {isPreviewMode && onClose && (
+                 <>
+                   <div className="bg-orange-100 border-4 border-orange-500 p-4 text-center mb-4">
+                     <span className="font-bold text-orange-800">
+                       ⚠️ 미리보기 모드 - 이 결과는 게임에 반영되지 않습니다
+                     </span>
+                   </div>
+                   <button onClick={onClose} className="w-full py-4 bg-gray-700 text-white font-black text-xl border-4 border-black hover:bg-gray-600 shadow-hard">
+                     닫기
+                   </button>
+                 </>
+               )}
+
+               {/* 읽기 전용 모드가 아니고 미리보기 모드도 아닐 때 버튼 표시 */}
+               {!readOnly && !isPreviewMode && onClose && (
                  <button onClick={onClose} className="w-full py-4 bg-blue-900 text-white font-black text-xl border-4 border-black hover:bg-blue-800 shadow-hard">
                    ACCEPT & CONTINUE
                  </button>
