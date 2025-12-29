@@ -6,22 +6,27 @@ interface CardModalProps {
   card: GameCard;
   visible: boolean;
   timeLeft: number;
-  
+
   // Controlled State
   selectedChoice: Choice | null;
   reasoning: string;
   onSelectionChange: (c: Choice) => void;
   onReasoningChange: (s: string) => void;
   onSubmit: () => Promise<void>;
-  
+
   result: AIEvaluationResult | null;
   isProcessing: boolean;
   onClose?: () => void;
+
+  // 추가: 읽기 전용 모드 (다른 팀 턴 뷰어 모드)
+  readOnly?: boolean;
+  // 추가: 현재 팀 이름 표시
+  teamName?: string;
 }
 
-const CardModal: React.FC<CardModalProps> = ({ 
-  card, 
-  visible, 
+const CardModal: React.FC<CardModalProps> = ({
+  card,
+  visible,
   timeLeft,
   selectedChoice,
   reasoning,
@@ -30,7 +35,9 @@ const CardModal: React.FC<CardModalProps> = ({
   onSubmit,
   result,
   isProcessing,
-  onClose
+  onClose,
+  readOnly = false,
+  teamName
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   
@@ -117,6 +124,15 @@ const CardModal: React.FC<CardModalProps> = ({
           {!result ? (
             /* Input Phase */
             <div className="space-y-6">
+              {/* 읽기 전용 모드 안내 */}
+              {readOnly && (
+                <div className="bg-yellow-100 border-4 border-yellow-500 p-4 text-center">
+                  <span className="font-bold text-yellow-800">
+                    {teamName ? `${teamName}의 턴입니다. 관람 모드로 시청 중...` : '다른 팀의 턴입니다.'}
+                  </span>
+                </div>
+              )}
+
               {!isOpenEnded ? (
                 <>
                   <h3 className="text-black text-sm font-bold uppercase tracking-widest">1. 당신의 선택은?</h3>
@@ -124,14 +140,17 @@ const CardModal: React.FC<CardModalProps> = ({
                     {card.choices?.map((choice) => (
                       <button
                         key={choice.id}
-                        onClick={() => onSelectionChange(choice)}
+                        onClick={() => !readOnly && onSelectionChange(choice)}
+                        disabled={readOnly}
                         className={`group relative flex flex-col items-start p-4 border-4 transition-all text-left h-full
-                          ${selectedChoice?.id === choice.id 
-                            ? 'border-blue-600 bg-blue-50 shadow-hard transform -translate-y-1' 
+                          ${selectedChoice?.id === choice.id
+                            ? 'border-blue-600 bg-blue-50 shadow-hard transform -translate-y-1'
                             : 'border-black hover:bg-gray-50'
-                          }`}
+                          }
+                          ${readOnly ? 'cursor-not-allowed opacity-70' : ''}
+                        `}
                       >
-                        <div className={`absolute top-0 right-0 px-3 py-1 text-sm font-bold border-b-2 border-l-2 
+                        <div className={`absolute top-0 right-0 px-3 py-1 text-sm font-bold border-b-2 border-l-2
                           ${selectedChoice?.id === choice.id ? 'bg-blue-600 text-white border-blue-600' : 'bg-black text-white border-black'}`}>
                           {choice.id}
                         </div>
@@ -155,34 +174,76 @@ const CardModal: React.FC<CardModalProps> = ({
                     <textarea
                       ref={textareaRef}
                       value={reasoning}
-                      onChange={(e) => onReasoningChange(e.target.value)}
+                      onChange={(e) => !readOnly && onReasoningChange(e.target.value)}
                       onKeyDown={handleKeyDown}
-                      placeholder={isOpenEnded ? "여기에 답변을 입력하세요..." : (selectedChoice ? "팀이 모바일에서 입력중일 수 있습니다..." : "먼저 선택지를 고르세요.")}
-                      className="w-full h-32 p-4 border-4 border-black font-medium focus:outline-none focus:bg-yellow-50 resize-none text-lg"
-                      disabled={isProcessing}
+                      placeholder={readOnly ? "다른 팀이 입력 중..." : (isOpenEnded ? "여기에 답변을 입력하세요..." : (selectedChoice ? "팀이 모바일에서 입력중일 수 있습니다..." : "먼저 선택지를 고르세요."))}
+                      className={`w-full h-32 p-4 border-4 border-black font-medium focus:outline-none focus:bg-yellow-50 resize-none text-lg ${readOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                      disabled={isProcessing || readOnly}
+                      readOnly={readOnly}
                     />
                   </div>
-                  
-                  <button
-                    onClick={onSubmit}
-                    disabled={(!isOpenEnded && !selectedChoice) || !reasoning.trim() || isProcessing}
-                    className="w-full mt-4 py-4 bg-black text-white text-xl font-black uppercase border-4 border-black hover:bg-gray-800 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-3 transition-all"
-                  >
-                    {isProcessing ? (
-                      <>
-                        <Sparkles className="animate-spin" /> AI Processing...
-                      </>
-                    ) : (
-                      <>
-                        <Send size={20} /> AI 리더의 평가(클릭)
-                      </>
-                    )}
-                  </button>
+
+                  {!readOnly && (
+                    <button
+                      onClick={onSubmit}
+                      disabled={(!isOpenEnded && !selectedChoice) || !reasoning.trim() || isProcessing}
+                      className="w-full mt-4 py-4 bg-black text-white text-xl font-black uppercase border-4 border-black hover:bg-gray-800 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-3 transition-all"
+                    >
+                      {isProcessing ? (
+                        <>
+                          <Sparkles className="animate-spin" /> AI Processing...
+                        </>
+                      ) : (
+                        <>
+                          <Send size={20} /> AI 리더의 평가(클릭)
+                        </>
+                      )}
+                    </button>
+                  )}
+
+                  {readOnly && isProcessing && (
+                    <div className="w-full mt-4 py-4 bg-gray-600 text-white text-xl font-black uppercase border-4 border-black flex items-center justify-center gap-3">
+                      <Sparkles className="animate-spin" /> AI 평가 중...
+                    </div>
+                  )}
               </div>
             </div>
           ) : (
-            /* Result Phase */
+            /* Result Phase - 응답 내용 + AI 결과 표시 */
             <div className="animate-in fade-in zoom-in duration-300 space-y-6">
+
+               {/* 팀 응답 내용 표시 */}
+               <div className="bg-blue-50 border-4 border-blue-900 p-6">
+                 <div className="flex items-center gap-3 mb-4">
+                   <div className="bg-blue-900 text-white p-2 rounded-full"><MessageSquare size={20} /></div>
+                   <h3 className="text-lg font-black uppercase text-blue-900">
+                     {teamName ? `${teamName}의 응답` : '팀 응답'}
+                   </h3>
+                 </div>
+
+                 {/* 선택한 옵션 표시 */}
+                 {selectedChoice && (
+                   <div className="mb-4">
+                     <div className="text-xs font-bold text-blue-700 uppercase mb-1">선택한 옵션</div>
+                     <div className="bg-white border-2 border-blue-300 p-3 font-bold">
+                       <span className="bg-blue-900 text-white px-2 py-0.5 text-xs mr-2">{selectedChoice.id}</span>
+                       {selectedChoice.text}
+                     </div>
+                   </div>
+                 )}
+
+                 {/* 응답 내용 표시 */}
+                 <div>
+                   <div className="text-xs font-bold text-blue-700 uppercase mb-1">
+                     {selectedChoice ? '선택 이유' : '응답 내용'}
+                   </div>
+                   <div className="bg-white border-2 border-blue-300 p-3 font-medium whitespace-pre-wrap">
+                     {reasoning || '(응답 내용 없음)'}
+                   </div>
+                 </div>
+               </div>
+
+               {/* AI 평가 결과 */}
                <div className="bg-gray-100 border-4 border-black p-6">
                  <div className="flex items-center gap-3 mb-4">
                    <div className="bg-black text-white p-2 rounded-full"><Sparkles size={24} /></div>
@@ -191,7 +252,7 @@ const CardModal: React.FC<CardModalProps> = ({
                  <p className="text-lg font-medium leading-relaxed whitespace-pre-wrap mb-6">
                    {result.feedback}
                  </p>
-                 
+
                  <div className="grid grid-cols-2 md:grid-cols-5 gap-2 border-t-2 border-gray-300 pt-4">
                    {['Capital', 'Energy', 'Trust', 'Competency', 'Insight'].map((label, i) => {
                       const key = label.toLowerCase() as keyof typeof result.scoreChanges;
@@ -208,9 +269,19 @@ const CardModal: React.FC<CardModalProps> = ({
                  </div>
                </div>
 
-               <button onClick={onClose} className="w-full py-4 bg-blue-900 text-white font-black text-xl border-4 border-black hover:bg-blue-800 shadow-hard">
-                 ACCEPT & CONTINUE
-               </button>
+               {/* 읽기 전용 모드가 아닐 때만 버튼 표시 */}
+               {!readOnly && onClose && (
+                 <button onClick={onClose} className="w-full py-4 bg-blue-900 text-white font-black text-xl border-4 border-black hover:bg-blue-800 shadow-hard">
+                   ACCEPT & CONTINUE
+                 </button>
+               )}
+
+               {/* 읽기 전용 모드일 때 */}
+               {readOnly && (
+                 <div className="text-center py-4 bg-gray-200 border-4 border-gray-400 font-bold text-gray-600">
+                   다른 팀의 턴을 관람 중입니다
+                 </div>
+               )}
             </div>
           )}
         </div>
