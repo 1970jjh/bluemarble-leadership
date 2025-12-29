@@ -53,13 +53,12 @@ const GameBoard: React.FC<GameBoardProps> = ({ teams, onSquareClick, gameMode })
     }
   };
 
-  // 모드별 배경 이미지 (직접 이미지 URL 사용)
-  // ibb.co에서 "Direct links" 복사 필요 (i.ibb.co로 시작하는 URL)
+  // 모드별 배경 이미지
   const bgImages: Record<string, string> = {
-    [GameVersion.Leader]: 'https://i.ibb.co/zVrLK67D/image.png',      // 리더십
-    [GameVersion.Follower]: 'https://i.ibb.co/xKqT27Lj/image.png',    // 팔로워십
-    [GameVersion.Team]: 'https://i.ibb.co/cKDqrFpK/image.png',        // 팀쉽
-    [GameVersion.Self]: 'https://i.ibb.co/35qyb3BF/image.png',        // 셀프리더십
+    [GameVersion.Leader]: 'https://i.ibb.co/PvL5b8Tm/image.png',      // 리더십
+    [GameVersion.Follower]: 'https://i.ibb.co/pBRPbX5M/image.png',    // 팔로워십
+    [GameVersion.Team]: 'https://i.ibb.co/cS0bpRtL/image.png',        // 팀쉽
+    [GameVersion.Self]: 'https://i.ibb.co/PZPBWpgf/image.png',        // 셀프리더십
   };
 
   // 현재 게임 모드에 맞는 배경 이미지 선택

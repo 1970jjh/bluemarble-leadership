@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { GameVersion, Team, Session, SessionStatus, TeamColor } from '../types';
-import { Plus, Trash2, Play, Pause, ExternalLink, QrCode, X, MonitorPlay } from 'lucide-react';
+import { Plus, Trash2, Play, Pause, ExternalLink, QrCode, X, MonitorPlay, Copy, Check } from 'lucide-react';
 import { INITIAL_RESOURCES } from '../constants';
+import { QRCodeSVG } from 'qrcode.react';
 
 interface LobbyProps {
   sessions: Session[];
@@ -25,6 +26,33 @@ const Lobby: React.FC<LobbyProps> = ({
   
   // --- UI State ---
   const [inviteModalSession, setInviteModalSession] = useState<Session | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  // 참가자 접속 URL 생성
+  const getJoinUrl = (accessCode: string) => {
+    const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+    return `${baseUrl}?join=${accessCode}`;
+  };
+
+  // 링크 복사 핸들러
+  const handleCopyLink = async (accessCode: string) => {
+    const url = getJoinUrl(accessCode);
+    try {
+      await navigator.clipboard.writeText(url);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    } catch (err) {
+      // Fallback for browsers that don't support clipboard API
+      const textArea = document.createElement('textarea');
+      textArea.value = url;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    }
+  };
 
   const handleCreate = () => {
     if (!newName.trim()) {
@@ -224,17 +252,16 @@ const Lobby: React.FC<LobbyProps> = ({
             <p className="text-center text-gray-500 font-bold mb-6">{inviteModalSession.name}</p>
 
             <div className="bg-gray-100 border-4 border-black p-8 mb-6 flex flex-col items-center justify-center">
-               {/* Simulated QR Code */}
-               <div className="bg-white p-2 border-2 border-black mb-4">
-                 <div className="w-48 h-48 bg-black pattern-grid-lg flex items-center justify-center text-white font-mono text-xs text-center p-2 relative">
-                    <div className="absolute inset-2 border-4 border-white"></div>
-                    <div className="absolute top-4 left-4 w-12 h-12 bg-white border-4 border-black"></div>
-                    <div className="absolute top-4 right-4 w-12 h-12 bg-white border-4 border-black"></div>
-                    <div className="absolute bottom-4 left-4 w-12 h-12 bg-white border-4 border-black"></div>
-                    <span className="z-10 bg-white text-black px-2 py-1 font-bold border-2 border-black">QR CODE</span>
-                 </div>
+               {/* 실제 QR 코드 */}
+               <div className="bg-white p-4 border-2 border-black mb-4">
+                 <QRCodeSVG
+                   value={getJoinUrl(inviteModalSession.accessCode)}
+                   size={200}
+                   level="H"
+                   includeMargin={true}
+                 />
                </div>
-               
+
                <p className="font-bold text-sm text-gray-500 mb-2 uppercase">Access Code</p>
                <div className="text-5xl font-black tracking-widest font-mono bg-white border-2 border-black px-6 py-2 shadow-hard-sm">
                  {inviteModalSession.accessCode}
@@ -242,14 +269,21 @@ const Lobby: React.FC<LobbyProps> = ({
             </div>
 
             <div className="space-y-3">
-              <button 
-                 className="w-full py-3 bg-yellow-400 border-4 border-black font-black uppercase shadow-hard hover:translate-y-1 hover:shadow-none transition-all flex items-center justify-center gap-2"
-                 onClick={() => alert("클립보드에 링크가 복사되었습니다 (시뮬레이션)")}
+              <button
+                 className={`w-full py-3 border-4 border-black font-black uppercase shadow-hard hover:translate-y-1 hover:shadow-none transition-all flex items-center justify-center gap-2 ${linkCopied ? 'bg-green-400' : 'bg-yellow-400'}`}
+                 onClick={() => handleCopyLink(inviteModalSession.accessCode)}
               >
-                <ExternalLink size={20} /> 초대 링크 복사
+                {linkCopied ? (
+                  <><Check size={20} /> 복사 완료!</>
+                ) : (
+                  <><Copy size={20} /> 초대 링크 복사</>
+                )}
               </button>
               <p className="text-xs text-center font-bold text-gray-500">
                 참가자들에게 위 QR코드 또는 접속 코드를 공유하세요.
+              </p>
+              <p className="text-xs text-center font-mono text-gray-400 break-all">
+                {getJoinUrl(inviteModalSession.accessCode)}
               </p>
             </div>
           </div>
