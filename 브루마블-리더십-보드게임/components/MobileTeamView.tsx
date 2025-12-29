@@ -1,6 +1,6 @@
 import React from 'react';
 import { Team, GamePhase, GameCard, Choice, AIEvaluationResult } from '../types';
-import { Battery, Coins, Handshake, Lightbulb, TrendingUp, MapPin, Dice5, Send, Sparkles, Eye, MessageSquare } from 'lucide-react';
+import { Battery, Coins, Handshake, Lightbulb, TrendingUp, MapPin, Dice5, Send, Sparkles, Eye, MessageSquare, LogOut } from 'lucide-react';
 import { BOARD_SQUARES } from '../constants';
 
 interface MobileTeamViewProps {
@@ -9,7 +9,8 @@ interface MobileTeamViewProps {
   isMyTurn: boolean;
   gamePhase: GamePhase;
   onRollDice: () => void;
-  
+  onLogout?: () => void;
+
   // Active Turn Props
   activeCard: GameCard | null;
   activeInput: { choice: Choice | null, reasoning: string };
@@ -19,12 +20,13 @@ interface MobileTeamViewProps {
   isProcessing: boolean;
 }
 
-const MobileTeamView: React.FC<MobileTeamViewProps> = ({ 
-  team, 
+const MobileTeamView: React.FC<MobileTeamViewProps> = ({
+  team,
   activeTeamName,
-  isMyTurn, 
-  gamePhase, 
+  isMyTurn,
+  gamePhase,
   onRollDice,
+  onLogout,
   activeCard,
   activeInput,
   onInputChange,
@@ -62,7 +64,22 @@ const MobileTeamView: React.FC<MobileTeamViewProps> = ({
             <h2 className="text-xs font-bold uppercase text-gray-500">MY TEAM</h2>
             <h1 className="text-2xl font-black uppercase">{team.name}</h1>
           </div>
-          <div className={`w-8 h-8 rounded-full border-2 border-black bg-${team.color.toLowerCase()}-500`}></div>
+          <div className="flex items-center gap-2">
+            <div className={`w-8 h-8 rounded-full border-2 border-black bg-${team.color.toLowerCase()}-500`}></div>
+            {onLogout && (
+              <button
+                onClick={() => {
+                  if (window.confirm('정말 로그아웃 하시겠습니까?')) {
+                    onLogout();
+                  }
+                }}
+                className="p-2 bg-gray-200 border-2 border-black hover:bg-red-100 transition-colors"
+                title="로그아웃"
+              >
+                <LogOut size={16} />
+              </button>
+            )}
+          </div>
         </div>
         {/* 팀원 목록 표시 */}
         {team.members.length > 0 && (
