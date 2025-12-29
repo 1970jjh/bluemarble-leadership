@@ -45,6 +45,9 @@ const App: React.FC = () => {
 
   // --- Participant State ---
   const [participantTeamId, setParticipantTeamId] = useState<string | null>(null);
+  const [participantName, setParticipantName] = useState<string>('');
+  const [nameInput, setNameInput] = useState<string>('');
+  const [isJoinedTeam, setIsJoinedTeam] = useState(false);
   const [initialAccessCode, setInitialAccessCode] = useState<string>('');
   const [isJoining, setIsJoining] = useState(false);
   const [joinError, setJoinError] = useState('');
@@ -331,6 +334,48 @@ const App: React.FC = () => {
   // 참가자 팀 선택 핸들러
   const handleSelectTeam = (teamId: string) => {
     setParticipantTeamId(teamId);
+  };
+
+  // 참가자 팀 참여 핸들러 (이름 입력 후)
+  const handleJoinTeam = async (teamId: string, playerName: string) => {
+    if (!currentSession || !playerName.trim()) return;
+
+    const newPlayer = {
+      id: `player_${Date.now()}`,
+      name: playerName.trim()
+    };
+
+    // 팀에 멤버 추가
+    const updatedTeams = currentSession.teams.map(team => {
+      if (team.id === teamId) {
+        return {
+          ...team,
+          members: [...team.members, newPlayer]
+        };
+      }
+      return team;
+    });
+
+    // Firebase에 저장
+    const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+    if (isFirebaseConfigured) {
+      try {
+        await firestoreService.updateTeams(currentSessionId!, updatedTeams);
+      } catch (error) {
+        console.error('Firebase 팀원 추가 실패:', error);
+      }
+    }
+
+    // 로컬 상태 업데이트
+    setSessions(prev => prev.map(s => {
+      if (s.id === currentSessionId) {
+        return { ...s, teams: updatedTeams };
+      }
+      return s;
+    }));
+
+    setParticipantName(playerName.trim());
+    setIsJoinedTeam(true);
   };
 
   const updateTeamsInSession = async (updatedTeams: Team[]) => {
@@ -781,7 +826,7 @@ const App: React.FC = () => {
     const participantTeam = participantSession?.teams.find(t => t.id === participantTeamId);
 
     // 팀 선택 화면
-    if (!participantTeamId || !participantTeam) {
+    if (!participantTeamId) {
       return (
         <div className="min-h-screen bg-blue-900 flex flex-col items-center justify-center p-4">
           <div className="max-w-md w-full bg-white border-4 border-black shadow-[8px_8px_0_0_#000] p-8">
@@ -793,14 +838,19 @@ const App: React.FC = () => {
             </p>
 
             <div className="grid grid-cols-2 gap-3 mb-6">
-              {participantSession?.teams.map((team, idx) => (
+              {participantSession?.teams.map((team) => (
                 <button
                   key={team.id}
                   onClick={() => handleSelectTeam(team.id)}
                   className="p-4 border-4 border-black font-black text-lg hover:bg-yellow-400 transition-colors flex flex-col items-center gap-2"
                 >
                   <div className={`w-8 h-8 rounded-full bg-${team.color.toLowerCase()}-500 border-2 border-black`}></div>
-                  {team.name}
+                  <span>{team.name}</span>
+                  {team.members.length > 0 && (
+                    <span className="text-xs font-normal text-gray-500">
+                      ({team.members.map(m => m.name).join(', ')})
+                    </span>
+                  )}
                 </button>
               ))}
             </div>
@@ -810,6 +860,61 @@ const App: React.FC = () => {
               className="w-full py-3 bg-gray-200 border-4 border-black font-bold"
             >
               나가기
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // 이름 입력 화면 (팀 선택 후, 참여 전)
+    if (participantTeamId && !isJoinedTeam) {
+      const selectedTeam = participantSession?.teams.find(t => t.id === participantTeamId);
+
+      return (
+        <div className="min-h-screen bg-blue-900 flex flex-col items-center justify-center p-4">
+          <div className="max-w-md w-full bg-white border-4 border-black shadow-[8px_8px_0_0_#000] p-8">
+            <h1 className="text-2xl font-black text-center mb-2">
+              {selectedTeam?.name} 참여
+            </h1>
+            <p className="text-center text-gray-500 font-bold mb-6">
+              이름을 입력해주세요
+            </p>
+
+            {/* 현재 팀원 표시 */}
+            {selectedTeam && selectedTeam.members.length > 0 && (
+              <div className="mb-4 p-3 bg-gray-100 border-2 border-black">
+                <p className="text-xs font-bold text-gray-500 mb-1">현재 참여 중인 팀원:</p>
+                <p className="font-bold">{selectedTeam.members.map(m => m.name).join(', ')}</p>
+              </div>
+            )}
+
+            <input
+              type="text"
+              value={nameInput}
+              onChange={(e) => setNameInput(e.target.value)}
+              placeholder="이름 입력"
+              className="w-full p-4 border-4 border-black text-lg font-bold mb-4 focus:outline-none focus:border-blue-500"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && nameInput.trim()) {
+                  handleJoinTeam(participantTeamId, nameInput);
+                }
+              }}
+            />
+
+            <button
+              onClick={() => handleJoinTeam(participantTeamId, nameInput)}
+              disabled={!nameInput.trim()}
+              className="w-full py-4 bg-blue-500 text-white border-4 border-black font-black text-lg hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed mb-3"
+            >
+              참여하기
+            </button>
+
+            <button
+              onClick={() => { setParticipantTeamId(null); setNameInput(''); }}
+              className="w-full py-3 bg-gray-200 border-4 border-black font-bold"
+            >
+              다른 팀 선택
             </button>
           </div>
         </div>

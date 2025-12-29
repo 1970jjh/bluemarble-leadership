@@ -56,12 +56,21 @@ const MobileTeamView: React.FC<MobileTeamViewProps> = ({
   return (
     <div className="min-h-screen bg-gray-100 p-4 pb-8 flex flex-col font-sans max-w-md mx-auto border-x-4 border-black bg-white">
       {/* Header */}
-      <div className={`p-4 border-4 border-black mb-6 shadow-hard flex justify-between items-center bg-${team.color.toLowerCase()}-100`}>
-        <div>
-          <h2 className="text-xs font-bold uppercase text-gray-500">MY TEAM</h2>
-          <h1 className="text-2xl font-black uppercase">{team.name}</h1>
+      <div className={`p-4 border-4 border-black mb-6 shadow-hard bg-${team.color.toLowerCase()}-100`}>
+        <div className="flex justify-between items-center">
+          <div>
+            <h2 className="text-xs font-bold uppercase text-gray-500">MY TEAM</h2>
+            <h1 className="text-2xl font-black uppercase">{team.name}</h1>
+          </div>
+          <div className={`w-8 h-8 rounded-full border-2 border-black bg-${team.color.toLowerCase()}-500`}></div>
         </div>
-        <div className={`w-8 h-8 rounded-full border-2 border-black bg-${team.color.toLowerCase()}-500`}></div>
+        {/* 팀원 목록 표시 */}
+        {team.members.length > 0 && (
+          <div className="mt-2 text-sm text-gray-600 truncate">
+            <span className="font-bold">팀원: </span>
+            {team.members.map(m => m.name).join(', ')}
+          </div>
+        )}
       </div>
 
       {/* --- DECISION CARD VIEW (Active or Spectator) --- */}

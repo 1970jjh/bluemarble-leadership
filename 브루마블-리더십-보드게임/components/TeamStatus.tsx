@@ -50,10 +50,20 @@ const TeamStatus: React.FC<TeamStatusProps> = ({ team, active }) => {
 
   return (
     <div className={`border-4 border-black bg-white transition-all duration-300 ${active ? 'shadow-hard translate-x-[-2px] translate-y-[-2px]' : 'opacity-90'}`}>
-      <div className={`p-2 border-b-4 border-black flex justify-between items-center ${getHeaderColor(team.color)}`}>
-        <h3 className="font-black text-lg uppercase truncate">{team.name}</h3>
-        {team.isBurnout && <span className="bg-black text-white text-[10px] px-2 py-0.5 font-bold">BURNOUT</span>}
-        {active && <span className="text-xl animate-bounce">▼</span>}
+      <div className={`p-2 border-b-4 border-black ${getHeaderColor(team.color)}`}>
+        <div className="flex justify-between items-center">
+          <h3 className="font-black text-lg uppercase truncate">{team.name}</h3>
+          <div className="flex items-center gap-1">
+            {team.isBurnout && <span className="bg-black text-white text-[10px] px-2 py-0.5 font-bold">BURNOUT</span>}
+            {active && <span className="text-xl animate-bounce">▼</span>}
+          </div>
+        </div>
+        {/* 팀원 목록 표시 */}
+        {team.members.length > 0 && (
+          <div className="text-xs mt-1 opacity-80 truncate">
+            {team.members.map(m => m.name).join(', ')}
+          </div>
+        )}
       </div>
       
       <div className="p-4 space-y-4">
