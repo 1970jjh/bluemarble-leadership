@@ -89,6 +89,18 @@ const App: React.FC = () => {
   const localOperationInProgress = useRef(false);
   const localOperationTimestamp = useRef(0);
 
+  // Ref to prevent saving data that was just received from Firebase (무한 루프 방지)
+  const isReceivingFromFirebase = useRef(false);
+  const lastReceivedTimestamp = useRef(0);
+  const saveDebounceTimer = useRef<any>(null);
+
+  // gameLogs를 ref로 관리하여 저장 시 최신 값 사용 (의존성 루프 방지)
+  const gameLogsRef = useRef<string[]>([]);
+  // gameLogs 변경 시 ref도 업데이트
+  useEffect(() => {
+    gameLogsRef.current = gameLogs;
+  }, [gameLogs]);
+
   // Helper to get current session object
   const currentSession = sessions.find(s => s.id === currentSessionId);
   const teams = currentSession ? currentSession.teams : [];
@@ -206,20 +218,19 @@ const App: React.FC = () => {
 
     const unsubscribe = firestoreService.subscribeToGameState(currentSessionId, (state) => {
       if (state) {
-        console.log('[Firebase] 게임 상태 수신:', state.phase, 'card:', !!state.currentCard, 'localOp:', localOperationInProgress.current);
-
         // 로컬 작업 진행 중이면 Firebase 상태 무시 (로컬 상태가 우선)
-        // 단, Firebase 데이터가 더 최신이면 적용 (lastUpdated 비교)
         if (localOperationInProgress.current) {
-          // 로컬 작업 중에는 중요한 상태(phase, isRolling)를 Firebase에서 덮어쓰지 않음
-          console.log('[Firebase] 로컬 작업 진행 중 - 중요 상태 업데이트 스킵');
+          console.log('[Firebase] 로컬 작업 진행 중 - 업데이트 스킵');
 
-          // 덜 중요한 상태만 업데이트 (다른 팀원의 입력 등)
+          // Decision 상태에서 다른 팀원의 입력만 업데이트
           if (state.currentCard && state.phase === GamePhase.Decision) {
+            isReceivingFromFirebase.current = true;
             setActiveCard(state.currentCard);
             setSharedSelectedChoice(state.selectedChoice);
             setSharedReasoning(state.reasoning || '');
             setShowCardModal(true);
+            // 짧은 지연 후 플래그 해제
+            setTimeout(() => { isReceivingFromFirebase.current = false; }, 100);
           }
           return;
         }
@@ -227,19 +238,28 @@ const App: React.FC = () => {
         // 로컬 작업이 끝난 후 일정 시간 동안도 보호 (Firebase 지연 응답 방지)
         const timeSinceLocalOp = Date.now() - localOperationTimestamp.current;
         if (timeSinceLocalOp < 2000 && state.lastUpdated < localOperationTimestamp.current) {
-          console.log('[Firebase] 오래된 Firebase 데이터 무시:', timeSinceLocalOp, 'ms');
+          console.log('[Firebase] 오래된 Firebase 데이터 무시');
           return;
         }
+
+        // 이미 같은 timestamp의 데이터를 받았으면 스킵 (중복 처리 방지)
+        if (state.lastUpdated && state.lastUpdated === lastReceivedTimestamp.current) {
+          return;
+        }
+        lastReceivedTimestamp.current = state.lastUpdated || 0;
+
+        // Firebase 수신 플래그 설정 (무한 루프 방지)
+        isReceivingFromFirebase.current = true;
 
         // 정상적인 Firebase 상태 동기화
         setGamePhase(state.phase as GamePhase);
         setCurrentTurnIndex(state.currentTeamIndex);
 
-        // diceValue는 값이 실제로 다를 때만 업데이트 (배열 참조 비교로 인한 무한 루프 방지)
+        // diceValue는 값이 실제로 다를 때만 업데이트
         const newDiceValue = state.diceValue || [1, 1];
         setDiceValue(prev => {
           if (prev[0] === newDiceValue[0] && prev[1] === newDiceValue[1]) {
-            return prev; // 같은 값이면 기존 참조 유지
+            return prev;
           }
           return newDiceValue;
         });
@@ -251,18 +271,26 @@ const App: React.FC = () => {
         setIsAiProcessing(state.isAiProcessing || false);
         setIsRolling(state.phase === GamePhase.Rolling);
 
+        // gameLogs는 길이가 다를 때만 업데이트 (배열 참조 비교로 인한 무한 루프 방지)
         if (state.gameLogs?.length) {
-          setGameLogs(state.gameLogs);
+          setGameLogs(prev => {
+            if (prev.length === state.gameLogs.length) {
+              return prev; // 같은 길이면 기존 참조 유지
+            }
+            return state.gameLogs;
+          });
         }
 
         // 카드가 있으면 모달 표시
         if (state.currentCard && state.phase === GamePhase.Decision) {
           setShowCardModal(true);
         }
-        // 결과가 이미 있으면 모달 닫힌 상태로 (이미 완료된 턴)
         if (state.aiResult && state.phase !== GamePhase.Decision) {
           setShowCardModal(false);
         }
+
+        // 짧은 지연 후 플래그 해제 (상태 업데이트가 완료된 후)
+        setTimeout(() => { isReceivingFromFirebase.current = false; }, 100);
       }
     });
 
@@ -289,25 +317,46 @@ const App: React.FC = () => {
         aiResult: aiEvaluationResult,
         isSubmitted: !!aiEvaluationResult,
         isAiProcessing: isAiProcessing,
-        gameLogs: gameLogs,
+        gameLogs: gameLogsRef.current, // ref 사용으로 의존성 루프 방지
         lastUpdated: Date.now()
       });
     } catch (error) {
       console.error('Firebase 게임 상태 저장 실패:', error);
     }
-  }, [currentSessionId, gamePhase, currentTurnIndex, diceValue, activeCard, sharedSelectedChoice, sharedReasoning, aiEvaluationResult, isAiProcessing, gameLogs]);
+  }, [currentSessionId, gamePhase, currentTurnIndex, diceValue, activeCard, sharedSelectedChoice, sharedReasoning, aiEvaluationResult, isAiProcessing]);
 
-  // 게임 상태 변경 시 Firebase에 저장
+  // 게임 상태 변경 시 Firebase에 저장 (디바운스 적용)
   useEffect(() => {
-    // 중요한 상태가 변경될 때만 저장
-    // Rolling 상태는 handleRollDice()와 performMove()에서 직접 저장하므로 여기서는 스킵
-    // (주사위 애니메이션 중 diceValue 변경으로 인한 불필요한 저장 방지)
-    if (gamePhase === GamePhase.Rolling) return;
-
-    if (currentSessionId && (activeCard || aiEvaluationResult || gamePhase !== GamePhase.Idle)) {
-      saveGameStateToFirebase();
+    // Firebase에서 방금 받은 데이터면 다시 저장하지 않음 (무한 루프 방지)
+    if (isReceivingFromFirebase.current) {
+      return;
     }
-  }, [activeCard, sharedSelectedChoice, sharedReasoning, aiEvaluationResult, isAiProcessing, gamePhase, currentSessionId, saveGameStateToFirebase]);
+
+    // Rolling/Moving 상태는 handleRollDice()와 performMove()에서 직접 저장
+    if (gamePhase === GamePhase.Rolling || gamePhase === GamePhase.Moving) {
+      return;
+    }
+
+    // Decision 상태에서만 자동 저장 (사용자 입력 동기화)
+    if (currentSessionId && gamePhase === GamePhase.Decision && activeCard) {
+      // 기존 타이머 취소
+      if (saveDebounceTimer.current) {
+        clearTimeout(saveDebounceTimer.current);
+      }
+      // 500ms 디바운스 (빠른 타이핑 중 연속 저장 방지)
+      saveDebounceTimer.current = setTimeout(() => {
+        if (!isReceivingFromFirebase.current) {
+          saveGameStateToFirebase();
+        }
+      }, 500);
+    }
+
+    return () => {
+      if (saveDebounceTimer.current) {
+        clearTimeout(saveDebounceTimer.current);
+      }
+    };
+  }, [sharedSelectedChoice, sharedReasoning, aiEvaluationResult, isAiProcessing, gamePhase, currentSessionId, activeCard, saveGameStateToFirebase]);
 
   // --- Session Logic ---
 
@@ -546,16 +595,21 @@ const App: React.FC = () => {
     }));
   };
 
-  // Timer
+  // Timer - gamePhase만 의존하여 불필요한 재생성 방지
   useEffect(() => {
     let interval: any;
-    if (gamePhase === GamePhase.Decision && turnTimeLeft > 0) {
+    if (gamePhase === GamePhase.Decision) {
       interval = setInterval(() => {
-        setTurnTimeLeft((prev) => prev - 1);
+        setTurnTimeLeft((prev) => {
+          if (prev <= 0) return 0;
+          return prev - 1;
+        });
       }, 1000);
     }
-    return () => clearInterval(interval);
-  }, [gamePhase, turnTimeLeft]);
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [gamePhase]);
 
   const addLog = useCallback(async (message: string) => {
     const timestamp = new Date().toLocaleTimeString('ko-KR');
@@ -704,7 +758,7 @@ const App: React.FC = () => {
           aiResult: null,
           isSubmitted: false,
           isAiProcessing: false,
-          gameLogs: gameLogs,
+          gameLogs: gameLogsRef.current,
           lastUpdated: Date.now()
         }).catch(err => console.error('Firebase 상태 저장 실패:', err));
       }
@@ -736,7 +790,7 @@ const App: React.FC = () => {
         aiResult: null,
         isSubmitted: false,
         isAiProcessing: false,
-        gameLogs: gameLogs,
+        gameLogs: gameLogsRef.current,
         lastUpdated: Date.now()
       }).catch(err => console.warn('[Firebase] Rolling 상태 저장 실패 (게임은 계속 진행):', err.message));
     }
@@ -790,7 +844,7 @@ const App: React.FC = () => {
         aiResult: null,
         isSubmitted: false,
         isAiProcessing: false,
-        gameLogs: gameLogs,
+        gameLogs: gameLogsRef.current,
         lastUpdated: Date.now()
       }).catch(err => console.warn('[Firebase] Moving 상태 저장 실패 (게임은 계속 진행):', err.message));
     }
@@ -858,7 +912,7 @@ const App: React.FC = () => {
         aiResult: null,
         isSubmitted: true,
         isAiProcessing: true,
-        gameLogs: gameLogs,
+        gameLogs: gameLogsRef.current,
         lastUpdated: Date.now()
       }).catch(err => console.error('Firebase 상태 저장 실패:', err));
     }
@@ -961,7 +1015,7 @@ const App: React.FC = () => {
           aiResult: result,
           isSubmitted: true,
           isAiProcessing: false,
-          gameLogs: gameLogs,
+          gameLogs: gameLogsRef.current,
           lastUpdated: Date.now()
         }).catch(err => console.error('Firebase 결과 저장 실패:', err));
       }
