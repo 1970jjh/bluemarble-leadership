@@ -46,7 +46,7 @@ export const BOARD_SQUARES: BoardSquare[] = [
 ];
 
 export const INITIAL_RESOURCES = {
-  capital: 5,    // Starts at 5, Goal 100
+  capital: 100,  // Starts at 100
   energy: 5,     // Starts at 5, Goal 100
   reputation: 5, // Starts at 5, Goal 100
   trust: 5,      // Starts at 5, Goal 100
