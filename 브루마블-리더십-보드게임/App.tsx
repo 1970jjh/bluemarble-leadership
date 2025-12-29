@@ -69,6 +69,12 @@ const App: React.FC = () => {
   const [showCardModal, setShowCardModal] = useState(false);
   const [previewCard, setPreviewCard] = useState<GameCard | null>(null);
 
+  // --- Preview Card State (관리자 미리보기용 - 게임에 반영 안됨) ---
+  const [previewSelectedChoice, setPreviewSelectedChoice] = useState<Choice | null>(null);
+  const [previewReasoning, setPreviewReasoning] = useState('');
+  const [previewAiResult, setPreviewAiResult] = useState<AIEvaluationResult | null>(null);
+  const [isPreviewProcessing, setIsPreviewProcessing] = useState(false);
+
   // --- Invite Modal State ---
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
@@ -986,8 +992,114 @@ const App: React.FC = () => {
     }
 
     if (cardToPreview) {
+      // 미리보기 상태 초기화
+      setPreviewSelectedChoice(null);
+      setPreviewReasoning('');
+      setPreviewAiResult(null);
+      setIsPreviewProcessing(false);
       setPreviewCard(cardToPreview);
     }
+  };
+
+  // --- 미리보기 카드 AI 평가 (게임에 반영 안됨) ---
+  const handlePreviewSubmit = async () => {
+    if (!previewCard) return;
+    if (isPreviewProcessing) return;
+
+    const isOpenEnded = !previewCard.choices || previewCard.choices.length === 0;
+    if (isOpenEnded && !previewReasoning) return;
+    if (!isOpenEnded && (!previewSelectedChoice || !previewReasoning)) return;
+
+    setIsPreviewProcessing(true);
+
+    if (!process.env.API_KEY) {
+      alert("API Key가 설정되지 않았습니다.");
+      setIsPreviewProcessing(false);
+      return;
+    }
+
+    try {
+      const prompt = `
+        Role: Strict, insightful, financially savvy Leadership Assessor.
+        Context:
+        - Card Type: "${previewCard.type}"
+        - Scenario: "${previewCard.situation}"
+        - Learning Point: "${previewCard.learningPoint}"
+        ${isOpenEnded
+          ? `- User Open-Ended Answer: "${previewReasoning}"`
+          : `- User Choice: "${previewSelectedChoice?.text}" \n- User Reasoning: "${previewReasoning}"`
+        }
+
+        Evaluation Rules:
+        1. IF Card Type is 'Event' (Chance/Golden Key):
+           - ALL outcomes MUST be POSITIVE scores. Award HIGHER positive scores for logical/strategic reasoning.
+
+        2. IF Card Type is 'Burnout':
+           - ALL outcomes MUST be NEGATIVE scores. Award SMALLER penalties for good damage control.
+
+        3. IF Card Type is 'Challenge' (Open-Ended Innovation):
+           - Evaluate the creativity, feasibility, and strategic alignment of the user's answer.
+           - High Quality Answer: Award substantial Competency and Insight.
+           - Low Quality Answer: No change or slight deduction in Insight.
+
+        4. IF Card Type is 'CoreValue' (Dilemma):
+           - Evaluate how well the choice aligns with the value described in the choice text.
+           - Ensure reasoning reflects the chosen value.
+
+        5. General:
+           - Deduct Capital if spending is mentioned.
+
+        Output JSON:
+        - feedback: Detailed paragraph (Korean).
+        - scores: { capital, energy, trust, competency, insight } (integers)
+      `;
+
+      const response = await genAI.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              feedback: { type: Type.STRING },
+              scores: {
+                type: Type.OBJECT,
+                properties: {
+                  capital: { type: Type.INTEGER },
+                  energy: { type: Type.INTEGER },
+                  trust: { type: Type.INTEGER },
+                  competency: { type: Type.INTEGER },
+                  insight: { type: Type.INTEGER },
+                }
+              }
+            }
+          }
+        }
+      });
+
+      const parsed = JSON.parse(response.text || '{}');
+      const result: AIEvaluationResult = {
+        feedback: parsed.feedback,
+        scoreChanges: parsed.scores
+      };
+
+      setPreviewAiResult(result);
+    } catch (e) {
+      console.error(e);
+      alert("AI 오류가 발생했습니다. 다시 시도해주세요.");
+    } finally {
+      setIsPreviewProcessing(false);
+    }
+  };
+
+  // 미리보기 모달 닫기 핸들러
+  const handleClosePreview = () => {
+    setPreviewCard(null);
+    setPreviewSelectedChoice(null);
+    setPreviewReasoning('');
+    setPreviewAiResult(null);
+    setIsPreviewProcessing(false);
   };
 
   // --- Views ---
@@ -1364,14 +1476,15 @@ const App: React.FC = () => {
            card={previewCard}
            visible={true}
            timeLeft={0}
-           selectedChoice={null}
-           reasoning=""
-           onSelectionChange={() => {}}
-           onReasoningChange={() => {}}
-           onSubmit={async () => alert("Preview Mode Only")}
-           result={null} 
-           isProcessing={false}
-           onClose={() => setPreviewCard(null)}
+           selectedChoice={previewSelectedChoice}
+           reasoning={previewReasoning}
+           onSelectionChange={setPreviewSelectedChoice}
+           onReasoningChange={setPreviewReasoning}
+           onSubmit={handlePreviewSubmit}
+           result={previewAiResult}
+           isProcessing={isPreviewProcessing}
+           onClose={handleClosePreview}
+           isPreviewMode={true}
         />
       )}
 
