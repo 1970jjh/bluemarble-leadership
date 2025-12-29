@@ -55,10 +55,10 @@ const GameBoard: React.FC<GameBoardProps> = ({ teams, onSquareClick, gameMode })
 
   // 모드별 배경 이미지
   const bgImages: Record<string, string> = {
-    [GameVersion.Leader]: 'https://i.ibb.co/PvL5b8Tm/image.png',      // 리더십
-    [GameVersion.Follower]: 'https://i.ibb.co/pBRPbX5M/image.png',    // 팔로워십
-    [GameVersion.Team]: 'https://i.ibb.co/cS0bpRtL/image.png',        // 팀쉽
-    [GameVersion.Self]: 'https://i.ibb.co/PZPBWpgf/image.png',        // 셀프리더십
+    [GameVersion.Leader]: 'https://i.ibb.co/jPpGrZ1S/image.png',      // 리더십
+    [GameVersion.Follower]: 'https://i.ibb.co/ks7LnDdK/image.png',    // 팔로워십
+    [GameVersion.Team]: 'https://i.ibb.co/PGMd9GS8/image.png',        // 팀쉽
+    [GameVersion.Self]: 'https://i.ibb.co/Rpd0VG9G/image.png',        // 셀프리더십
   };
 
   // 현재 게임 모드에 맞는 배경 이미지 선택
