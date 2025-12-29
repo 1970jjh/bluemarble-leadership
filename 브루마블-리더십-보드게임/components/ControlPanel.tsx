@@ -152,7 +152,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
              <Terminal size={10} /> System Log
           </div>
           <div className="flex-1 flex flex-col gap-1 justify-end">
-             {logs.length === 0 && <span className="text-gray-600 italic">> Waiting for game start...</span>}
+             {logs.length === 0 && <span className="text-gray-600 italic">&gt; Waiting for game start...</span>}
              {logs.map((log, i) => (
                 <div key={i} className="text-green-400 break-words leading-tight">
                   <span className="opacity-50 mr-1">&gt;</span>{log}
