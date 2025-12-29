@@ -305,12 +305,15 @@ const App: React.FC = () => {
     if (isFirebaseConfigured) {
       try {
         await firestoreService.createSession(newSession);
+        // Firebase 구독이 자동으로 세션을 추가하므로 여기서는 추가하지 않음
+        return;
       } catch (error) {
         console.error('Firebase 세션 생성 실패:', error);
+        throw error; // 에러를 상위로 전달
       }
     }
 
-    // 로컬 상태 업데이트 (Firebase 미설정 시 또는 백업용)
+    // Firebase 미설정 시에만 로컬 상태 업데이트
     setSessions(prev => [newSession, ...prev]);
   };
 
@@ -319,10 +322,13 @@ const App: React.FC = () => {
     if (isFirebaseConfigured) {
       try {
         await firestoreService.deleteSession(sessionId);
+        // Firebase 구독이 자동으로 세션을 제거하므로 여기서는 제거하지 않음
+        return;
       } catch (error) {
         console.error('Firebase 세션 삭제 실패:', error);
       }
     }
+    // Firebase 미설정 시에만 로컬 상태 업데이트
     setSessions(prev => prev.filter(s => s.id !== sessionId));
   };
 
@@ -687,6 +693,26 @@ const App: React.FC = () => {
     setIsRolling(false);
 
     if (!currentTeam) return;
+
+    // Firebase에 주사위 결과와 Moving 상태 저장
+    const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+    if (isFirebaseConfigured && currentSessionId) {
+      firestoreService.updateGameState(currentSessionId, {
+        sessionId: currentSessionId,
+        phase: GamePhase.Moving,
+        currentTeamIndex: currentTurnIndex,
+        currentTurn: 0,
+        diceValue: [die1, die2],
+        currentCard: null,
+        selectedChoice: null,
+        reasoning: '',
+        aiResult: null,
+        isSubmitted: false,
+        isAiProcessing: false,
+        gameLogs: gameLogs,
+        lastUpdated: Date.now()
+      }).catch(err => console.error('Firebase 상태 저장 실패:', err));
+    }
 
     // 주사위 로그는 리포트에 불필요하므로 제거
     moveTeamLogic(currentTeam, die1 + die2);
