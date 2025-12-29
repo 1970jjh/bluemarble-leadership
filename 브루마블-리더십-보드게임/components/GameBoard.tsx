@@ -65,35 +65,26 @@ const GameBoard: React.FC<GameBoardProps> = ({ teams, onSquareClick, gameMode })
   const currentBgImage = bgImages[gameMode] || bgImages[GameVersion.Self];
 
   return (
-    <div className="w-full aspect-square bg-[#e8e8e8] border-[12px] border-black p-4 shadow-hard rounded-xl relative overflow-hidden">
-      <div className="w-full h-full grid grid-cols-9 grid-rows-9 gap-1.5">
-        
-        {/* Center Logo Area */}
-        <div className="col-start-2 col-end-9 row-start-2 row-end-9 bg-white border-4 border-black flex flex-col items-center justify-center p-8 relative overflow-hidden shadow-inner">
-           
-           {/* Dynamic Background Image - 원본 이미지 그대로 표시 */}
-           <div className="absolute inset-0 z-0">
-             <img
-               src={currentBgImage}
-               alt="Board Background"
-               className="w-full h-full object-cover"
-               onError={(e) => {
-                 console.warn("Background image failed to load. Check URL.");
-                 e.currentTarget.style.display = 'none';
-               }}
-             />
-           </div>
+    <div className="flex flex-col items-center gap-4">
+      {/* 게임판 */}
+      <div className="w-full aspect-square bg-[#e8e8e8] border-[12px] border-black p-4 shadow-hard rounded-xl relative overflow-hidden">
+        <div className="w-full h-full grid grid-cols-9 grid-rows-9 gap-1.5">
 
-           {/* JJ ACADEMY 로고 - 배경 위에 표시 */}
-           <h1 className="text-6xl md:text-8xl font-black text-blue-900 tracking-tighter text-center leading-none italic z-10 drop-shadow-[4px_4px_0_rgba(255,255,255,1)] [text-shadow:_2px_2px_0_#fff,_-2px_-2px_0_#fff,_2px_-2px_0_#fff,_-2px_2px_0_#fff]">
-             JJ<br/><span className="text-4xl md:text-6xl text-black">ACADEMY</span>
-           </h1>
-
-           {/* 게임 모드 표시 */}
-           <div className="mt-8 bg-black text-white px-8 py-3 text-2xl font-black border-4 border-white shadow-hard z-10 rotate-[-3deg] uppercase max-w-full text-center">
-             {gameMode.toUpperCase()} SIMULATION
-           </div>
-        </div>
+          {/* Center Area - 배경 이미지만 표시 */}
+          <div className="col-start-2 col-end-9 row-start-2 row-end-9 bg-white border-4 border-black relative overflow-hidden shadow-inner">
+             {/* Dynamic Background Image - 원본 이미지 그대로 표시 */}
+             <div className="absolute inset-0">
+               <img
+                 src={currentBgImage}
+                 alt="Board Background"
+                 className="w-full h-full object-cover"
+                 onError={(e) => {
+                   console.warn("Background image failed to load. Check URL.");
+                   e.currentTarget.style.display = 'none';
+                 }}
+               />
+             </div>
+          </div>
 
         {/* Board Squares */}
         {BOARD_SQUARES.map((square) => (
@@ -155,6 +146,17 @@ const GameBoard: React.FC<GameBoardProps> = ({ teams, onSquareClick, gameMode })
             </div>
           </div>
         ))}
+        </div>
+      </div>
+
+      {/* 게임판 아래 텍스트 */}
+      <div className="w-full flex flex-col md:flex-row items-center justify-center gap-4 px-4">
+        <h1 className="text-3xl md:text-4xl font-black text-blue-900 tracking-tighter text-center leading-none italic">
+          JJ <span className="text-black">ACADEMY</span>
+        </h1>
+        <div className="bg-black text-white px-6 py-2 text-lg md:text-xl font-black border-4 border-black shadow-hard uppercase text-center">
+          {gameMode.toUpperCase()} SIMULATION
+        </div>
       </div>
     </div>
   );
