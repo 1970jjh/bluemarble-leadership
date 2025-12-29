@@ -24,6 +24,11 @@ interface CardModalProps {
   teamName?: string;
   // 추가: 미리보기 모드 (게임에 반영 안됨)
   isPreviewMode?: boolean;
+
+  // 관리자 뷰용 추가 props
+  isAdminView?: boolean;        // 관리자 대시보드 뷰 여부
+  isTeamSaved?: boolean;        // 팀이 입력을 저장했는지
+  onAISubmit?: () => Promise<void>;  // 관리자가 AI 분석 실행
 }
 
 const CardModal: React.FC<CardModalProps> = ({
@@ -40,7 +45,10 @@ const CardModal: React.FC<CardModalProps> = ({
   onClose,
   readOnly = false,
   teamName,
-  isPreviewMode = false
+  isPreviewMode = false,
+  isAdminView = false,
+  isTeamSaved = false,
+  onAISubmit
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   
@@ -144,7 +152,7 @@ const CardModal: React.FC<CardModalProps> = ({
               )}
 
               {/* 읽기 전용 모드 안내 */}
-              {readOnly && !isPreviewMode && (
+              {readOnly && !isPreviewMode && !isAdminView && (
                 <div className="bg-yellow-100 border-4 border-yellow-500 p-4 text-center">
                   <span className="font-bold text-yellow-800">
                     {teamName ? `${teamName}의 턴입니다. 관람 모드로 시청 중...` : '다른 팀의 턴입니다.'}
@@ -152,80 +160,147 @@ const CardModal: React.FC<CardModalProps> = ({
                 </div>
               )}
 
-              {!isOpenEnded ? (
-                <>
-                  <h3 className="text-black text-sm font-bold uppercase tracking-widest">1. 당신의 선택은?</h3>
-                  <div className="grid md:grid-cols-3 gap-4">
-                    {card.choices?.map((choice) => (
-                      <button
-                        key={choice.id}
-                        onClick={() => !readOnly && onSelectionChange(choice)}
-                        disabled={readOnly}
-                        className={`group relative flex flex-col items-start p-4 border-4 transition-all text-left h-full
-                          ${selectedChoice?.id === choice.id
-                            ? 'border-blue-600 bg-blue-50 shadow-hard transform -translate-y-1'
-                            : 'border-black hover:bg-gray-50'
-                          }
-                          ${readOnly ? 'cursor-not-allowed opacity-70' : ''}
-                        `}
-                      >
-                        <div className={`absolute top-0 right-0 px-3 py-1 text-sm font-bold border-b-2 border-l-2
-                          ${selectedChoice?.id === choice.id ? 'bg-blue-600 text-white border-blue-600' : 'bg-black text-white border-black'}`}>
-                          {choice.id}
-                        </div>
-                        <h4 className="text-lg font-bold mt-6 leading-tight">{choice.text}</h4>
-                      </button>
-                    ))}
+              {/* 관리자 뷰: 팀 입력 대기 중 */}
+              {isAdminView && !isTeamSaved && (
+                <div className="bg-blue-100 border-4 border-blue-500 p-8 text-center">
+                  <div className="animate-pulse">
+                    <div className="w-16 h-16 mx-auto mb-4 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                    <span className="font-bold text-blue-800 text-lg">
+                      {teamName ? `${teamName}이(가) 입력 중입니다...` : '팀 입력 대기 중...'}
+                    </span>
+                    <p className="text-blue-600 mt-2 text-sm">팀원이 선택과 사유를 입력하고 저장하면 여기에 표시됩니다.</p>
                   </div>
-                </>
-              ) : (
-                <div className="flex items-center gap-2 text-purple-900 font-bold bg-purple-100 p-4 border-2 border-purple-900">
-                  <MessageSquare />
-                  <span>이 질문은 주관식 답변입니다. 자유롭게 의견을 서술해주세요.</span>
                 </div>
               )}
 
-              <div className={`transition-all duration-300 ${isOpenEnded || selectedChoice ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
-                  <h3 className="text-black text-sm font-bold uppercase tracking-widest mb-2 mt-6">
-                    {isOpenEnded ? "2. 당신의 생각은?" : "2. 선택 이유는?"}
-                  </h3>
-                  <div className="relative">
-                    <textarea
-                      ref={textareaRef}
-                      value={reasoning}
-                      onChange={(e) => !readOnly && onReasoningChange(e.target.value)}
-                      onKeyDown={handleKeyDown}
-                      placeholder={readOnly ? "다른 팀이 입력 중..." : (isOpenEnded ? "여기에 답변을 입력하세요..." : (selectedChoice ? "팀이 모바일에서 입력중일 수 있습니다..." : "먼저 선택지를 고르세요."))}
-                      className={`w-full h-32 p-4 border-4 border-black font-medium focus:outline-none focus:bg-yellow-50 resize-none text-lg ${readOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
-                      disabled={isProcessing || readOnly}
-                      readOnly={readOnly}
-                    />
+              {/* 관리자 뷰: 팀 입력 완료 - 팀 응답 표시 + AI 분석 버튼 */}
+              {isAdminView && isTeamSaved && (
+                <>
+                  <div className="bg-green-100 border-4 border-green-600 p-4 text-center mb-4">
+                    <span className="font-bold text-green-800">
+                      ✓ {teamName || '팀'}의 입력이 완료되었습니다!
+                    </span>
                   </div>
 
-                  {!readOnly && (
+                  {/* 선택한 옵션 표시 */}
+                  {selectedChoice && (
+                    <div className="bg-blue-50 border-4 border-blue-300 p-4">
+                      <div className="text-xs font-bold text-blue-700 uppercase mb-2">선택한 옵션</div>
+                      <div className="flex items-center gap-2">
+                        <span className="bg-blue-600 text-white px-3 py-1 text-sm font-bold">{selectedChoice.id}</span>
+                        <span className="font-bold text-lg">{selectedChoice.text}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 응답 내용 표시 */}
+                  <div className="bg-gray-50 border-4 border-gray-300 p-4">
+                    <div className="text-xs font-bold text-gray-700 uppercase mb-2">
+                      {selectedChoice ? '선택 이유' : '응답 내용'}
+                    </div>
+                    <p className="font-medium text-lg whitespace-pre-wrap">{reasoning || '(응답 없음)'}</p>
+                  </div>
+
+                  {/* AI 분석 버튼 (관리자 전용) */}
+                  {onAISubmit && (
                     <button
-                      onClick={onSubmit}
-                      disabled={(!isOpenEnded && !selectedChoice) || !reasoning.trim() || isProcessing}
-                      className="w-full mt-4 py-4 bg-black text-white text-xl font-black uppercase border-4 border-black hover:bg-gray-800 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-3 transition-all"
+                      onClick={onAISubmit}
+                      disabled={isProcessing}
+                      className="w-full py-4 bg-purple-600 text-white text-xl font-black uppercase border-4 border-black hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-3 transition-all shadow-hard"
                     >
                       {isProcessing ? (
                         <>
-                          <Sparkles className="animate-spin" /> AI Processing...
+                          <Sparkles className="animate-spin" /> AI 분석 중...
                         </>
                       ) : (
                         <>
-                          <Send size={20} /> AI 리더의 평가(클릭)
+                          <Sparkles size={24} /> AI 분석 실행
                         </>
                       )}
                     </button>
                   )}
+                </>
+              )}
 
-                  {readOnly && isProcessing && (
-                    <div className="w-full mt-4 py-4 bg-gray-600 text-white text-xl font-black uppercase border-4 border-black flex items-center justify-center gap-3">
-                      <Sparkles className="animate-spin" /> AI 평가 중...
+              {/* 일반 뷰 (팀원/미리보기): 선택지 및 입력 UI */}
+              {!isAdminView && (
+                <>
+                  {!isOpenEnded ? (
+                    <>
+                      <h3 className="text-black text-sm font-bold uppercase tracking-widest">1. 당신의 선택은?</h3>
+                      <div className="grid md:grid-cols-3 gap-4">
+                        {card.choices?.map((choice) => (
+                          <button
+                            key={choice.id}
+                            onClick={() => !readOnly && onSelectionChange(choice)}
+                            disabled={readOnly}
+                            className={`group relative flex flex-col items-start p-4 border-4 transition-all text-left h-full
+                              ${selectedChoice?.id === choice.id
+                                ? 'border-blue-600 bg-blue-50 shadow-hard transform -translate-y-1'
+                                : 'border-black hover:bg-gray-50'
+                              }
+                              ${readOnly ? 'cursor-not-allowed opacity-70' : ''}
+                            `}
+                          >
+                            <div className={`absolute top-0 right-0 px-3 py-1 text-sm font-bold border-b-2 border-l-2
+                              ${selectedChoice?.id === choice.id ? 'bg-blue-600 text-white border-blue-600' : 'bg-black text-white border-black'}`}>
+                              {choice.id}
+                            </div>
+                            <h4 className="text-lg font-bold mt-6 leading-tight">{choice.text}</h4>
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex items-center gap-2 text-purple-900 font-bold bg-purple-100 p-4 border-2 border-purple-900">
+                      <MessageSquare />
+                      <span>이 질문은 주관식 답변입니다. 자유롭게 의견을 서술해주세요.</span>
                     </div>
                   )}
-              </div>
+
+                  <div className={`transition-all duration-300 ${isOpenEnded || selectedChoice ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
+                      <h3 className="text-black text-sm font-bold uppercase tracking-widest mb-2 mt-6">
+                        {isOpenEnded ? "2. 당신의 생각은?" : "2. 선택 이유는?"}
+                      </h3>
+                      <div className="relative">
+                        <textarea
+                          ref={textareaRef}
+                          value={reasoning}
+                          onChange={(e) => !readOnly && onReasoningChange(e.target.value)}
+                          onKeyDown={handleKeyDown}
+                          placeholder={readOnly ? "다른 팀이 입력 중..." : (isOpenEnded ? "여기에 답변을 입력하세요..." : (selectedChoice ? "팀이 모바일에서 입력중일 수 있습니다..." : "먼저 선택지를 고르세요."))}
+                          className={`w-full h-32 p-4 border-4 border-black font-medium focus:outline-none focus:bg-yellow-50 resize-none text-lg ${readOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                          disabled={isProcessing || readOnly}
+                          readOnly={readOnly}
+                        />
+                      </div>
+
+                      {!readOnly && (
+                        <button
+                          onClick={onSubmit}
+                          disabled={(!isOpenEnded && !selectedChoice) || !reasoning.trim() || isProcessing}
+                          className="w-full mt-4 py-4 bg-black text-white text-xl font-black uppercase border-4 border-black hover:bg-gray-800 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-3 transition-all"
+                        >
+                          {isProcessing ? (
+                            <>
+                              <Sparkles className="animate-spin" /> AI Processing...
+                            </>
+                          ) : (
+                            <>
+                              <Send size={20} /> AI 리더의 평가(클릭)
+                            </>
+                          )}
+                        </button>
+                      )}
+
+                      {readOnly && isProcessing && (
+                        <div className="w-full mt-4 py-4 bg-gray-600 text-white text-xl font-black uppercase border-4 border-black flex items-center justify-center gap-3">
+                          <Sparkles className="animate-spin" /> AI 평가 중...
+                        </div>
+                      )}
+                  </div>
+                </>
+              )}
             </div>
           ) : (
             /* Result Phase - 응답 내용 + AI 결과 표시 */
