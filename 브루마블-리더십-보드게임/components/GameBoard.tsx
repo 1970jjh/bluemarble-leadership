@@ -53,18 +53,16 @@ const GameBoard: React.FC<GameBoardProps> = ({ teams, onSquareClick, gameMode })
     }
   };
 
-  // User provided background images
-  // Note: These must be direct image links (ending in .jpg/.png) for best results.
-  // Using the provided links as requested.
+  // 모드별 배경 이미지
   const bgImages: Record<string, string> = {
-    [GameVersion.Leader]: 'https://ibb.co/q3SR4w0y',
-    [GameVersion.Follower]: 'https://ibb.co/rRctFyNz',
-    [GameVersion.Team]: 'https://ibb.co/9k6wfB2t',
-    [GameVersion.Self]: 'https://ibb.co/VWzXCyTP',
+    [GameVersion.Leader]: 'https://i.ibb.co/PvL5b8Tm/image.png',      // 리더십
+    [GameVersion.Follower]: 'https://i.ibb.co/pBRPbX5M/image.png',    // 팔로워십
+    [GameVersion.Team]: 'https://i.ibb.co/cS0bpRtL/image.png',        // 팀쉽
+    [GameVersion.Self]: 'https://i.ibb.co/PZPBWpgf/image.png',        // 셀프리더십
   };
 
-  // Fallback for when gameMode doesn't match keys (e.g., initial state "Leadership Simulation")
-  const currentBgImage = bgImages[gameMode] || bgImages[GameVersion.Leader];
+  // 현재 게임 모드에 맞는 배경 이미지 선택
+  const currentBgImage = bgImages[gameMode] || bgImages[GameVersion.Self];
 
   return (
     <div className="w-full aspect-square bg-[#e8e8e8] border-[12px] border-black p-4 shadow-hard rounded-xl relative overflow-hidden">
@@ -88,19 +86,14 @@ const GameBoard: React.FC<GameBoardProps> = ({ teams, onSquareClick, gameMode })
              <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-white/60 via-white/80 to-white/90"></div>
            </div>
            
+           {/* JJ ACADEMY 로고 */}
            <h1 className="text-6xl md:text-8xl font-black text-blue-900 tracking-tighter text-center leading-none italic z-10 drop-shadow-[6px_6px_0_rgba(0,0,0,0.2)]">
              JJ<br/><span className="text-4xl md:text-6xl text-black">ACADEMY</span>
            </h1>
+
+           {/* 게임 모드 표시 */}
            <div className="mt-8 bg-black text-white px-8 py-3 text-2xl font-black border-4 border-white shadow-hard z-10 rotate-[-3deg] uppercase max-w-full text-center">
              {gameMode.toUpperCase()} SIMULATION
-           </div>
-           
-           {/* Decorative Card Decks in Center */}
-           <div className="absolute bottom-8 left-12 w-32 h-40 bg-orange-500 border-4 border-black rounded-lg shadow-hard rotate-[-10deg] flex items-center justify-center z-10">
-             <span className="font-black text-white text-4xl">?</span>
-           </div>
-           <div className="absolute top-8 right-12 w-32 h-40 bg-blue-600 border-4 border-black rounded-lg shadow-hard rotate-[5deg] flex items-center justify-center z-10">
-             <span className="font-black text-white text-lg uppercase text-center">Core<br/>Values</span>
            </div>
         </div>
 

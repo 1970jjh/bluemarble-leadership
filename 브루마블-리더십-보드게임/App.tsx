@@ -32,16 +32,22 @@ import { GoogleGenAI, Type } from "@google/genai";
 // Firebase 연동
 import * as firestoreService from './lib/firestore';
 
-type AppView = 'intro' | 'lobby' | 'game';
+type AppView = 'intro' | 'lobby' | 'game' | 'participant';
 type AdminViewMode = 'dashboard' | 'mobile_monitor';
 
 const App: React.FC = () => {
   // --- Global App State ---
   const [view, setView] = useState<AppView>('intro');
-  
+
   // --- Session Management State ---
   const [sessions, setSessions] = useState<Session[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+
+  // --- Participant State ---
+  const [participantTeamId, setParticipantTeamId] = useState<string | null>(null);
+  const [initialAccessCode, setInitialAccessCode] = useState<string>('');
+  const [isJoining, setIsJoining] = useState(false);
+  const [joinError, setJoinError] = useState('');
 
   // --- Current Game State ---
   const [adminViewMode, setAdminViewMode] = useState<AdminViewMode>('dashboard');
@@ -73,6 +79,15 @@ const App: React.FC = () => {
   // --- AI Client Initialization ---
   const genAI = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
 
+  // --- URL 파라미터 확인 (접속 코드) ---
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const joinCode = urlParams.get('join');
+    if (joinCode) {
+      setInitialAccessCode(joinCode);
+    }
+  }, []);
+
   // --- Firebase: 세션 실시간 구독 ---
   useEffect(() => {
     // Firebase가 설정되어 있으면 실시간으로 세션 목록 구독
@@ -85,6 +100,22 @@ const App: React.FC = () => {
       return () => unsubscribe();
     }
   }, []);
+
+  // --- Firebase: 현재 세션 실시간 구독 (참가자/관리자 동기화) ---
+  useEffect(() => {
+    if (!currentSessionId) return;
+
+    const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+    if (!isFirebaseConfigured) return;
+
+    const unsubscribe = firestoreService.subscribeToSession(currentSessionId, (session) => {
+      if (session) {
+        setSessions(prev => prev.map(s => s.id === currentSessionId ? session : s));
+      }
+    });
+
+    return () => unsubscribe();
+  }, [currentSessionId]);
 
   // --- Session Logic ---
 
@@ -163,11 +194,70 @@ const App: React.FC = () => {
 
   const handleEnterSession = (session: Session) => {
     setCurrentSessionId(session.id);
-    setCurrentTurnIndex(0); 
+    setCurrentTurnIndex(0);
     setGamePhase(GamePhase.Idle);
     setMonitoringTeamId(session.teams[0]?.id || null);
     setGameLogs([`Entered Session: ${session.name}`, `Status: ${session.status}`]);
     setView('game');
+  };
+
+  // 참가자 세션 참여 핸들러
+  const handleUserJoin = async (accessCode: string) => {
+    setIsJoining(true);
+    setJoinError('');
+
+    try {
+      // Firebase에서 세션 찾기
+      const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+
+      let foundSession: Session | null = null;
+
+      if (isFirebaseConfigured) {
+        // Firebase에서 접속 코드로 세션 검색
+        foundSession = await firestoreService.getSessionByAccessCode(accessCode);
+      } else {
+        // 로컬 세션에서 검색
+        foundSession = sessions.find(s => s.accessCode === accessCode) || null;
+      }
+
+      if (!foundSession) {
+        setJoinError('세션을 찾을 수 없습니다. 접속 코드를 확인해주세요.');
+        setIsJoining(false);
+        return;
+      }
+
+      if (foundSession.status !== 'active') {
+        setJoinError('이 세션은 현재 활성화되지 않았습니다.');
+        setIsJoining(false);
+        return;
+      }
+
+      // 세션 입장
+      setCurrentSessionId(foundSession.id);
+
+      // 로컬 세션 목록에 추가 (없으면)
+      setSessions(prev => {
+        if (prev.find(s => s.id === foundSession!.id)) return prev;
+        return [...prev, foundSession!];
+      });
+
+      // URL에서 join 파라미터 제거
+      window.history.replaceState({}, document.title, window.location.pathname);
+
+      // 참가자 뷰로 이동
+      setView('participant');
+
+    } catch (error) {
+      console.error('세션 참여 실패:', error);
+      setJoinError('세션 참여 중 오류가 발생했습니다.');
+    } finally {
+      setIsJoining(false);
+    }
+  };
+
+  // 참가자 팀 선택 핸들러
+  const handleSelectTeam = (teamId: string) => {
+    setParticipantTeamId(teamId);
   };
 
   const updateTeamsInSession = async (updatedTeams: Team[]) => {
@@ -564,18 +654,95 @@ const App: React.FC = () => {
   // --- Views ---
 
   if (view === 'intro') {
-    return <Intro onAdminLogin={() => setView('lobby')} onUserJoin={() => { alert("데모: 로비에서 세션을 생성하고 QR코드를 통해 접속하세요."); }} />;
+    return (
+      <Intro
+        onAdminLogin={() => setView('lobby')}
+        onUserJoin={handleUserJoin}
+        initialAccessCode={initialAccessCode}
+        isLoading={isJoining}
+        joinError={joinError}
+      />
+    );
   }
 
   if (view === 'lobby') {
     return (
-      <Lobby 
+      <Lobby
         sessions={sessions}
         onCreateSession={handleCreateSession}
         onDeleteSession={handleDeleteSession}
         onUpdateStatus={handleUpdateSessionStatus}
         onEnterSession={handleEnterSession}
       />
+    );
+  }
+
+  // --- 참가자 뷰 ---
+  if (view === 'participant') {
+    const participantSession = currentSession;
+    const participantTeam = participantSession?.teams.find(t => t.id === participantTeamId);
+
+    // 팀 선택 화면
+    if (!participantTeamId || !participantTeam) {
+      return (
+        <div className="min-h-screen bg-blue-900 flex flex-col items-center justify-center p-4">
+          <div className="max-w-md w-full bg-white border-4 border-black shadow-[8px_8px_0_0_#000] p-8">
+            <h1 className="text-2xl font-black text-center mb-2">
+              {participantSession?.name || '게임'}
+            </h1>
+            <p className="text-center text-gray-500 font-bold mb-6">
+              참여할 팀을 선택하세요
+            </p>
+
+            <div className="grid grid-cols-2 gap-3 mb-6">
+              {participantSession?.teams.map((team, idx) => (
+                <button
+                  key={team.id}
+                  onClick={() => handleSelectTeam(team.id)}
+                  className="p-4 border-4 border-black font-black text-lg hover:bg-yellow-400 transition-colors flex flex-col items-center gap-2"
+                >
+                  <div className={`w-8 h-8 rounded-full bg-${team.color.toLowerCase()}-500 border-2 border-black`}></div>
+                  {team.name}
+                </button>
+              ))}
+            </div>
+
+            <button
+              onClick={() => { setView('intro'); setCurrentSessionId(null); }}
+              className="w-full py-3 bg-gray-200 border-4 border-black font-bold"
+            >
+              나가기
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // 팀 게임 화면
+    const isMyTurn = participantSession?.teams[currentTurnIndex]?.id === participantTeamId;
+
+    return (
+      <div className="min-h-screen bg-gray-900">
+        <MobileTeamView
+          team={participantTeam}
+          activeTeamName={participantSession?.teams[currentTurnIndex]?.name || ''}
+          isMyTurn={isMyTurn}
+          gamePhase={gamePhase}
+          onRollDice={handleRollDice}
+          activeCard={activeCard}
+          activeInput={{
+            choice: sharedSelectedChoice,
+            reasoning: sharedReasoning
+          }}
+          onInputChange={(choice, reason) => {
+            setSharedSelectedChoice(choice);
+            setSharedReasoning(reason);
+          }}
+          onSubmit={handleSharedSubmit}
+          aiResult={aiEvaluationResult}
+          isProcessing={isAiProcessing}
+        />
+      </div>
     );
   }
 
