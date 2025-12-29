@@ -694,6 +694,26 @@ const App: React.FC = () => {
 
     if (!currentTeam) return;
 
+    // Firebase에 주사위 결과와 Moving 상태 저장
+    const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+    if (isFirebaseConfigured && currentSessionId) {
+      firestoreService.updateGameState(currentSessionId, {
+        sessionId: currentSessionId,
+        phase: GamePhase.Moving,
+        currentTeamIndex: currentTurnIndex,
+        currentTurn: 0,
+        diceValue: [die1, die2],
+        currentCard: null,
+        selectedChoice: null,
+        reasoning: '',
+        aiResult: null,
+        isSubmitted: false,
+        isAiProcessing: false,
+        gameLogs: gameLogs,
+        lastUpdated: Date.now()
+      }).catch(err => console.error('Firebase 상태 저장 실패:', err));
+    }
+
     // 주사위 로그는 리포트에 불필요하므로 제거
     moveTeamLogic(currentTeam, die1 + die2);
   };
