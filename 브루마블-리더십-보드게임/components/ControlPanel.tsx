@@ -146,12 +146,12 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
           SKIP TURN
         </button>
 
-        {/* Game Log Terminal */}
-        <div id="game-log-terminal" className="flex-1 min-h-[150px] bg-black border-4 border-gray-700 p-2 font-mono text-xs overflow-y-auto relative shadow-inner flex flex-col">
-          <div className="sticky top-0 bg-black/90 border-b border-gray-700 text-gray-400 font-bold uppercase text-[10px] mb-2 flex items-center gap-1">
-             <Terminal size={10} /> System Log
+        {/* Game Log Terminal - 고정 높이 + 스크롤바 */}
+        <div id="game-log-terminal" className="h-[200px] max-h-[200px] bg-black border-4 border-gray-700 p-2 font-mono text-xs overflow-y-auto relative shadow-inner flex flex-col">
+          <div className="sticky top-0 bg-black/90 border-b border-gray-700 text-gray-400 font-bold uppercase text-[10px] mb-2 flex items-center gap-1 z-10">
+             <Terminal size={10} /> System Log ({logs.length})
           </div>
-          <div className="flex-1 flex flex-col gap-1 justify-end">
+          <div className="flex-1 flex flex-col gap-1">
              {logs.length === 0 && <span className="text-gray-600 italic">&gt; Waiting for game start...</span>}
              {logs.map((log, i) => (
                 <div key={i} className="text-green-400 break-words leading-tight">
@@ -163,11 +163,18 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
           {/* Scrollbar styling specific to this container */}
           <style>{`
             #game-log-terminal::-webkit-scrollbar {
-              width: 8px;
+              width: 10px;
+            }
+            #game-log-terminal::-webkit-scrollbar-track {
+              background: #1a1a1a;
             }
             #game-log-terminal::-webkit-scrollbar-thumb {
-              background: #d97706; /* amber-600 */
-              border: 1px solid black;
+              background: #d97706;
+              border: 2px solid #1a1a1a;
+              border-radius: 4px;
+            }
+            #game-log-terminal::-webkit-scrollbar-thumb:hover {
+              background: #f59e0b;
             }
           `}</style>
         </div>
