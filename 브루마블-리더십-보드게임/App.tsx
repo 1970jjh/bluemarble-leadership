@@ -1052,7 +1052,7 @@ const App: React.FC = () => {
     }
   };
 
-  const handleApplyResult = () => {
+  const handleApplyResult = async () => {
     if (aiEvaluationResult && currentTeam && activeCard) {
       // 1. Update Team Resources
       updateTeamResources(currentTeam.id, aiEvaluationResult.scoreChanges);
@@ -1076,7 +1076,33 @@ const App: React.FC = () => {
       addLog(`---`); // 턴 구분선
     }
 
-    // 3. Next Turn
+    // 3. 먼저 Firebase에 Idle 상태 저장 (모달이 다시 열리는 것 방지)
+    const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+    if (isFirebaseConfigured && currentSessionId) {
+      const nextTeamIndex = currentSession ? (currentTurnIndex + 1) % currentSession.teams.length : 0;
+
+      try {
+        await firestoreService.updateGameState(currentSessionId, {
+          sessionId: currentSessionId,
+          phase: GamePhase.Idle,
+          currentTeamIndex: nextTeamIndex,
+          currentTurn: 0,
+          diceValue: [1, 1],
+          currentCard: null,  // 카드 초기화 → 모달 닫힘
+          selectedChoice: null,
+          reasoning: '',
+          aiResult: null,
+          isSubmitted: false,
+          isAiProcessing: false,
+          gameLogs: gameLogsRef.current,
+          lastUpdated: Date.now()
+        });
+      } catch (err) {
+        console.error('Firebase 턴 종료 상태 저장 실패:', err);
+      }
+    }
+
+    // 4. Next Turn (로컬 상태 업데이트)
     nextTurn();
   };
 
