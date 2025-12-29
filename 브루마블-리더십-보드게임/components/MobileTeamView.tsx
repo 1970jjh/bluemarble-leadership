@@ -180,10 +180,20 @@ const MobileTeamView: React.FC<MobileTeamViewProps> = ({
             disabled={!isMyTurn || gamePhase !== GamePhase.Idle}
             className={`w-full py-6 border-4 border-black text-xl font-black shadow-hard uppercase flex items-center justify-center gap-3 transition-all
               ${isMyTurn && gamePhase === GamePhase.Idle
-                ? 'bg-yellow-400 hover:bg-yellow-300 animate-pulse text-black' 
+                ? 'bg-yellow-400 hover:bg-yellow-300 animate-pulse text-black'
                 : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}
           >
-            {isMyTurn ? (
+            {gamePhase === GamePhase.Rolling ? (
+              <>
+                <Dice5 size={28} className="animate-spin" />
+                주사위 굴리는 중...
+              </>
+            ) : gamePhase === GamePhase.Moving ? (
+              <>
+                <MapPin size={28} />
+                이동 중...
+              </>
+            ) : isMyTurn ? (
               <>
                 <Dice5 size={28} />
                 ROLL DICE

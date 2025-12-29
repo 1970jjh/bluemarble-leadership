@@ -540,14 +540,54 @@ const App: React.FC = () => {
       setSharedReasoning('');
       setAiEvaluationResult(null);
       setGamePhase(GamePhase.Decision);
-      setShowCardModal(true); // Open Admin Modal automatically
+      setShowCardModal(true);
+
+      // 즉시 Firebase에 게임 상태 저장 (팀원들이 카드를 볼 수 있도록)
+      const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+      if (isFirebaseConfigured && currentSessionId) {
+        firestoreService.updateGameState(currentSessionId, {
+          sessionId: currentSessionId,
+          phase: GamePhase.Decision,
+          currentTeamIndex: currentTurnIndex,
+          currentTurn: 0,
+          diceValue: diceValue,
+          currentCard: selectedCard,
+          selectedChoice: null,
+          reasoning: '',
+          aiResult: null,
+          isSubmitted: false,
+          isAiProcessing: false,
+          gameLogs: gameLogs,
+          lastUpdated: Date.now()
+        }).catch(err => console.error('Firebase 상태 저장 실패:', err));
+      }
     }
   };
 
   const handleRollDice = () => {
-    if (isRolling) return;
+    if (isRolling || gamePhase === GamePhase.Rolling) return;
     setIsRolling(true);
     setGamePhase(GamePhase.Rolling);
+
+    // 즉시 Firebase에 Rolling 상태 저장 (다른 팀원들이 주사위 클릭 못하도록)
+    const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+    if (isFirebaseConfigured && currentSessionId) {
+      firestoreService.updateGameState(currentSessionId, {
+        sessionId: currentSessionId,
+        phase: GamePhase.Rolling,
+        currentTeamIndex: currentTurnIndex,
+        currentTurn: 0,
+        diceValue: diceValue,
+        currentCard: null,
+        selectedChoice: null,
+        reasoning: '',
+        aiResult: null,
+        isSubmitted: false,
+        isAiProcessing: false,
+        gameLogs: gameLogs,
+        lastUpdated: Date.now()
+      }).catch(err => console.error('Firebase 상태 저장 실패:', err));
+    }
 
     let rollCount = 0;
     const interval = setInterval(() => {
@@ -616,6 +656,9 @@ const App: React.FC = () => {
 
   const handleSharedSubmit = async () => {
     if (!currentTeam || !activeCard) return;
+    // 이미 처리 중이면 중복 제출 방지
+    if (isAiProcessing) return;
+
     // Check constraints based on open-ended vs choice
     const isOpenEnded = !activeCard.choices || activeCard.choices.length === 0;
     if (isOpenEnded && !sharedReasoning) return;
@@ -623,24 +666,36 @@ const App: React.FC = () => {
 
     setIsAiProcessing(true);
 
+    // 즉시 Firebase에 AI 처리 중 상태 저장 (다른 팀원들이 제출 못하도록)
+    const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+    if (isFirebaseConfigured && currentSessionId) {
+      firestoreService.updateGameState(currentSessionId, {
+        sessionId: currentSessionId,
+        phase: gamePhase,
+        currentTeamIndex: currentTurnIndex,
+        currentTurn: 0,
+        diceValue: diceValue,
+        currentCard: activeCard,
+        selectedChoice: sharedSelectedChoice,
+        reasoning: sharedReasoning,
+        aiResult: null,
+        isSubmitted: true,
+        isAiProcessing: true,
+        gameLogs: gameLogs,
+        lastUpdated: Date.now()
+      }).catch(err => console.error('Firebase 상태 저장 실패:', err));
+    }
+
     // 리포트용 구조화된 로그 기록
-    const logData = {
-      team: currentTeam.name,
-      cardType: activeCard.type,
-      cardTitle: activeCard.title,
-      situation: activeCard.situation,
-      choice: !isOpenEnded && sharedSelectedChoice ? `[${sharedSelectedChoice.id}] ${sharedSelectedChoice.text}` : null,
-      response: sharedReasoning
-    };
     addLog(`[턴] ${currentTeam.name} | 카드: ${activeCard.title} (${activeCard.type})`);
     addLog(`[상황] ${activeCard.situation}`);
-    if (logData.choice) {
-      addLog(`[선택] ${logData.choice}`);
+    if (!isOpenEnded && sharedSelectedChoice) {
+      addLog(`[선택] [${sharedSelectedChoice.id}] ${sharedSelectedChoice.text}`);
     }
     addLog(`[응답] ${sharedReasoning}`);
 
     if (!process.env.API_KEY) {
-       alert("API Key missing");
+       alert("API Key가 설정되지 않았습니다. Vercel 환경변수에 VITE_GEMINI_API_KEY를 설정해주세요.");
        setIsAiProcessing(false);
        return;
     }
@@ -712,16 +767,36 @@ const App: React.FC = () => {
       };
 
       setAiEvaluationResult(result);
+      setIsAiProcessing(false);
+
+      // 즉시 Firebase에 AI 결과 저장 (모든 팀원에게 결과 표시)
+      const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+      if (isFirebaseConfigured && currentSessionId) {
+        firestoreService.updateGameState(currentSessionId, {
+          sessionId: currentSessionId,
+          phase: gamePhase,
+          currentTeamIndex: currentTurnIndex,
+          currentTurn: 0,
+          diceValue: diceValue,
+          currentCard: activeCard,
+          selectedChoice: sharedSelectedChoice,
+          reasoning: sharedReasoning,
+          aiResult: result,
+          isSubmitted: true,
+          isAiProcessing: false,
+          gameLogs: gameLogs,
+          lastUpdated: Date.now()
+        }).catch(err => console.error('Firebase 결과 저장 실패:', err));
+      }
 
       // 리포트용 AI 평가 결과 로그
       const scores = result.scoreChanges;
       addLog(`[AI평가] ${result.feedback}`);
       addLog(`[점수변화] 자본:${scores.capital || 0} | 에너지:${scores.energy || 0} | 신뢰:${scores.trust || 0} | 역량:${scores.competency || 0} | 통찰:${scores.insight || 0}`);
-      
+
     } catch (e) {
       console.error(e);
-      alert("AI Error");
-    } finally {
+      alert("AI 오류가 발생했습니다. 다시 시도해주세요.");
       setIsAiProcessing(false);
     }
   };
