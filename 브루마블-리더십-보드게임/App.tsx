@@ -234,7 +234,16 @@ const App: React.FC = () => {
         // 정상적인 Firebase 상태 동기화
         setGamePhase(state.phase as GamePhase);
         setCurrentTurnIndex(state.currentTeamIndex);
-        setDiceValue(state.diceValue || [1, 1]);
+
+        // diceValue는 값이 실제로 다를 때만 업데이트 (배열 참조 비교로 인한 무한 루프 방지)
+        const newDiceValue = state.diceValue || [1, 1];
+        setDiceValue(prev => {
+          if (prev[0] === newDiceValue[0] && prev[1] === newDiceValue[1]) {
+            return prev; // 같은 값이면 기존 참조 유지
+          }
+          return newDiceValue;
+        });
+
         setActiveCard(state.currentCard);
         setSharedSelectedChoice(state.selectedChoice);
         setSharedReasoning(state.reasoning || '');
@@ -291,6 +300,10 @@ const App: React.FC = () => {
   // 게임 상태 변경 시 Firebase에 저장
   useEffect(() => {
     // 중요한 상태가 변경될 때만 저장
+    // Rolling 상태는 handleRollDice()와 performMove()에서 직접 저장하므로 여기서는 스킵
+    // (주사위 애니메이션 중 diceValue 변경으로 인한 불필요한 저장 방지)
+    if (gamePhase === GamePhase.Rolling) return;
+
     if (currentSessionId && (activeCard || aiEvaluationResult || gamePhase !== GamePhase.Idle)) {
       saveGameStateToFirebase();
     }
