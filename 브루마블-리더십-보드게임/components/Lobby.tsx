@@ -6,7 +6,7 @@ import { QRCodeSVG } from 'qrcode.react';
 
 interface LobbyProps {
   sessions: Session[];
-  onCreateSession: (name: string, version: GameVersion, teamCount: number) => void;
+  onCreateSession: (name: string, version: GameVersion, teamCount: number) => Promise<void>;
   onDeleteSession: (sessionId: string) => void;
   onUpdateStatus: (sessionId: string, status: SessionStatus) => void;
   onEnterSession: (session: Session) => void;
@@ -23,7 +23,8 @@ const Lobby: React.FC<LobbyProps> = ({
   const [newName, setNewName] = useState('');
   const [newVersion, setNewVersion] = useState<GameVersion>(GameVersion.Self);
   const [newTeamCount, setNewTeamCount] = useState(4);
-  
+  const [isCreating, setIsCreating] = useState(false);
+
   // --- UI State ---
   const [inviteModalSession, setInviteModalSession] = useState<Session | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
@@ -54,15 +55,25 @@ const Lobby: React.FC<LobbyProps> = ({
     }
   };
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!newName.trim()) {
       alert("세션 이름을 입력해주세요.");
       return;
     }
-    onCreateSession(newName, newVersion, newTeamCount);
-    setNewName('');
-    setNewTeamCount(4);
-    alert("새로운 세션이 생성되었습니다.");
+    if (isCreating) return; // 중복 클릭 방지
+
+    setIsCreating(true);
+    try {
+      await onCreateSession(newName, newVersion, newTeamCount);
+      setNewName('');
+      setNewTeamCount(4);
+      alert("새로운 세션이 생성되었습니다.");
+    } catch (error) {
+      console.error('세션 생성 실패:', error);
+      alert("세션 생성에 실패했습니다.");
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   const getStatusBadge = (status: SessionStatus) => {
@@ -139,11 +150,16 @@ const Lobby: React.FC<LobbyProps> = ({
                 </div>
 
                 <div className="pt-4">
-                  <button 
+                  <button
                     onClick={handleCreate}
-                    className="w-full py-4 bg-blue-900 text-white font-black text-xl uppercase border-4 border-black shadow-hard hover:bg-blue-800 hover:translate-y-1 hover:shadow-hard-sm transition-all"
+                    disabled={isCreating}
+                    className={`w-full py-4 font-black text-xl uppercase border-4 border-black shadow-hard transition-all ${
+                      isCreating
+                        ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
+                        : 'bg-blue-900 text-white hover:bg-blue-800 hover:translate-y-1 hover:shadow-hard-sm'
+                    }`}
                   >
-                    세션 생성하기
+                    {isCreating ? '생성 중...' : '세션 생성하기'}
                   </button>
                 </div>
               </div>
