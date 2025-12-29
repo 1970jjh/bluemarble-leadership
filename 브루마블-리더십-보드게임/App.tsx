@@ -26,7 +26,8 @@ import {
   BOARD_SIZE,
   INITIAL_RESOURCES
 } from './constants';
-import { Smartphone, Monitor } from 'lucide-react';
+import { Smartphone, Monitor, QrCode, X, Copy, Check } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { GoogleGenAI, Type } from "@google/genai";
 
 // Firebase 연동
@@ -68,6 +69,10 @@ const App: React.FC = () => {
   const [showCardModal, setShowCardModal] = useState(false);
   const [previewCard, setPreviewCard] = useState<GameCard | null>(null);
 
+  // --- Invite Modal State ---
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
+
   // Shared Input State
   const [sharedSelectedChoice, setSharedSelectedChoice] = useState<Choice | null>(null);
   const [sharedReasoning, setSharedReasoning] = useState('');
@@ -78,6 +83,32 @@ const App: React.FC = () => {
   const currentSession = sessions.find(s => s.id === currentSessionId);
   const teams = currentSession ? currentSession.teams : [];
   const currentTeam = teams[currentTurnIndex];
+
+  // 참가자 접속 URL 생성
+  const getJoinUrl = (accessCode: string) => {
+    const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+    return `${baseUrl}?join=${accessCode}`;
+  };
+
+  // 링크 복사 핸들러
+  const handleCopyLink = async (accessCode: string) => {
+    const url = getJoinUrl(accessCode);
+    try {
+      await navigator.clipboard.writeText(url);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    } catch (err) {
+      // Fallback for browsers that don't support clipboard API
+      const textArea = document.createElement('textarea');
+      textArea.value = url;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    }
+  };
 
   // --- AI Client Initialization ---
   const genAI = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
@@ -1154,11 +1185,18 @@ const App: React.FC = () => {
          </div>
          
          <div className="flex gap-2">
-            <button 
+            <button
               onClick={() => setAdminViewMode('dashboard')}
               className={`px-4 py-2 border-2 border-black font-bold flex items-center gap-2 ${adminViewMode === 'dashboard' ? 'bg-black text-white' : 'bg-white hover:bg-gray-100'}`}
             >
               <Monitor size={18} /> Board
+            </button>
+            <button
+              onClick={() => setShowInviteModal(true)}
+              className="px-4 py-2 border-2 border-black font-bold flex items-center gap-2 bg-yellow-400 hover:bg-yellow-500"
+              title="참가자 초대 QR/링크"
+            >
+              <QrCode size={18} /> 초대
             </button>
             <div className="flex border-2 border-black bg-gray-100 overflow-x-auto max-w-[200px] md:max-w-none">
                {teams.map((t) => (
@@ -1276,6 +1314,59 @@ const App: React.FC = () => {
 
       {showReport && (
         <ReportView teams={teams} onClose={() => setShowReport(false)} />
+      )}
+
+      {/* Invite Modal - 참가자 초대 QR/링크 */}
+      {showInviteModal && currentSession && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white max-w-lg w-full border-4 border-black shadow-[10px_10px_0_0_#fff] p-6 relative animate-in fade-in zoom-in duration-200">
+            <button
+              onClick={() => setShowInviteModal(false)}
+              className="absolute top-4 right-4 hover:bg-gray-100 p-1 rounded-full border-2 border-transparent hover:border-black transition-all"
+            >
+              <X size={24} />
+            </button>
+
+            <h2 className="text-2xl font-black uppercase text-center mb-2">참가자 초대</h2>
+            <p className="text-center text-gray-500 font-bold mb-6">{currentSession.name}</p>
+
+            <div className="bg-gray-100 border-4 border-black p-8 mb-6 flex flex-col items-center justify-center">
+               {/* QR 코드 */}
+               <div className="bg-white p-4 border-2 border-black mb-4">
+                 <QRCodeSVG
+                   value={getJoinUrl(currentSession.accessCode)}
+                   size={200}
+                   level="H"
+                   includeMargin={true}
+                 />
+               </div>
+
+               <p className="font-bold text-sm text-gray-500 mb-2 uppercase">Access Code</p>
+               <div className="text-5xl font-black tracking-widest font-mono bg-white border-2 border-black px-6 py-2 shadow-hard-sm">
+                 {currentSession.accessCode}
+               </div>
+            </div>
+
+            <div className="space-y-3">
+              <button
+                 className={`w-full py-3 border-4 border-black font-black uppercase shadow-hard hover:translate-y-1 hover:shadow-none transition-all flex items-center justify-center gap-2 ${linkCopied ? 'bg-green-400' : 'bg-yellow-400'}`}
+                 onClick={() => handleCopyLink(currentSession.accessCode)}
+              >
+                {linkCopied ? (
+                  <><Check size={20} /> 복사 완료!</>
+                ) : (
+                  <><Copy size={20} /> 초대 링크 복사</>
+                )}
+              </button>
+              <p className="text-xs text-center font-bold text-gray-500">
+                참가자들에게 위 QR코드 또는 접속 코드를 공유하세요.
+              </p>
+              <p className="text-xs text-center font-mono text-gray-400 break-all">
+                {getJoinUrl(currentSession.accessCode)}
+              </p>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
