@@ -414,7 +414,29 @@ const App: React.FC = () => {
 
   // 참가자 팀 참여 핸들러 (이름 입력 후)
   const handleJoinTeam = async (teamId: string, playerName: string) => {
-    if (!currentSession || !playerName.trim()) return;
+    if (!playerName.trim()) {
+      alert('이름을 입력해주세요.');
+      return;
+    }
+
+    // currentSession이 없으면 Firebase에서 직접 조회
+    let sessionToUpdate = currentSession;
+
+    if (!sessionToUpdate && currentSessionId) {
+      const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+      if (isFirebaseConfigured) {
+        try {
+          sessionToUpdate = await firestoreService.getSession(currentSessionId);
+        } catch (error) {
+          console.error('세션 조회 실패:', error);
+        }
+      }
+    }
+
+    if (!sessionToUpdate) {
+      alert('세션을 찾을 수 없습니다. 다시 시도해주세요.');
+      return;
+    }
 
     const newPlayer = {
       id: `player_${Date.now()}`,
@@ -422,7 +444,7 @@ const App: React.FC = () => {
     };
 
     // 팀에 멤버 추가
-    const updatedTeams = currentSession.teams.map(team => {
+    const updatedTeams = sessionToUpdate.teams.map(team => {
       if (team.id === teamId) {
         return {
           ...team,
@@ -437,8 +459,11 @@ const App: React.FC = () => {
     if (isFirebaseConfigured) {
       try {
         await firestoreService.updateTeams(currentSessionId!, updatedTeams);
+        console.log('[Firebase] 팀원 추가 완료:', playerName);
       } catch (error) {
         console.error('Firebase 팀원 추가 실패:', error);
+        alert('팀 참여에 실패했습니다. 다시 시도해주세요.');
+        return;
       }
     }
 
