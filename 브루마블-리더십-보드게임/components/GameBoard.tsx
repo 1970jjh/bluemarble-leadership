@@ -71,23 +71,21 @@ const GameBoard: React.FC<GameBoardProps> = ({ teams, onSquareClick, gameMode })
         {/* Center Logo Area */}
         <div className="col-start-2 col-end-9 row-start-2 row-end-9 bg-white border-4 border-black flex flex-col items-center justify-center p-8 relative overflow-hidden shadow-inner">
            
-           {/* Dynamic Background Image */}
+           {/* Dynamic Background Image - 원본 이미지 그대로 표시 */}
            <div className="absolute inset-0 z-0">
-             {/* Use img tag for provided links. Added onerror to log issues if link is invalid. */}
-             <img 
-               src={currentBgImage} 
-               alt="Board Background" 
-               className="w-full h-full object-cover opacity-50"
+             <img
+               src={currentBgImage}
+               alt="Board Background"
+               className="w-full h-full object-cover"
                onError={(e) => {
                  console.warn("Background image failed to load. Check URL.");
                  e.currentTarget.style.display = 'none';
                }}
              />
-             <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-white/60 via-white/80 to-white/90"></div>
            </div>
-           
-           {/* JJ ACADEMY 로고 */}
-           <h1 className="text-6xl md:text-8xl font-black text-blue-900 tracking-tighter text-center leading-none italic z-10 drop-shadow-[6px_6px_0_rgba(0,0,0,0.2)]">
+
+           {/* JJ ACADEMY 로고 - 배경 위에 표시 */}
+           <h1 className="text-6xl md:text-8xl font-black text-blue-900 tracking-tighter text-center leading-none italic z-10 drop-shadow-[4px_4px_0_rgba(255,255,255,1)] [text-shadow:_2px_2px_0_#fff,_-2px_-2px_0_#fff,_2px_-2px_0_#fff,_-2px_2px_0_#fff]">
              JJ<br/><span className="text-4xl md:text-6xl text-black">ACADEMY</span>
            </h1>
 
