@@ -1,4 +1,33 @@
 
+// 22개 역량 타입
+export type CompetencyType =
+  // Self Leadership (6)
+  | 'self-awareness'      // 자기 인식
+  | 'emotional-control'   // 감정 조절
+  | 'time-management'     // 시간 관리
+  | 'resilience'          // 회복 탄력성
+  | 'learning-agility'    // 지속 학습
+  | 'personal-vision'     // 자기 비전
+  // Followership (5)
+  | 'active-listening'    // 적극적 경청
+  | 'proactivity'         // 능동적 수행
+  | 'critical-thinking'   // 비판적 사고
+  | 'feedback-reception'  // 피드백 수용
+  | 'commitment'          // 조직 몰입
+  // Leadership (6)
+  | 'clear-direction'     // 명확한 지시
+  | 'motivation'          // 동기 부여
+  | 'empowerment'         // 임파워먼트
+  | 'decision-making'     // 의사결정
+  | 'coaching'            // 코칭
+  | 'servant-leadership'  // 서번트 리더십
+  // Teamship (5)
+  | 'psychological-safety' // 심리적 안전감
+  | 'conflict-management'  // 갈등 관리
+  | 'diversity-inclusion'  // 다양성 포용
+  | 'mutual-accountability' // 상호 책임
+  | 'collaboration-tools'; // 협업 툴 활용
+
 export enum TeamColor {
   Red = 'Red',
   Blue = 'Blue',
@@ -79,8 +108,9 @@ export interface BoardSquare {
   index: number;
   type: SquareType;
   name: string;
-  price?: number; 
-  module?: 'Self' | 'Team' | 'Leader' | 'Follower'; 
+  price?: number;
+  module?: 'Self' | 'Team' | 'Leader' | 'Follower';
+  competency?: CompetencyType; // 칸에 해당하는 역량
   description?: string;
 }
 
@@ -92,6 +122,7 @@ export interface Choice {
 export interface GameCard {
   id: string;
   type: 'Self' | 'Team' | 'Leader' | 'Follower' | 'Event' | 'Challenge' | 'Burnout' | 'Etiquette' | 'CoreValue';
+  competency?: CompetencyType; // 22개 역량 중 하나 (Event/Challenge/Burnout 등은 없음)
   title: string;
   situation: string;
   choices?: Choice[]; // Optional: If undefined/empty, it's an open-ended input
