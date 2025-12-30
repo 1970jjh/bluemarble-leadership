@@ -671,13 +671,13 @@ const App: React.FC = () => {
     updateTeamsInSession(updatedTeams);
   };
 
-  const updateTeamResources = (teamId: string, changes: any) => {
+  const updateTeamResources = async (teamId: string, changes: any) => {
     if (!currentSession) return;
     const updatedTeams = currentSession.teams.map(team => {
       if (team.id !== teamId) return team;
-      
+
       const newResources = { ...team.resources };
-      
+
       // Update resources without capping (allow negative and >100)
       if (changes.capital !== undefined) newResources.capital += changes.capital;
       if (changes.energy !== undefined) newResources.energy += changes.energy;
@@ -685,10 +685,10 @@ const App: React.FC = () => {
       if (changes.trust !== undefined) newResources.trust += changes.trust;
       if (changes.competency !== undefined) newResources.competency += changes.competency;
       if (changes.insight !== undefined) newResources.insight += changes.insight;
-      
+
       return { ...team, resources: newResources };
     });
-    updateTeamsInSession(updatedTeams);
+    await updateTeamsInSession(updatedTeams);
   };
 
   // --- Core Game Actions ---
@@ -1041,33 +1041,57 @@ const App: React.FC = () => {
   };
 
   const handleApplyResult = async () => {
-    if (aiEvaluationResult && currentTeam && activeCard) {
-      // 1. Update Team Resources
-      updateTeamResources(currentTeam.id, aiEvaluationResult.scoreChanges);
-
-      // 2. Log to Team History
-      const turnRecord: TurnRecord = {
-        turnNumber: currentSession?.teams[currentTurnIndex].history.length! + 1,
-        cardId: activeCard.id,
-        cardTitle: activeCard.title,
-        situation: activeCard.situation,
-        choiceId: sharedSelectedChoice?.id || 'OPEN',
-        choiceText: sharedSelectedChoice?.text || 'Free Text Input',
-        reasoning: sharedReasoning,
-        aiFeedback: aiEvaluationResult.feedback,
-        scoreChanges: aiEvaluationResult.scoreChanges,
-        timestamp: Date.now()
-      };
-      updateTeamHistory(currentTeam.id, turnRecord);
-
-      addLog(`[턴완료] ${currentTeam.name} 턴 종료 - 점수 적용됨`);
-      addLog(`---`); // 턴 구분선
+    if (!currentSession || !aiEvaluationResult || !currentTeam || !activeCard) {
+      // 조건 미충족 시에도 다음 턴으로 넘어감
+      nextTurn();
+      return;
     }
 
-    // 3. 먼저 Firebase에 Idle 상태 저장 (모달이 다시 열리는 것 방지)
+    // 1. 팀 리소스와 히스토리를 한 번에 업데이트 (Race Condition 방지)
+    const turnRecord: TurnRecord = {
+      turnNumber: currentSession.teams[currentTurnIndex].history.length + 1,
+      cardId: activeCard.id,
+      cardTitle: activeCard.title,
+      situation: activeCard.situation,
+      choiceId: sharedSelectedChoice?.id || 'OPEN',
+      choiceText: sharedSelectedChoice?.text || 'Free Text Input',
+      reasoning: sharedReasoning,
+      aiFeedback: aiEvaluationResult.feedback,
+      scoreChanges: aiEvaluationResult.scoreChanges,
+      timestamp: Date.now()
+    };
+
+    const scoreChanges = aiEvaluationResult.scoreChanges;
+    const updatedTeams = currentSession.teams.map(team => {
+      if (team.id !== currentTeam.id) return team;
+
+      // 리소스 업데이트
+      const newResources = { ...team.resources };
+      if (scoreChanges.capital !== undefined) newResources.capital += scoreChanges.capital;
+      if (scoreChanges.energy !== undefined) newResources.energy += scoreChanges.energy;
+      if (scoreChanges.reputation !== undefined) newResources.reputation += scoreChanges.reputation;
+      if (scoreChanges.trust !== undefined) newResources.trust += scoreChanges.trust;
+      if (scoreChanges.competency !== undefined) newResources.competency += scoreChanges.competency;
+      if (scoreChanges.insight !== undefined) newResources.insight += scoreChanges.insight;
+
+      // 히스토리 추가
+      return {
+        ...team,
+        resources: newResources,
+        history: [...team.history, turnRecord]
+      };
+    });
+
+    // Firebase에 팀 업데이트 저장 (await로 완료 대기)
+    await updateTeamsInSession(updatedTeams);
+
+    addLog(`[턴완료] ${currentTeam.name} 턴 종료 - 점수 적용됨`);
+    addLog(`---`); // 턴 구분선
+
+    // 2. Firebase에 Idle 상태 저장 (모달이 다시 열리는 것 방지)
     const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
     if (isFirebaseConfigured && currentSessionId) {
-      const nextTeamIndex = currentSession ? (currentTurnIndex + 1) % currentSession.teams.length : 0;
+      const nextTeamIndex = (currentTurnIndex + 1) % currentSession.teams.length;
 
       try {
         await firestoreService.updateGameState(currentSessionId, {
@@ -1090,7 +1114,7 @@ const App: React.FC = () => {
       }
     }
 
-    // 4. Next Turn (로컬 상태 업데이트)
+    // 3. Next Turn (로컬 상태 업데이트)
     nextTurn();
   };
 
