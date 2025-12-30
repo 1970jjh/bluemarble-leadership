@@ -710,12 +710,10 @@ const App: React.FC = () => {
     let selectedCard: GameCard | null = null;
 
     if (square.type === SquareType.City) {
-      // 칸의 module(주제)에 맞는 카드 선택
-      // 예: "협업 툴 활용" 칸(Team 모듈) → T-005 협업 도구 카드
-      const relevantCards = SAMPLE_CARDS.filter(c => c.type === square.module);
-      selectedCard = relevantCards.length > 0
-        ? relevantCards[Math.floor(Math.random() * relevantCards.length)]
-        : SAMPLE_CARDS[0];
+      // 칸의 module(주제)과 competency(역량)에 맞는 특정 카드 선택
+      // 예: "자기 인식" 칸(Self 모듈, self-awareness) → SELF-SA-001 카드
+      const exactCard = SAMPLE_CARDS.find(c => c.type === square.module && c.competency === square.competency);
+      selectedCard = exactCard || SAMPLE_CARDS.find(c => c.type === square.module) || SAMPLE_CARDS[0];
     }
     else if (square.type === SquareType.GoldenKey) {
       selectedCard = pickRandomCard('Event');
@@ -1110,8 +1108,8 @@ const App: React.FC = () => {
 
     switch (square.type) {
       case SquareType.City:
-        // 미리보기도 칸의 module(주제)에 맞는 카드 표시
-        cardToPreview = findCard(c => c.type === square.module);
+        // 미리보기: 칸의 module(주제)과 competency(역량)에 맞는 특정 카드 표시
+        cardToPreview = findCard(c => c.type === square.module && c.competency === square.competency);
         break;
       case SquareType.GoldenKey:
         // Exclude ventures, keep general events or chance
