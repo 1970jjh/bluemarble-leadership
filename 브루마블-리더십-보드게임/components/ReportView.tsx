@@ -10,9 +10,17 @@ interface ReportViewProps {
 }
 
 // 팀별 AI 피드백 타입
+interface TeamFeedbackData {
+  overall: string;
+  strengths: string[];
+  improvements: string[];
+  advice: string;
+  discussion_topics: string[];
+}
+
 interface TeamAIFeedback {
   teamName: string;
-  feedback: string;
+  feedback: TeamFeedbackData;
 }
 
 // 종합 AI 분석 타입
@@ -179,30 +187,44 @@ const ReportView: React.FC<ReportViewProps> = ({ teams, onClose }) => {
           게임 기록:
           ${historyContext || '기록 없음'}
 
-          다음 형식으로 한글 종합 피드백을 작성해주세요:
-          1. 전반적 평가 (2-3문장)
-          2. 강점 (2-3가지)
-          3. 개선점 (2-3가지)
-          4. 성장을 위한 조언 (2-3문장)
+          다음 JSON 형식으로 한글 종합 피드백을 작성해주세요:
+          {
+            "overall": "전반적 평가 (2-3문장)",
+            "strengths": ["강점 1", "강점 2", "강점 3"],
+            "improvements": ["개선점 1", "개선점 2", "개선점 3"],
+            "advice": "성장을 위한 조언 (2-3문장)",
+            "discussion_topics": ["토의주제 1", "토의주제 2", "토의주제 3"]
+          }
 
-          300자 내외로 작성해주세요.
+          중요:
+          - 마크다운 기호(##, **, * 등)를 절대 사용하지 마세요
+          - 토의주제는 팀원들이 함께 대화할 수 있는 열린 질문으로 작성해주세요
+          - 모든 내용은 한글로 작성해주세요
         `;
 
         try {
           const feedbackResponse = await genAI.models.generateContent({
             model: 'gemini-2.0-flash',
-            contents: feedbackPrompt
+            contents: feedbackPrompt,
+            config: { responseMimeType: "application/json" }
           });
 
+          const parsed = JSON.parse(feedbackResponse.text || '{}');
           feedbacks.push({
             teamName: team.name,
-            feedback: feedbackResponse.text || '피드백 생성 실패'
+            feedback: parsed
           });
         } catch (err) {
           console.error(`Team ${team.name} feedback failed:`, err);
           feedbacks.push({
             teamName: team.name,
-            feedback: '피드백 생성에 실패했습니다.'
+            feedback: {
+              overall: '피드백 생성에 실패했습니다.',
+              strengths: [],
+              improvements: [],
+              advice: '',
+              discussion_topics: []
+            }
           });
         }
       }
@@ -593,9 +615,65 @@ const ReportView: React.FC<ReportViewProps> = ({ teams, onClose }) => {
                            </>
                          )}
 
-                         <div className="ai-feedback bg-blue-100 p-4 rounded-lg border-2 border-blue-300">
-                           <h4 className="font-bold mb-2 text-blue-800">AI 종합 피드백</h4>
-                           <p className="text-sm whitespace-pre-wrap">{feedback?.feedback || '피드백 생성 중...'}</p>
+                         <div className="ai-feedback bg-blue-50 p-5 rounded-lg border-2 border-blue-300">
+                           <h4 className="font-bold text-lg mb-4 text-blue-800 border-b border-blue-300 pb-2">AI 종합 피드백</h4>
+
+                           {feedback?.feedback ? (
+                             <div className="space-y-4 text-sm">
+                               {/* 전반적 평가 */}
+                               <div>
+                                 <p className="text-gray-800 leading-relaxed">{feedback.feedback.overall}</p>
+                               </div>
+
+                               {/* 강점 */}
+                               {feedback.feedback.strengths?.length > 0 && (
+                                 <div className="bg-green-50 p-3 rounded border-l-4 border-green-500">
+                                   <h5 className="font-bold text-green-800 mb-2">강점</h5>
+                                   <ul className="space-y-1">
+                                     {feedback.feedback.strengths.map((s: string, i: number) => (
+                                       <li key={i} className="text-gray-700">• {s}</li>
+                                     ))}
+                                   </ul>
+                                 </div>
+                               )}
+
+                               {/* 개선점 */}
+                               {feedback.feedback.improvements?.length > 0 && (
+                                 <div className="bg-orange-50 p-3 rounded border-l-4 border-orange-500">
+                                   <h5 className="font-bold text-orange-800 mb-2">개선점</h5>
+                                   <ul className="space-y-1">
+                                     {feedback.feedback.improvements.map((s: string, i: number) => (
+                                       <li key={i} className="text-gray-700">• {s}</li>
+                                     ))}
+                                   </ul>
+                                 </div>
+                               )}
+
+                               {/* 성장을 위한 조언 */}
+                               {feedback.feedback.advice && (
+                                 <div className="bg-blue-100 p-3 rounded border-l-4 border-blue-500">
+                                   <h5 className="font-bold text-blue-800 mb-2">성장을 위한 조언</h5>
+                                   <p className="text-gray-700 italic">{feedback.feedback.advice}</p>
+                                 </div>
+                               )}
+
+                               {/* 팀 토의 주제 3가지 */}
+                               {feedback.feedback.discussion_topics?.length > 0 && (
+                                 <div className="bg-purple-50 p-3 rounded border-l-4 border-purple-500 mt-4">
+                                   <h5 className="font-bold text-purple-800 mb-2">팀 토의 주제</h5>
+                                   <ol className="space-y-2">
+                                     {feedback.feedback.discussion_topics.map((topic: string, i: number) => (
+                                       <li key={i} className="text-gray-700 bg-white p-2 rounded border">
+                                         <span className="font-bold text-purple-700">{i + 1}.</span> {topic}
+                                       </li>
+                                     ))}
+                                   </ol>
+                                 </div>
+                               )}
+                             </div>
+                           ) : (
+                             <p className="text-gray-500">피드백 생성 중...</p>
+                           )}
                          </div>
                        </div>
                      );
