@@ -1,4 +1,4 @@
-import { BoardSquare, GameCard, SquareType, Team, TeamColor } from './types';
+import { BoardSquare, GameCard, SquareType, Team, TeamColor, CompetencyType } from './types';
 
 export const BOARD_SIZE = 32;
 
@@ -6,42 +6,42 @@ export const BOARD_SIZE = 32;
 export const BOARD_SQUARES: BoardSquare[] = [
   // Bottom Row (Right to Left)
   { index: 0, type: SquareType.Start, name: '오리엔테이션 (Start)' },
-  { index: 1, type: SquareType.City, name: '자기 인식 (Self-Awareness)', module: 'Self' },
+  { index: 1, type: SquareType.City, name: '자기 인식 (Self-Awareness)', module: 'Self', competency: 'self-awareness' },
   { index: 2, type: SquareType.GoldenKey, name: '우연한 기회 (Chance)' },
-  { index: 3, type: SquareType.City, name: '적극적 경청 (Active Listening)', module: 'Follower' },
-  { index: 4, type: SquareType.City, name: '심리적 안전감 (Psy. Safety)', module: 'Team' },
-  { index: 5, type: SquareType.City, name: '명확한 지시 (Directing)', module: 'Leader' },
-  { index: 6, type: SquareType.City, name: '감정 조절 (Emotional Control)', module: 'Self' },
+  { index: 3, type: SquareType.City, name: '적극적 경청 (Active Listening)', module: 'Follower', competency: 'active-listening' },
+  { index: 4, type: SquareType.City, name: '심리적 안전감 (Psy. Safety)', module: 'Team', competency: 'psychological-safety' },
+  { index: 5, type: SquareType.City, name: '명확한 지시 (Directing)', module: 'Leader', competency: 'clear-direction' },
+  { index: 6, type: SquareType.City, name: '감정 조절 (Emotional Control)', module: 'Self', competency: 'emotional-control' },
   { index: 7, type: SquareType.GoldenKey, name: '우연한 기회 (Chance)' },
   { index: 8, type: SquareType.Island, name: '번아웃 (Burnout)' },
 
   // Left Column (Bottom to Top)
-  { index: 9, type: SquareType.City, name: '능동적 수행 (Proactivity)', module: 'Follower' },
-  { index: 10, type: SquareType.City, name: '갈등 관리 (Conflict Mgmt)', module: 'Team' },
-  { index: 11, type: SquareType.City, name: '동기 부여 (Motivation)', module: 'Leader' },
+  { index: 9, type: SquareType.City, name: '능동적 수행 (Proactivity)', module: 'Follower', competency: 'proactivity' },
+  { index: 10, type: SquareType.City, name: '갈등 관리 (Conflict Mgmt)', module: 'Team', competency: 'conflict-management' },
+  { index: 11, type: SquareType.City, name: '동기 부여 (Motivation)', module: 'Leader', competency: 'motivation' },
   { index: 12, type: SquareType.GoldenKey, name: '우연한 기회 (Chance)' },
-  { index: 13, type: SquareType.City, name: '시간 관리 (Time Mgmt)', module: 'Self' },
-  { index: 14, type: SquareType.City, name: '비판적 사고 (Critical Thinking)', module: 'Follower' },
-  { index: 15, type: SquareType.City, name: '다양성 포용 (Diversity)', module: 'Team' },
+  { index: 13, type: SquareType.City, name: '시간 관리 (Time Mgmt)', module: 'Self', competency: 'time-management' },
+  { index: 14, type: SquareType.City, name: '비판적 사고 (Critical Thinking)', module: 'Follower', competency: 'critical-thinking' },
+  { index: 15, type: SquareType.City, name: '다양성 포용 (Diversity)', module: 'Team', competency: 'diversity-inclusion' },
 
   // Top Row (Left to Right)
   { index: 16, type: SquareType.WorldTour, name: '핵심 가치 (Core Values)' },
-  { index: 17, type: SquareType.City, name: '임파워먼트 (Empowerment)', module: 'Leader' },
-  { index: 18, type: SquareType.City, name: '회복 탄력성 (Resilience)', module: 'Self' },
+  { index: 17, type: SquareType.City, name: '임파워먼트 (Empowerment)', module: 'Leader', competency: 'empowerment' },
+  { index: 18, type: SquareType.City, name: '회복 탄력성 (Resilience)', module: 'Self', competency: 'resilience' },
   { index: 19, type: SquareType.GoldenKey, name: '우연한 기회 (Chance)' },
-  { index: 20, type: SquareType.City, name: '피드백 수용 (Feedback)', module: 'Follower' },
-  { index: 21, type: SquareType.City, name: '상호 책임 (Accountability)', module: 'Team' },
-  { index: 22, type: SquareType.City, name: '의사결정 (Decision Making)', module: 'Leader' },
-  { index: 23, type: SquareType.City, name: '지속 학습 (Learning Agility)', module: 'Self' },
+  { index: 20, type: SquareType.City, name: '피드백 수용 (Feedback)', module: 'Follower', competency: 'feedback-reception' },
+  { index: 21, type: SquareType.City, name: '상호 책임 (Accountability)', module: 'Team', competency: 'mutual-accountability' },
+  { index: 22, type: SquareType.City, name: '의사결정 (Decision Making)', module: 'Leader', competency: 'decision-making' },
+  { index: 23, type: SquareType.City, name: '지속 학습 (Learning Agility)', module: 'Self', competency: 'learning-agility' },
 
   // Right Column (Top to Bottom)
   { index: 24, type: SquareType.Space, name: '혁신 프로젝트 (Challenge)' },
-  { index: 25, type: SquareType.City, name: '조직 몰입 (Commitment)', module: 'Follower' },
-  { index: 26, type: SquareType.City, name: '협업 툴 활용 (Collaboration)', module: 'Team' },
+  { index: 25, type: SquareType.City, name: '조직 몰입 (Commitment)', module: 'Follower', competency: 'commitment' },
+  { index: 26, type: SquareType.City, name: '협업 툴 활용 (Collaboration)', module: 'Team', competency: 'collaboration-tools' },
   { index: 27, type: SquareType.Fund, name: '사내 벤처 (Innovation)' },
-  { index: 28, type: SquareType.City, name: '코칭 (Coaching)', module: 'Leader' },
-  { index: 29, type: SquareType.City, name: '자기 비전 (Personal Vision)', module: 'Self' },
-  { index: 30, type: SquareType.City, name: '서번트 리더십 (Servant)', module: 'Leader' },
+  { index: 28, type: SquareType.City, name: '코칭 (Coaching)', module: 'Leader', competency: 'coaching' },
+  { index: 29, type: SquareType.City, name: '자기 비전 (Personal Vision)', module: 'Self', competency: 'personal-vision' },
+  { index: 30, type: SquareType.City, name: '서번트 리더십 (Servant)', module: 'Leader', competency: 'servant-leadership' },
   { index: 31, type: SquareType.GoldenKey, name: '우연한 기회 (Chance)' },
 ];
 
