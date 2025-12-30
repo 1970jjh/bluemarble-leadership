@@ -662,6 +662,70 @@ const App: React.FC = () => {
     setCurrentTurnIndex((prev) => (prev + 1) % currentSession.teams.length);
   }, [currentSession, currentTurnIndex, currentSessionId]);
 
+  // 게임 리셋 함수
+  const handleResetGame = useCallback(async () => {
+    if (!currentSession || !currentSessionId) return;
+
+    const confirmed = window.confirm('게임을 초기화하시겠습니까? 모든 팀의 점수와 히스토리가 리셋됩니다.');
+    if (!confirmed) return;
+
+    // 모든 팀 초기화
+    const resetTeams = currentSession.teams.map(team => ({
+      ...team,
+      position: 0,
+      resources: { ...INITIAL_RESOURCES },
+      isBurnout: false,
+      burnoutCounter: 0,
+      lapCount: 0,
+      currentMemberIndex: 0,
+      history: []
+    }));
+
+    // 로컬 상태 초기화
+    setShowCardModal(false);
+    setActiveCard(null);
+    setSharedSelectedChoice(null);
+    setSharedReasoning('');
+    setAiEvaluationResult(null);
+    setIsAiProcessing(false);
+    setIsTeamSaved(false);
+    setIsSaving(false);
+    setGamePhase(GamePhase.Idle);
+    setCurrentTurnIndex(0);
+    setDiceValue([1, 1]);
+    setTurnTimeLeft(120);
+    setGameLogs(['[시스템] 게임이 리셋되었습니다.']);
+    gameLogsRef.current = ['[시스템] 게임이 리셋되었습니다.'];
+
+    // Firebase 업데이트
+    await updateTeamsInSession(resetTeams);
+
+    const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+    if (isFirebaseConfigured) {
+      try {
+        await firestoreService.updateGameState(currentSessionId, {
+          sessionId: currentSessionId,
+          phase: GamePhase.Idle,
+          currentTeamIndex: 0,
+          currentTurn: 0,
+          diceValue: [1, 1],
+          currentCard: null,
+          selectedChoice: null,
+          reasoning: '',
+          aiResult: null,
+          isSubmitted: false,
+          isAiProcessing: false,
+          gameLogs: ['[시스템] 게임이 리셋되었습니다.'],
+          lastUpdated: Date.now()
+        });
+      } catch (err) {
+        console.error('Firebase 리셋 실패:', err);
+      }
+    }
+
+    alert('게임이 초기화되었습니다!');
+  }, [currentSession, currentSessionId]);
+
   const updateTeamHistory = (teamId: string, record: TurnRecord) => {
     if (!currentSession) return;
     const updatedTeams = currentSession.teams.map(team => {
@@ -693,27 +757,48 @@ const App: React.FC = () => {
 
   // --- Core Game Actions ---
 
+  // GameVersion을 카드 타입으로 변환하는 헬퍼 함수
+  const getCardTypeFromVersion = (version: GameVersion | string | undefined): string => {
+    switch (version) {
+      case GameVersion.Self:
+      case 'Self Leadership':
+        return 'Self';
+      case GameVersion.Follower:
+      case 'Followership':
+        return 'Follower';
+      case GameVersion.Leader:
+      case 'Leadership (Manager)':
+        return 'Leader';
+      case GameVersion.Team:
+      case 'Teamship':
+        return 'Team';
+      default:
+        return 'Self'; // 기본값
+    }
+  };
+
   const handleLandOnSquare = (team: Team, squareIndex: number) => {
     const square = BOARD_SQUARES.find(s => s.index === squareIndex);
     if (!square) return;
 
-    // 도착 로그는 리포트에 불필요하므로 제거 - 카드 이벤트만 기록
+    // 세션 모드에 맞는 카드 타입 결정
+    const sessionCardType = getCardTypeFromVersion(currentSession?.version);
 
     // Helper to pick random card
     const pickRandomCard = (type: string, fallbackId: string = 'E-001') => {
       const candidates = SAMPLE_CARDS.filter(c => c.type === type);
-      return candidates.length > 0 
-        ? candidates[Math.floor(Math.random() * candidates.length)] 
+      return candidates.length > 0
+        ? candidates[Math.floor(Math.random() * candidates.length)]
         : SAMPLE_CARDS.find(c => c.id === fallbackId) || SAMPLE_CARDS[0];
     };
 
     let selectedCard: GameCard | null = null;
 
     if (square.type === SquareType.City) {
-      // 칸의 module(주제)과 competency(역량)에 맞는 특정 카드 선택
-      // 예: "자기 인식" 칸(Self 모듈, self-awareness) → SELF-SA-001 카드
-      const exactCard = SAMPLE_CARDS.find(c => c.type === square.module && c.competency === square.competency);
-      selectedCard = exactCard || SAMPLE_CARDS.find(c => c.type === square.module) || SAMPLE_CARDS[0];
+      // 세션 모드(version)와 칸의 역량(competency)에 맞는 카드 선택
+      // 예: Leader 세션 + time-management 칸 → LEAD-TM-001 카드
+      const exactCard = SAMPLE_CARDS.find(c => c.type === sessionCardType && c.competency === square.competency);
+      selectedCard = exactCard || SAMPLE_CARDS.find(c => c.type === sessionCardType) || SAMPLE_CARDS[0];
     }
     else if (square.type === SquareType.GoldenKey) {
       selectedCard = pickRandomCard('Event');
@@ -1122,9 +1207,12 @@ const App: React.FC = () => {
     const square = BOARD_SQUARES.find(s => s.index === index);
     if (!square) return;
 
+    // 세션 모드에 맞는 카드 타입 결정
+    const sessionCardType = getCardTypeFromVersion(currentSession?.version);
+
     let cardToPreview: GameCard | undefined;
-    
-    // Helper to find random card of type or filtered property
+
+    // Helper to find card (City는 정확한 매칭, 나머지는 랜덤)
     const findCard = (filter: (c: GameCard) => boolean) => {
       const candidates = SAMPLE_CARDS.filter(filter);
       return candidates.length > 0 ? candidates[Math.floor(Math.random() * candidates.length)] : undefined;
@@ -1132,8 +1220,9 @@ const App: React.FC = () => {
 
     switch (square.type) {
       case SquareType.City:
-        // 미리보기: 칸의 module(주제)과 competency(역량)에 맞는 특정 카드 표시
-        cardToPreview = findCard(c => c.type === square.module && c.competency === square.competency);
+        // 미리보기: 세션 모드와 칸의 역량에 맞는 특정 카드 표시
+        // 예: Leader 세션 + time-management 칸 → LEAD-TM-001 카드
+        cardToPreview = SAMPLE_CARDS.find(c => c.type === sessionCardType && c.competency === square.competency);
         break;
       case SquareType.GoldenKey:
         // Exclude ventures, keep general events or chance
@@ -1564,7 +1653,7 @@ const App: React.FC = () => {
                   onManualRoll={handleManualRoll}
                   onSkip={() => { addLog(`${currentTeam.name} skipped turn.`); nextTurn(); }}
                   onOpenReport={() => setShowReport(true)}
-                  onReset={() => {}}
+                  onReset={handleResetGame}
                   logs={gameLogs}
                 />
              )}
