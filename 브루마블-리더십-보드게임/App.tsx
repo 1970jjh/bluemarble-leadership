@@ -1132,7 +1132,7 @@ const App: React.FC = () => {
       return;
     }
 
-    // 1. 팀 리소스와 히스토리를 한 번에 업데이트 (Race Condition 방지)
+    // 1. 팀 리소스, 히스토리, 멤버 인덱스를 한 번에 업데이트 (Race Condition 방지)
     const turnRecord: TurnRecord = {
       turnNumber: currentSession.teams[currentTurnIndex].history.length + 1,
       cardId: activeCard.id,
@@ -1147,24 +1147,30 @@ const App: React.FC = () => {
     };
 
     const scoreChanges = aiEvaluationResult.scoreChanges;
-    const updatedTeams = currentSession.teams.map(team => {
-      if (team.id !== currentTeam.id) return team;
+    const updatedTeams = currentSession.teams.map((team, idx) => {
+      // 현재 팀: 점수와 히스토리 업데이트 + 멤버 인덱스 회전
+      if (team.id === currentTeam.id) {
+        const newResources = { ...team.resources };
+        if (scoreChanges.capital !== undefined) newResources.capital += scoreChanges.capital;
+        if (scoreChanges.energy !== undefined) newResources.energy += scoreChanges.energy;
+        if (scoreChanges.reputation !== undefined) newResources.reputation += scoreChanges.reputation;
+        if (scoreChanges.trust !== undefined) newResources.trust += scoreChanges.trust;
+        if (scoreChanges.competency !== undefined) newResources.competency += scoreChanges.competency;
+        if (scoreChanges.insight !== undefined) newResources.insight += scoreChanges.insight;
 
-      // 리소스 업데이트
-      const newResources = { ...team.resources };
-      if (scoreChanges.capital !== undefined) newResources.capital += scoreChanges.capital;
-      if (scoreChanges.energy !== undefined) newResources.energy += scoreChanges.energy;
-      if (scoreChanges.reputation !== undefined) newResources.reputation += scoreChanges.reputation;
-      if (scoreChanges.trust !== undefined) newResources.trust += scoreChanges.trust;
-      if (scoreChanges.competency !== undefined) newResources.competency += scoreChanges.competency;
-      if (scoreChanges.insight !== undefined) newResources.insight += scoreChanges.insight;
+        // 멤버 인덱스 회전 (팀원이 있는 경우)
+        const nextMemberIndex = team.members.length > 0
+          ? (team.currentMemberIndex + 1) % team.members.length
+          : 0;
 
-      // 히스토리 추가
-      return {
-        ...team,
-        resources: newResources,
-        history: [...team.history, turnRecord]
-      };
+        return {
+          ...team,
+          resources: newResources,
+          history: [...team.history, turnRecord],
+          currentMemberIndex: nextMemberIndex
+        };
+      }
+      return team;
     });
 
     // Firebase에 팀 업데이트 저장 (await로 완료 대기)
@@ -1173,11 +1179,23 @@ const App: React.FC = () => {
     addLog(`[턴완료] ${currentTeam.name} 턴 종료 - 점수 적용됨`);
     addLog(`---`); // 턴 구분선
 
-    // 2. Firebase에 Idle 상태 저장 (모달이 다시 열리는 것 방지)
+    // 2. 로컬 상태 초기화 (nextTurn 대신 직접 처리 - 팀 덮어쓰기 방지)
+    setShowCardModal(false);
+    setActiveCard(null);
+    setSharedSelectedChoice(null);
+    setSharedReasoning('');
+    setAiEvaluationResult(null);
+    setIsAiProcessing(false);
+    setIsTeamSaved(false);
+    setIsSaving(false);
+    setGamePhase(GamePhase.Idle);
+    setTurnTimeLeft(120);
+
+    const nextTeamIndex = (currentTurnIndex + 1) % currentSession.teams.length;
+
+    // 3. Firebase에 Idle 상태 저장
     const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
     if (isFirebaseConfigured && currentSessionId) {
-      const nextTeamIndex = (currentTurnIndex + 1) % currentSession.teams.length;
-
       try {
         await firestoreService.updateGameState(currentSessionId, {
           sessionId: currentSessionId,
@@ -1185,7 +1203,7 @@ const App: React.FC = () => {
           currentTeamIndex: nextTeamIndex,
           currentTurn: 0,
           diceValue: [1, 1],
-          currentCard: null,  // 카드 초기화 → 모달 닫힘
+          currentCard: null,
           selectedChoice: null,
           reasoning: '',
           aiResult: null,
@@ -1199,8 +1217,8 @@ const App: React.FC = () => {
       }
     }
 
-    // 3. Next Turn (로컬 상태 업데이트)
-    nextTurn();
+    // 4. 다음 팀으로 전환 (nextTurn 호출 없이 직접 업데이트)
+    setCurrentTurnIndex(nextTeamIndex);
   };
 
   const handleBoardSquareClick = (index: number) => {
