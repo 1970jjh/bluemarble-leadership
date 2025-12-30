@@ -146,8 +146,8 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
           SKIP TURN
         </button>
 
-        {/* Game Log Terminal - 고정 높이 + 스크롤바 */}
-        <div id="game-log-terminal" className="h-[200px] max-h-[200px] bg-black border-4 border-gray-700 p-2 font-mono text-xs overflow-y-auto relative shadow-inner flex flex-col">
+        {/* Game Log Terminal - 고정 높이 + 스크롤바 (3배 확대) */}
+        <div id="game-log-terminal" className="h-[600px] max-h-[600px] bg-black border-4 border-gray-700 p-2 font-mono text-xs overflow-y-auto relative shadow-inner flex flex-col">
           <div className="sticky top-0 bg-black/90 border-b border-gray-700 text-gray-400 font-bold uppercase text-[10px] mb-2 flex items-center gap-1 z-10">
              <Terminal size={10} /> System Log ({logs.length})
           </div>
