@@ -777,6 +777,18 @@ const App: React.FC = () => {
     }
   };
 
+  // 역량 ID를 한글 이름으로 변환하는 헬퍼 함수
+  const getCompetencyName = (competencyId: string | undefined): string => {
+    if (!competencyId) return '일반';
+    const square = BOARD_SQUARES.find(s => s.competency === competencyId);
+    if (square) {
+      // 이름에서 한글 부분만 추출 (예: '자기 인식 (Self-Awareness)' → '자기 인식')
+      const match = square.name.match(/^([^(]+)/);
+      return match ? match[1].trim() : square.name;
+    }
+    return competencyId;
+  };
+
   const handleLandOnSquare = (team: Team, squareIndex: number) => {
     const square = BOARD_SQUARES.find(s => s.index === squareIndex);
     if (!square) return;
@@ -1027,13 +1039,18 @@ const App: React.FC = () => {
 
     setIsAiProcessing(true);
 
-    // 리포트용 구조화된 로그 기록
-    addLog(`[턴] ${currentTeam.name} | 카드: ${activeCard.title} (${activeCard.type})`);
-    addLog(`[상황] ${activeCard.situation}`);
+    // 역량명 가져오기
+    const competencyName = getCompetencyName(activeCard.competency);
+
+    // 리포트용 구조화된 로그 기록 (역량/상황/선택/이유 포함)
+    addLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+    addLog(`📋 [${currentTeam.name}] ${activeCard.title}`);
+    addLog(`🎯 [역량] ${competencyName}`);
+    addLog(`📖 [상황] ${activeCard.situation}`);
     if (!isOpenEnded && sharedSelectedChoice) {
-      addLog(`[선택] [${sharedSelectedChoice.id}] ${sharedSelectedChoice.text}`);
+      addLog(`✅ [선택] ${sharedSelectedChoice.text}`);
     }
-    addLog(`[응답] ${sharedReasoning}`);
+    addLog(`💭 [이유] ${sharedReasoning}`);
 
     if (!process.env.API_KEY) {
        alert("API Key가 설정되지 않았습니다. Vercel 환경변수에 VITE_GEMINI_API_KEY를 설정해주세요.");
@@ -1115,8 +1132,9 @@ const App: React.FC = () => {
 
       // 리포트용 AI 평가 결과 로그
       const scores = result.scoreChanges;
-      addLog(`[AI평가] ${result.feedback}`);
-      addLog(`[점수변화] 자본:${scores.capital || 0} | 에너지:${scores.energy || 0} | 신뢰:${scores.trust || 0} | 역량:${scores.competency || 0} | 통찰:${scores.insight || 0}`);
+      addLog(`🤖 [AI 분석] ${result.feedback}`);
+      addLog(`📊 [점수변화] 자본:${scores.capital || 0} | 에너지:${scores.energy || 0} | 신뢰:${scores.trust || 0} | 역량:${scores.competency || 0} | 통찰:${scores.insight || 0}`);
+      addLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
 
     } catch (e) {
       console.error(e);
