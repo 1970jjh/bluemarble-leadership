@@ -1,78 +1,59 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Team } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { GoogleGenAI } from "@google/genai";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
-import { Download, Image as ImageIcon, Sparkles, Loader, FileText, Upload } from 'lucide-react';
+import { Download, Image as ImageIcon, Sparkles, Loader, FileText, Upload, Printer } from 'lucide-react';
 
 interface ReportViewProps {
   teams: Team[];
   onClose: () => void;
 }
 
-// 한글 폰트 Base64 캐시
-let koreanFontLoaded = false;
-let koreanFontBase64: string | null = null;
+// 팀별 AI 피드백 타입
+interface TeamAIFeedback {
+  teamName: string;
+  feedback: string;
+}
 
-// 한글 폰트 로딩 함수 (Noto Sans KR)
-const loadKoreanFont = async (): Promise<string> => {
-  if (koreanFontBase64) return koreanFontBase64;
+// 종합 AI 분석 타입
+interface OverallAnalysis {
+  summary: string;
+  perspectives: {
+    self_leadership: PerspectiveAnalysis;
+    followership: PerspectiveAnalysis;
+    leadership: PerspectiveAnalysis;
+    teamship: PerspectiveAnalysis;
+  };
+  common_mistakes: string;
+  discussion_topics: string[];
+  conclusion: string;
+}
 
-  try {
-    // Noto Sans KR Regular 폰트 로드 (Google Fonts)
-    const fontUrl = 'https://cdn.jsdelivr.net/gh/nicenewbie/font-noto-sans-kr-base64@main/NotoSansKR-Regular.ttf';
-    const response = await fetch(fontUrl);
-    const arrayBuffer = await response.arrayBuffer();
-
-    // ArrayBuffer to Base64
-    const bytes = new Uint8Array(arrayBuffer);
-    let binary = '';
-    bytes.forEach(byte => binary += String.fromCharCode(byte));
-    koreanFontBase64 = btoa(binary);
-
-    return koreanFontBase64;
-  } catch (error) {
-    console.error('Korean font loading failed:', error);
-    throw error;
-  }
-};
-
-// jsPDF에 한글 폰트 등록
-const registerKoreanFont = async (doc: jsPDF): Promise<void> => {
-  if (!koreanFontLoaded) {
-    try {
-      const fontData = await loadKoreanFont();
-      doc.addFileToVFS('NotoSansKR-Regular.ttf', fontData);
-      doc.addFont('NotoSansKR-Regular.ttf', 'NotoSansKR', 'normal');
-      koreanFontLoaded = true;
-    } catch (error) {
-      console.warn('Font registration failed, using default font:', error);
-    }
-  } else if (koreanFontBase64) {
-    doc.addFileToVFS('NotoSansKR-Regular.ttf', koreanFontBase64);
-    doc.addFont('NotoSansKR-Regular.ttf', 'NotoSansKR', 'normal');
-  }
-
-  doc.setFont('NotoSansKR');
-};
+interface PerspectiveAnalysis {
+  title: string;
+  analysis: string;
+  strengths: string;
+  improvements: string;
+  action_plan: string;
+}
 
 const ReportView: React.FC<ReportViewProps> = ({ teams, onClose }) => {
-  // --- Poster Generation State ---
+  // --- State ---
   const [photos, setPhotos] = useState<File[]>([]);
   const [posterUrl, setPosterUrl] = useState<string | null>(null);
   const [isGeneratingPoster, setIsGeneratingPoster] = useState(false);
-  const [isGeneratingOverallPDF, setIsGeneratingOverallPDF] = useState(false);
-  const [isGeneratingTeamPDF, setIsGeneratingTeamPDF] = useState(false);
-  const [fontLoading, setFontLoading] = useState(false);
+  const [isGeneratingOverall, setIsGeneratingOverall] = useState(false);
+  const [isGeneratingTeam, setIsGeneratingTeam] = useState(false);
 
-  // 폰트 미리 로딩
-  useEffect(() => {
-    setFontLoading(true);
-    loadKoreanFont()
-      .then(() => setFontLoading(false))
-      .catch(() => setFontLoading(false));
-  }, []);
+  // AI 생성 결과 저장
+  const [teamFeedbacks, setTeamFeedbacks] = useState<TeamAIFeedback[]>([]);
+  const [overallAnalysis, setOverallAnalysis] = useState<OverallAnalysis | null>(null);
+
+  // 리포트 뷰 모드
+  const [reportMode, setReportMode] = useState<'summary' | 'team' | 'overall' | null>(null);
+
+  const teamReportRef = useRef<HTMLDivElement>(null);
+  const overallReportRef = useRef<HTMLDivElement>(null);
 
   // --- Calculations ---
   const rankedTeams = [...teams].sort((a, b) => {
@@ -174,66 +155,16 @@ const ReportView: React.FC<ReportViewProps> = ({ teams, onClose }) => {
     }
   };
 
-  // 팀별 리포트 생성 (AI 종합 피드백 포함)
-  const generateTeamReports = async () => {
-    setIsGeneratingTeamPDF(true);
+  // 팀별 AI 피드백 생성
+  const generateTeamFeedbacks = async () => {
+    setIsGeneratingTeam(true);
+    setReportMode('team');
 
     try {
       const genAI = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
-      const doc = new jsPDF();
+      const feedbacks: TeamAIFeedback[] = [];
 
-      // 한글 폰트 등록
-      await registerKoreanFont(doc);
-
-      for (let index = 0; index < rankedTeams.length; index++) {
-        const team = rankedTeams[index];
-        if (index > 0) doc.addPage();
-
-        // 헤더
-        doc.setFontSize(22);
-        doc.setFont('NotoSansKR');
-        doc.text(`팀 리포트: ${team.name}`, 14, 20);
-
-        doc.setFontSize(12);
-        doc.text(`최종 점수: ${calculateTotal(team)}점 (순위: ${index + 1}위)`, 14, 30);
-        doc.text(`자본: ${team.resources.capital} | 에너지: ${team.resources.energy} | 신뢰: ${team.resources.trust} | 역량: ${team.resources.competency} | 통찰: ${team.resources.insight}`, 14, 38);
-
-        // 턴별 기록 테이블
-        if (team.history.length > 0) {
-          const tableData = team.history.map(record => [
-            `${record.turnNumber}턴`,
-            record.cardTitle,
-            record.choiceText.substring(0, 30) + (record.choiceText.length > 30 ? '...' : ''),
-            record.reasoning.substring(0, 40) + (record.reasoning.length > 40 ? '...' : ''),
-            record.aiFeedback.substring(0, 50) + (record.aiFeedback.length > 50 ? '...' : ''),
-            `자:${record.scoreChanges.capital || 0} 에:${record.scoreChanges.energy || 0} 신:${record.scoreChanges.trust || 0}`
-          ]);
-
-          autoTable(doc, {
-            startY: 45,
-            head: [['턴', '상황', '선택', '이유', 'AI 피드백', '점수']],
-            body: tableData,
-            styles: {
-              fontSize: 7,
-              font: 'NotoSansKR',
-              cellPadding: 2
-            },
-            headStyles: {
-              fillColor: [30, 58, 138],
-              font: 'NotoSansKR'
-            },
-            columnStyles: {
-              0: { cellWidth: 12 },
-              1: { cellWidth: 25 },
-              2: { cellWidth: 30 },
-              3: { cellWidth: 35 },
-              4: { cellWidth: 50 },
-              5: { cellWidth: 28 }
-            }
-          });
-        }
-
-        // AI 종합 피드백 생성
+      for (const team of rankedTeams) {
         const historyContext = team.history.map(h =>
           `[${h.cardTitle}] 선택: ${h.choiceText}, 이유: ${h.reasoning}, AI피드백: ${h.aiFeedback}`
         ).join('\n');
@@ -254,7 +185,7 @@ const ReportView: React.FC<ReportViewProps> = ({ teams, onClose }) => {
           3. 개선점 (2-3가지)
           4. 성장을 위한 조언 (2-3문장)
 
-          200자 내외로 간결하게 작성해주세요.
+          300자 내외로 작성해주세요.
         `;
 
         try {
@@ -263,55 +194,37 @@ const ReportView: React.FC<ReportViewProps> = ({ teams, onClose }) => {
             contents: feedbackPrompt
           });
 
-          const aiFeedback = feedbackResponse.text || '피드백 생성 실패';
-
-          // AI 피드백 섹션
-          // @ts-ignore - autoTable adds finalY to doc
-          const finalY = doc.lastAutoTable?.finalY || 140;
-          let yPos = finalY + 10;
-
-          if (yPos > 240) {
-            doc.addPage();
-            yPos = 20;
-          }
-
-          doc.setFillColor(240, 248, 255);
-          doc.rect(10, yPos, 190, 50, 'F');
-          doc.setDrawColor(30, 58, 138);
-          doc.rect(10, yPos, 190, 50, 'S');
-
-          doc.setFontSize(12);
-          doc.setFont('NotoSansKR');
-          doc.setTextColor(30, 58, 138);
-          doc.text('🤖 AI 종합 피드백', 14, yPos + 8);
-
-          doc.setFontSize(9);
-          doc.setTextColor(0, 0, 0);
-          const feedbackLines = doc.splitTextToSize(aiFeedback, 180);
-          doc.text(feedbackLines.slice(0, 8), 14, yPos + 16);
-
+          feedbacks.push({
+            teamName: team.name,
+            feedback: feedbackResponse.text || '피드백 생성 실패'
+          });
         } catch (err) {
-          console.error('AI feedback generation failed:', err);
+          console.error(`Team ${team.name} feedback failed:`, err);
+          feedbacks.push({
+            teamName: team.name,
+            feedback: '피드백 생성에 실패했습니다.'
+          });
         }
       }
 
-      doc.save("BL_아카데미_팀별_리포트.pdf");
+      setTeamFeedbacks(feedbacks);
 
     } catch (error) {
-      console.error('Team report generation failed:', error);
-      alert('팀별 리포트 생성에 실패했습니다.');
+      console.error('Team feedbacks generation failed:', error);
+      alert('팀별 피드백 생성에 실패했습니다.');
     } finally {
-      setIsGeneratingTeamPDF(false);
+      setIsGeneratingTeam(false);
     }
   };
 
-  // 종합 리포트 생성 (모드별 AI 분석 + 토의주제 7가지)
-  const generateOverallReport = async () => {
-    setIsGeneratingOverallPDF(true);
+  // 종합 AI 분석 생성
+  const generateOverallAnalysis = async () => {
+    setIsGeneratingOverall(true);
+    setReportMode('overall');
+
     try {
       const genAI = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
 
-      // 전체 게임 컨텍스트 준비
       const context = rankedTeams.map(t => {
         const historyStr = t.history.map(h =>
           `[${h.cardTitle}] 선택: ${h.choiceId}, 이유: ${h.reasoning.substring(0, 50)}`
@@ -380,146 +293,71 @@ const ReportView: React.FC<ReportViewProps> = ({ teams, onClose }) => {
         config: { responseMimeType: "application/json" }
       });
 
-      const aiAnalysis = JSON.parse(response.text || '{}');
-
-      // PDF 생성
-      const doc = new jsPDF();
-      await registerKoreanFont(doc);
-
-      // 제목
-      doc.setFontSize(24);
-      doc.setFont('NotoSansKR');
-      doc.setTextColor(30, 58, 138);
-      doc.text("BL 아카데미: 리더십 종합 리포트", 14, 20);
-
-      // 1. 종합 요약
-      doc.setFontSize(14);
-      doc.setTextColor(0, 0, 0);
-      doc.text("1. 종합 요약", 14, 35);
-      doc.setFontSize(10);
-      const splitSummary = doc.splitTextToSize(aiAnalysis.summary || "요약 없음", 180);
-      doc.text(splitSummary, 14, 42);
-
-      let yPos = 42 + (splitSummary.length * 5) + 10;
-
-      // 2. 모드별 분석
-      doc.setFontSize(14);
-      doc.text("2. 모드별 심층 분석", 14, yPos);
-      yPos += 8;
-
-      const perspectives = aiAnalysis.perspectives || {};
-      const perspectiveKeys = ['self_leadership', 'followership', 'leadership', 'teamship'];
-      const perspectiveColors: {[key: string]: [number, number, number]} = {
-        'self_leadership': [239, 68, 68],
-        'followership': [59, 130, 246],
-        'leadership': [16, 185, 129],
-        'teamship': [139, 92, 246]
-      };
-
-      for (const key of perspectiveKeys) {
-        const perspective = perspectives[key];
-        if (!perspective) continue;
-
-        if (yPos > 240) {
-          doc.addPage();
-          yPos = 20;
-        }
-
-        // 섹션 헤더
-        const color = perspectiveColors[key] || [0, 0, 0];
-        doc.setFillColor(color[0], color[1], color[2]);
-        doc.rect(14, yPos, 4, 8, 'F');
-
-        doc.setFontSize(12);
-        doc.setTextColor(color[0], color[1], color[2]);
-        doc.text(perspective.title || key.toUpperCase(), 22, yPos + 6);
-        yPos += 12;
-
-        doc.setTextColor(0, 0, 0);
-        doc.setFontSize(9);
-
-        // 분석
-        const analysisText = doc.splitTextToSize(`분석: ${perspective.analysis || ''}`, 175);
-        doc.text(analysisText, 18, yPos);
-        yPos += analysisText.length * 4 + 4;
-
-        // 잘한 점
-        const strengthsText = doc.splitTextToSize(`✓ 잘한 점: ${perspective.strengths || ''}`, 175);
-        doc.text(strengthsText, 18, yPos);
-        yPos += strengthsText.length * 4 + 4;
-
-        // 개선점
-        const improvementsText = doc.splitTextToSize(`△ 개선점: ${perspective.improvements || ''}`, 175);
-        doc.text(improvementsText, 18, yPos);
-        yPos += improvementsText.length * 4 + 4;
-
-        // 액션플랜
-        const actionText = doc.splitTextToSize(`▶ 액션플랜: ${perspective.action_plan || ''}`, 175);
-        doc.text(actionText, 18, yPos);
-        yPos += actionText.length * 4 + 8;
-      }
-
-      // 3. 공통 실수 및 팁
-      if (yPos > 220) { doc.addPage(); yPos = 20; }
-
-      doc.setFontSize(14);
-      doc.setTextColor(0, 0, 0);
-      doc.text("3. 공통 실수 및 개선 팁", 14, yPos);
-      yPos += 8;
-      doc.setFontSize(10);
-      const mistakes = doc.splitTextToSize(aiAnalysis.common_mistakes || "", 180);
-      doc.text(mistakes, 14, yPos);
-      yPos += mistakes.length * 5 + 10;
-
-      // 4. 토의주제 7가지
-      if (yPos > 200) { doc.addPage(); yPos = 20; }
-
-      doc.setFontSize(14);
-      doc.setTextColor(30, 58, 138);
-      doc.text("4. 팀 토의 주제 (7가지)", 14, yPos);
-      yPos += 10;
-
-      doc.setFontSize(10);
-      doc.setTextColor(0, 0, 0);
-
-      const discussionTopics = aiAnalysis.discussion_topics || [];
-      discussionTopics.forEach((topic: string, idx: number) => {
-        if (yPos > 270) { doc.addPage(); yPos = 20; }
-
-        doc.setFillColor(245, 245, 245);
-        const topicLines = doc.splitTextToSize(topic, 170);
-        const boxHeight = topicLines.length * 4 + 6;
-        doc.rect(14, yPos - 3, 182, boxHeight, 'F');
-
-        doc.setFontSize(10);
-        doc.text(`${idx + 1}.`, 18, yPos + 2);
-        doc.text(topicLines, 26, yPos + 2);
-        yPos += boxHeight + 4;
-      });
-
-      // 5. 마무리
-      if (yPos > 240) { doc.addPage(); yPos = 20; }
-      yPos += 5;
-
-      doc.setFillColor(254, 249, 195);
-      doc.rect(10, yPos, 190, 25, 'F');
-      doc.setDrawColor(234, 179, 8);
-      doc.rect(10, yPos, 190, 25, 'S');
-
-      doc.setFontSize(11);
-      doc.setFont('NotoSansKR');
-      doc.setTextColor(120, 53, 15);
-      const conclusion = doc.splitTextToSize(`💡 ${aiAnalysis.conclusion || ''}`, 180);
-      doc.text(conclusion, 14, yPos + 10);
-
-      doc.save("BL_아카데미_종합_리포트.pdf");
+      const aiAnalysis = JSON.parse(response.text || '{}') as OverallAnalysis;
+      setOverallAnalysis(aiAnalysis);
 
     } catch (e) {
       console.error(e);
-      alert("AI 리포트 생성에 실패했습니다.");
+      alert("AI 분석 생성에 실패했습니다.");
     } finally {
-      setIsGeneratingOverallPDF(false);
+      setIsGeneratingOverall(false);
     }
+  };
+
+  // 프린트 함수
+  const handlePrint = (reportType: 'team' | 'overall') => {
+    const printContent = reportType === 'team' ? teamReportRef.current : overallReportRef.current;
+    if (!printContent) return;
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert('팝업이 차단되었습니다. 팝업을 허용해주세요.');
+      return;
+    }
+
+    const title = reportType === 'team' ? 'BL 아카데미 - 팀별 리포트' : 'BL 아카데미 - 종합 리포트';
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>${title}</title>
+        <meta charset="utf-8">
+        <style>
+          @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
+          * { font-family: 'Noto Sans KR', sans-serif; box-sizing: border-box; }
+          body { padding: 20px; max-width: 800px; margin: 0 auto; color: #333; line-height: 1.6; }
+          h1 { color: #1e3a8a; border-bottom: 3px solid #1e3a8a; padding-bottom: 10px; }
+          h2 { color: #1e3a8a; margin-top: 30px; }
+          h3 { color: #374151; }
+          .team-section { page-break-inside: avoid; margin-bottom: 40px; padding: 20px; border: 2px solid #e5e7eb; border-radius: 8px; }
+          .perspective-section { margin: 20px 0; padding: 15px; background: #f9fafb; border-left: 4px solid #3b82f6; }
+          .topic-item { padding: 10px; margin: 8px 0; background: #f3f4f6; border-radius: 4px; }
+          .score-table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+          .score-table th, .score-table td { border: 1px solid #d1d5db; padding: 8px; text-align: center; }
+          .score-table th { background: #1e3a8a; color: white; }
+          .history-table { width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 12px; }
+          .history-table th, .history-table td { border: 1px solid #d1d5db; padding: 6px; text-align: left; }
+          .history-table th { background: #374151; color: white; }
+          .ai-feedback { background: #eff6ff; border: 2px solid #3b82f6; border-radius: 8px; padding: 15px; margin-top: 15px; }
+          .conclusion-box { background: #fef3c7; border: 2px solid #f59e0b; border-radius: 8px; padding: 20px; margin-top: 30px; }
+          @media print {
+            body { padding: 0; }
+            .team-section { page-break-after: always; }
+            .no-print { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        ${printContent.innerHTML}
+      </body>
+      </html>
+    `);
+
+    printWindow.document.close();
+    printWindow.onload = () => {
+      printWindow.print();
+    };
   };
 
 
@@ -544,7 +382,7 @@ const ReportView: React.FC<ReportViewProps> = ({ teams, onClose }) => {
                 {/* Score Table */}
                 <div className="border-4 border-black p-4 bg-gray-50 shadow-hard">
                   <h2 className="text-2xl font-black mb-6 uppercase border-b-4 border-black pb-2 flex justify-between">
-                     <span>🏆 최종 순위</span>
+                     <span>최종 순위</span>
                      <span className="text-sm font-normal text-gray-500 normal-case">5개 핵심 지표 합계</span>
                   </h2>
                   <div className="overflow-x-auto">
@@ -568,7 +406,7 @@ const ReportView: React.FC<ReportViewProps> = ({ teams, onClose }) => {
                             <td className="p-2 border-2 border-black flex items-center gap-2">
                               <div className={`w-3 h-3 border border-black bg-${team.color.toLowerCase()}-600`}></div>
                               {team.name}
-                              {idx === 0 && ' 👑'}
+                              {idx === 0 && ' (1위)'}
                             </td>
                             <td className="p-2 border-2 border-black">{team.resources.capital}</td>
                             <td className="p-2 border-2 border-black">{team.resources.energy}</td>
@@ -641,7 +479,7 @@ const ReportView: React.FC<ReportViewProps> = ({ teams, onClose }) => {
                            <img src={posterUrl} alt="Generated Poster" className="w-full h-full object-contain p-2" />
                            <a
                              href={posterUrl}
-                             download={`팀_${winningTeam.name}_우승_포스터.png`}
+                             download={`팀_${winningTeam?.name}_우승_포스터.png`}
                              className="absolute bottom-4 right-4 bg-white text-black p-2 border-2 border-black font-bold shadow-hard hover:bg-yellow-400 flex items-center gap-2"
                            >
                               <Download size={16} /> 다운로드
@@ -656,38 +494,203 @@ const ReportView: React.FC<ReportViewProps> = ({ teams, onClose }) => {
                 </div>
              </div>
 
-             {/* 3. Report Downloads */}
+             {/* 3. Report Generation */}
              <div className="border-4 border-black p-6 bg-white shadow-hard">
-                <h2 className="text-2xl font-black uppercase mb-6 border-b-4 border-black pb-2">리포트 내보내기</h2>
-                {fontLoading && (
-                  <div className="mb-4 p-3 bg-blue-50 border-2 border-blue-300 text-blue-700 text-sm">
-                    <Loader className="inline animate-spin mr-2" size={16} />
-                    한글 폰트 로딩 중...
-                  </div>
-                )}
+                <h2 className="text-2xl font-black uppercase mb-6 border-b-4 border-black pb-2">AI 리포트 생성</h2>
                 <div className="flex flex-col md:flex-row gap-4">
                    <button
-                     onClick={generateTeamReports}
-                     disabled={isGeneratingTeamPDF || fontLoading}
+                     onClick={generateTeamFeedbacks}
+                     disabled={isGeneratingTeam}
                      className="flex-1 py-4 bg-blue-100 border-4 border-black font-bold uppercase hover:bg-blue-200 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
                    >
-                     {isGeneratingTeamPDF ? <Loader className="animate-spin" /> : <FileText size={24} />}
-                     {isGeneratingTeamPDF ? "생성 중..." : "팀별 리포트 다운로드 (PDF)"}
+                     {isGeneratingTeam ? <Loader className="animate-spin" /> : <FileText size={24} />}
+                     {isGeneratingTeam ? "AI 분석 중..." : "팀별 리포트 생성"}
                    </button>
 
                    <button
-                     onClick={generateOverallReport}
-                     disabled={isGeneratingOverallPDF || fontLoading}
+                     onClick={generateOverallAnalysis}
+                     disabled={isGeneratingOverall}
                      className="flex-1 py-4 bg-purple-100 border-4 border-black font-bold uppercase hover:bg-purple-200 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
                    >
-                     {isGeneratingOverallPDF ? <Loader className="animate-spin" /> : <Sparkles size={24} />}
-                     {isGeneratingOverallPDF ? "AI 분석 중..." : "종합 AI 리포트 다운로드 (PDF)"}
+                     {isGeneratingOverall ? <Loader className="animate-spin" /> : <Sparkles size={24} />}
+                     {isGeneratingOverall ? "AI 분석 중..." : "종합 리포트 생성"}
                    </button>
                 </div>
                 <p className="mt-4 text-sm text-gray-500 text-center">
                   * 종합 리포트에는 모드별(셀프리더십/팔로워십/리더십/팀십) AI 분석과 토의주제 7가지가 포함됩니다.
                 </p>
              </div>
+
+             {/* 4. Team Report Display */}
+             {teamFeedbacks.length > 0 && (
+               <div className="border-4 border-black p-6 bg-blue-50 shadow-hard">
+                 <div className="flex justify-between items-center mb-6 border-b-4 border-black pb-2">
+                   <h2 className="text-2xl font-black uppercase">팀별 AI 리포트</h2>
+                   <button
+                     onClick={() => handlePrint('team')}
+                     className="px-4 py-2 bg-blue-500 text-white border-2 border-black font-bold flex items-center gap-2 hover:bg-blue-600"
+                   >
+                     <Printer size={18} /> PDF로 저장/인쇄
+                   </button>
+                 </div>
+
+                 {/* 프린트용 숨겨진 콘텐츠 */}
+                 <div ref={teamReportRef} className="space-y-6">
+                   <h1 style={{ display: 'none' }}>BL 아카데미 - 팀별 리포트</h1>
+
+                   {rankedTeams.map((team, idx) => {
+                     const feedback = teamFeedbacks.find(f => f.teamName === team.name);
+                     return (
+                       <div key={team.id} className="team-section bg-white p-6 border-2 border-gray-300 rounded-lg">
+                         <h3 className="text-xl font-black mb-4 text-blue-900">
+                           {idx + 1}위 - {team.name} (총점: {calculateTotal(team)}점)
+                         </h3>
+
+                         <table className="score-table w-full mb-4 text-sm">
+                           <thead>
+                             <tr>
+                               <th className="bg-gray-800 text-white p-2">자본</th>
+                               <th className="bg-gray-800 text-white p-2">에너지</th>
+                               <th className="bg-gray-800 text-white p-2">신뢰</th>
+                               <th className="bg-gray-800 text-white p-2">역량</th>
+                               <th className="bg-gray-800 text-white p-2">통찰</th>
+                             </tr>
+                           </thead>
+                           <tbody>
+                             <tr>
+                               <td className="p-2 border">{team.resources.capital}</td>
+                               <td className="p-2 border">{team.resources.energy}</td>
+                               <td className="p-2 border">{team.resources.trust}</td>
+                               <td className="p-2 border">{team.resources.competency}</td>
+                               <td className="p-2 border">{team.resources.insight}</td>
+                             </tr>
+                           </tbody>
+                         </table>
+
+                         {team.history.length > 0 && (
+                           <>
+                             <h4 className="font-bold mb-2">턴별 기록</h4>
+                             <table className="history-table w-full mb-4 text-xs">
+                               <thead>
+                                 <tr>
+                                   <th className="bg-gray-700 text-white p-2">턴</th>
+                                   <th className="bg-gray-700 text-white p-2">상황</th>
+                                   <th className="bg-gray-700 text-white p-2">선택</th>
+                                   <th className="bg-gray-700 text-white p-2">이유</th>
+                                 </tr>
+                               </thead>
+                               <tbody>
+                                 {team.history.map((h, i) => (
+                                   <tr key={i}>
+                                     <td className="p-2 border">{h.turnNumber}</td>
+                                     <td className="p-2 border">{h.cardTitle}</td>
+                                     <td className="p-2 border">{h.choiceText.substring(0, 50)}...</td>
+                                     <td className="p-2 border">{h.reasoning.substring(0, 50)}...</td>
+                                   </tr>
+                                 ))}
+                               </tbody>
+                             </table>
+                           </>
+                         )}
+
+                         <div className="ai-feedback bg-blue-100 p-4 rounded-lg border-2 border-blue-300">
+                           <h4 className="font-bold mb-2 text-blue-800">AI 종합 피드백</h4>
+                           <p className="text-sm whitespace-pre-wrap">{feedback?.feedback || '피드백 생성 중...'}</p>
+                         </div>
+                       </div>
+                     );
+                   })}
+                 </div>
+               </div>
+             )}
+
+             {/* 5. Overall Report Display */}
+             {overallAnalysis && (
+               <div className="border-4 border-black p-6 bg-purple-50 shadow-hard">
+                 <div className="flex justify-between items-center mb-6 border-b-4 border-black pb-2">
+                   <h2 className="text-2xl font-black uppercase">종합 AI 리포트</h2>
+                   <button
+                     onClick={() => handlePrint('overall')}
+                     className="px-4 py-2 bg-purple-500 text-white border-2 border-black font-bold flex items-center gap-2 hover:bg-purple-600"
+                   >
+                     <Printer size={18} /> PDF로 저장/인쇄
+                   </button>
+                 </div>
+
+                 {/* 프린트용 콘텐츠 */}
+                 <div ref={overallReportRef} className="space-y-6">
+                   <h1 className="text-2xl font-bold text-blue-900 border-b-2 border-blue-900 pb-2">BL 아카데미 - 리더십 종합 리포트</h1>
+
+                   {/* 종합 요약 */}
+                   <div className="bg-white p-4 rounded-lg border-2 border-gray-300">
+                     <h2 className="text-xl font-bold mb-3 text-blue-900">1. 종합 요약</h2>
+                     <p className="text-gray-700">{overallAnalysis.summary}</p>
+                   </div>
+
+                   {/* 모드별 분석 */}
+                   <div className="bg-white p-4 rounded-lg border-2 border-gray-300">
+                     <h2 className="text-xl font-bold mb-4 text-blue-900">2. 모드별 심층 분석</h2>
+
+                     {(['self_leadership', 'followership', 'leadership', 'teamship'] as const).map(key => {
+                       const perspective = overallAnalysis.perspectives[key];
+                       if (!perspective) return null;
+
+                       const colors: Record<string, string> = {
+                         self_leadership: 'border-red-500 bg-red-50',
+                         followership: 'border-blue-500 bg-blue-50',
+                         leadership: 'border-green-500 bg-green-50',
+                         teamship: 'border-purple-500 bg-purple-50'
+                       };
+
+                       return (
+                         <div key={key} className={`perspective-section p-4 mb-4 border-l-4 ${colors[key]} rounded-r-lg`}>
+                           <h3 className="font-bold text-lg mb-2">{perspective.title}</h3>
+                           <p className="text-sm mb-3">{perspective.analysis}</p>
+                           <div className="grid md:grid-cols-3 gap-3 text-sm">
+                             <div className="bg-white p-2 rounded border">
+                               <strong className="text-green-700">잘한 점:</strong>
+                               <p>{perspective.strengths}</p>
+                             </div>
+                             <div className="bg-white p-2 rounded border">
+                               <strong className="text-orange-700">개선점:</strong>
+                               <p>{perspective.improvements}</p>
+                             </div>
+                             <div className="bg-white p-2 rounded border">
+                               <strong className="text-blue-700">액션플랜:</strong>
+                               <p>{perspective.action_plan}</p>
+                             </div>
+                           </div>
+                         </div>
+                       );
+                     })}
+                   </div>
+
+                   {/* 공통 실수 */}
+                   <div className="bg-white p-4 rounded-lg border-2 border-gray-300">
+                     <h2 className="text-xl font-bold mb-3 text-blue-900">3. 공통 실수 및 개선 팁</h2>
+                     <p className="text-gray-700">{overallAnalysis.common_mistakes}</p>
+                   </div>
+
+                   {/* 토의주제 7가지 */}
+                   <div className="bg-white p-4 rounded-lg border-2 border-gray-300">
+                     <h2 className="text-xl font-bold mb-4 text-blue-900">4. 팀 토의 주제 (7가지)</h2>
+                     <div className="space-y-2">
+                       {overallAnalysis.discussion_topics.map((topic, idx) => (
+                         <div key={idx} className="topic-item p-3 bg-gray-100 rounded-lg border-l-4 border-blue-500">
+                           <span className="font-bold text-blue-800">{idx + 1}.</span> {topic}
+                         </div>
+                       ))}
+                     </div>
+                   </div>
+
+                   {/* 결론 */}
+                   <div className="conclusion-box bg-yellow-100 p-4 rounded-lg border-2 border-yellow-500">
+                     <h2 className="text-xl font-bold mb-3 text-yellow-800">마무리</h2>
+                     <p className="text-gray-800 font-medium">{overallAnalysis.conclusion}</p>
+                   </div>
+                 </div>
+               </div>
+             )}
 
           </div>
         </div>
