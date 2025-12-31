@@ -88,6 +88,7 @@ export interface TurnRecord {
   aiFeedback: string;
   scoreChanges: Partial<ResourceState>;
   timestamp: number;
+  position?: number;  // 해당 턴에서 도착한 보드 위치
 }
 
 export interface Team {
@@ -137,13 +138,17 @@ export interface AIEvaluationResult {
 export enum GamePhase {
   Setup = 'Setup',
   Lobby = 'Lobby',
+  WaitingToStart = 'WaitingToStart',  // 게임 시작 대기 (관리자가 START 누르기 전)
   Idle = 'Idle',
   Rolling = 'Rolling',
   Moving = 'Moving',
-  Event = 'Event', 
-  Decision = 'Decision', 
-  Result = 'Result', 
-  End = 'End', 
+  ShowingDiceResult = 'ShowingDiceResult',  // 주사위 결과 표시 중
+  ShowingCompetencyCard = 'ShowingCompetencyCard',  // 역량카드 미리보기 표시 중
+  Event = 'Event',
+  Decision = 'Decision',
+  Result = 'Result',
+  Paused = 'Paused',  // 게임 일시정지
+  End = 'End',
 }
 
 export type SessionStatus = 'active' | 'paused' | 'ended';

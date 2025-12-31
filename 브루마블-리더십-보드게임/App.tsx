@@ -7,6 +7,9 @@ import ReportView from './components/ReportView';
 import Intro from './components/Intro';
 import Lobby from './components/Lobby';
 import MobileTeamView from './components/MobileTeamView';
+import DiceResultOverlay from './components/DiceResultOverlay';
+import CompetencyCardPreview from './components/CompetencyCardPreview';
+import { soundEffects } from './lib/soundEffects';
 import {
   Team,
   GamePhase,
@@ -24,7 +27,9 @@ import {
   BOARD_SQUARES,
   SAMPLE_CARDS,
   BOARD_SIZE,
-  INITIAL_RESOURCES
+  INITIAL_RESOURCES,
+  LAP_BONUS,
+  DOUBLE_BONUS
 } from './constants';
 import { Smartphone, Monitor, QrCode, X, Copy, Check } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
@@ -57,12 +62,20 @@ const App: React.FC = () => {
   const [adminViewMode, setAdminViewMode] = useState<AdminViewMode>('dashboard');
   const [monitoringTeamId, setMonitoringTeamId] = useState<string | null>(null);
   const [currentTurnIndex, setCurrentTurnIndex] = useState(0);
-  const [gamePhase, setGamePhase] = useState<GamePhase>(GamePhase.Idle);
+  const [gamePhase, setGamePhase] = useState<GamePhase>(GamePhase.WaitingToStart);
   const [diceValue, setDiceValue] = useState<[number, number]>([1, 1]);
   const [isRolling, setIsRolling] = useState(false);
   const [gameLogs, setGameLogs] = useState<string[]>([]);
   const [turnTimeLeft, setTurnTimeLeft] = useState(120);
   const [showReport, setShowReport] = useState(false);
+  const [isGameStarted, setIsGameStarted] = useState(false);  // 게임 시작 여부
+  const [phaseBeforePause, setPhaseBeforePause] = useState<GamePhase>(GamePhase.Idle);  // 일시정지 전 상태
+
+  // 3D 주사위 및 연출 관련 상태
+  const [showDiceOverlay, setShowDiceOverlay] = useState(false);  // 3D 주사위 오버레이 표시
+  const [pendingDice, setPendingDice] = useState<[number, number]>([1, 1]);  // 대기 중인 주사위 결과
+  const [showCompetencyPreview, setShowCompetencyPreview] = useState(false);  // 역량카드 미리보기
+  const [pendingSquare, setPendingSquare] = useState<any>(null);  // 도착 예정 칸
 
   // --- Active Card & Decision State (Shared between Admin & Mobile) ---
   const [activeCard, setActiveCard] = useState<GameCard | null>(null);
@@ -86,6 +99,10 @@ const App: React.FC = () => {
   const [isAiProcessing, setIsAiProcessing] = useState(false);
   const [isTeamSaved, setIsTeamSaved] = useState(false);  // 팀이 입력을 저장했는지
   const [isSaving, setIsSaving] = useState(false);        // 저장 중 여부
+
+  // 관람자 투표 상태
+  const [spectatorVotes, setSpectatorVotes] = useState<{ [optionId: string]: number }>({});  // 옵션별 투표 수
+  const [mySpectatorVote, setMySpectatorVote] = useState<Choice | null>(null);  // 내 투표 (참가자 로컬 상태)
 
   // Ref to track local operations in progress (to prevent Firebase from overriding local state)
   const localOperationInProgress = useRef(false);
@@ -275,6 +292,11 @@ const App: React.FC = () => {
         setIsTeamSaved(state.isSubmitted || false);  // 팀 저장 완료 여부
         setIsRolling(state.phase === GamePhase.Rolling);
 
+        // 관람자 투표 동기화
+        if (state.spectatorVotes) {
+          setSpectatorVotes(state.spectatorVotes);
+        }
+
         // gameLogs는 길이가 다를 때만 업데이트 (배열 참조 비교로 인한 무한 루프 방지)
         if (state.gameLogs?.length) {
           setGameLogs(prev => {
@@ -446,10 +468,104 @@ const App: React.FC = () => {
   const handleEnterSession = (session: Session) => {
     setCurrentSessionId(session.id);
     setCurrentTurnIndex(0);
-    setGamePhase(GamePhase.Idle);
+    setGamePhase(GamePhase.WaitingToStart);
+    setIsGameStarted(false);
     setMonitoringTeamId(session.teams[0]?.id || null);
     setGameLogs([`Entered Session: ${session.name}`, `Status: ${session.status}`]);
     setView('game');
+  };
+
+  // 게임 시작 핸들러
+  const handleStartGame = async () => {
+    setIsGameStarted(true);
+    setGamePhase(GamePhase.Idle);
+    addLog('🎮 게임이 시작되었습니다!');
+    soundEffects.playGameStart();
+
+    // Firebase에 게임 상태 저장
+    const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+    if (isFirebaseConfigured && currentSessionId) {
+      try {
+        await firestoreService.updateGameState(currentSessionId, {
+          sessionId: currentSessionId,
+          phase: GamePhase.Idle,
+          currentTeamIndex: 0,
+          currentTurn: 0,
+          diceValue: [1, 1],
+          currentCard: null,
+          selectedChoice: null,
+          reasoning: '',
+          aiResult: null,
+          isSubmitted: false,
+          isAiProcessing: false,
+          isGameStarted: true,
+          gameLogs: gameLogsRef.current,
+          lastUpdated: Date.now()
+        });
+      } catch (err) {
+        console.error('Firebase 게임 시작 상태 저장 실패:', err);
+      }
+    }
+  };
+
+  // 게임 일시정지 핸들러
+  const handlePauseGame = async () => {
+    setPhaseBeforePause(gamePhase);
+    setGamePhase(GamePhase.Paused);
+    addLog('⏸️ 게임이 일시정지되었습니다.');
+    soundEffects.playPause();
+
+    const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+    if (isFirebaseConfigured && currentSessionId) {
+      try {
+        await firestoreService.updateGameState(currentSessionId, {
+          sessionId: currentSessionId,
+          phase: GamePhase.Paused,
+          currentTeamIndex: currentTurnIndex,
+          currentTurn: 0,
+          diceValue: diceValue,
+          currentCard: activeCard,
+          selectedChoice: sharedSelectedChoice,
+          reasoning: sharedReasoning,
+          aiResult: aiEvaluationResult,
+          isSubmitted: isTeamSaved,
+          isAiProcessing: isAiProcessing,
+          gameLogs: gameLogsRef.current,
+          lastUpdated: Date.now()
+        });
+      } catch (err) {
+        console.error('Firebase 일시정지 상태 저장 실패:', err);
+      }
+    }
+  };
+
+  // 게임 재개 핸들러
+  const handleResumeGame = async () => {
+    setGamePhase(phaseBeforePause || GamePhase.Idle);
+    addLog('▶️ 게임이 재개되었습니다.');
+
+    const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+    if (isFirebaseConfigured && currentSessionId) {
+      try {
+        await firestoreService.updateGameState(currentSessionId, {
+          sessionId: currentSessionId,
+          phase: phaseBeforePause || GamePhase.Idle,
+          currentTeamIndex: currentTurnIndex,
+          currentTurn: 0,
+          diceValue: diceValue,
+          currentCard: activeCard,
+          selectedChoice: sharedSelectedChoice,
+          reasoning: sharedReasoning,
+          aiResult: aiEvaluationResult,
+          isSubmitted: isTeamSaved,
+          isAiProcessing: isAiProcessing,
+          gameLogs: gameLogsRef.current,
+          lastUpdated: Date.now()
+        });
+      } catch (err) {
+        console.error('Firebase 재개 상태 저장 실패:', err);
+      }
+    }
   };
 
   // 참가자 세션 참여 핸들러
@@ -645,6 +761,8 @@ const App: React.FC = () => {
     setIsAiProcessing(false);
     setIsTeamSaved(false);
     setIsSaving(false);
+    setSpectatorVotes({});  // 관람자 투표 초기화
+    setMySpectatorVote(null);  // 내 투표 초기화
 
     setGamePhase(GamePhase.Idle);
     setTurnTimeLeft(120);
@@ -690,6 +808,8 @@ const App: React.FC = () => {
     setIsAiProcessing(false);
     setIsTeamSaved(false);
     setIsSaving(false);
+    setSpectatorVotes({});  // 관람자 투표 초기화
+    setMySpectatorVote(null);  // 내 투표 초기화
     setGamePhase(GamePhase.Idle);
     setCurrentTurnIndex(0);
     setDiceValue([1, 1]);
@@ -793,6 +913,61 @@ const App: React.FC = () => {
     const square = BOARD_SQUARES.find(s => s.index === squareIndex);
     if (!square) return;
 
+    // 자기 팀이 이미 해당 위치에서 카드를 풀었는지 확인 (City 칸만 해당)
+    // 현재 세션에서 팀 정보 가져오기
+    const currentTeamFromSession = currentSession?.teams.find(t => t.id === team.id);
+    const alreadySolvedPositions = currentTeamFromSession?.history
+      ?.filter(h => h.position !== undefined)
+      .map(h => h.position) || [];
+
+    if (square.type === SquareType.City && alreadySolvedPositions.includes(squareIndex)) {
+      // 이미 푼 역량카드 → 추가 주사위 굴리기
+      addLog(`🔄 ${team.name}: 이미 풀었던 역량카드입니다. 추가 주사위를 굴립니다!`);
+
+      // 추가 주사위 굴리기 (1~6 랜덤)
+      const extraDie1 = Math.ceil(Math.random() * 6);
+      const extraDie2 = Math.ceil(Math.random() * 6);
+      const extraSteps = extraDie1 + extraDie2;
+
+      addLog(`🎲 추가 주사위: ${extraDie1} + ${extraDie2} = ${extraSteps}칸 이동`);
+
+      // 새 위치 계산
+      let newPos = squareIndex + extraSteps;
+      let passedStart = false;
+      if (newPos >= BOARD_SIZE) {
+        newPos = newPos % BOARD_SIZE;
+        passedStart = true;
+      }
+
+      // 팀 위치 업데이트
+      if (currentSession) {
+        const updatedTeams = currentSession.teams.map(t => {
+          if (t.id === team.id) {
+            let newResources = { ...t.resources };
+            let newLapCount = t.lapCount;
+            if (passedStart) {
+              newResources.capital += 20;
+              newResources.energy += LAP_BONUS.energy;
+              newResources.trust += LAP_BONUS.trust;
+              newResources.competency += LAP_BONUS.competency;
+              newResources.insight += LAP_BONUS.insight;
+              newLapCount += 1;
+              addLog(`🎉 ${t.name} 한 바퀴 완주! 보너스 획득`);
+            }
+            return { ...t, position: newPos, resources: newResources, lapCount: newLapCount };
+          }
+          return t;
+        });
+        updateTeamsInSession(updatedTeams);
+      }
+
+      // 새 위치에서 다시 handleLandOnSquare 호출 (재귀)
+      setTimeout(() => {
+        handleLandOnSquare({ ...team, position: newPos }, newPos);
+      }, 1000);
+      return;
+    }
+
     // 세션 모드에 맞는 카드 타입 결정
     const sessionCardType = getCardTypeFromVersion(currentSession?.version);
 
@@ -843,6 +1018,8 @@ const App: React.FC = () => {
       setSharedSelectedChoice(null);
       setSharedReasoning('');
       setAiEvaluationResult(null);
+      setSpectatorVotes({});  // 관람자 투표 초기화
+      setMySpectatorVote(null);  // 내 투표 초기화
       setGamePhase(GamePhase.Decision);
       setShowCardModal(true);
 
@@ -861,6 +1038,7 @@ const App: React.FC = () => {
           aiResult: null,
           isSubmitted: false,
           isAiProcessing: false,
+          spectatorVotes: {},  // 관람자 투표 초기화
           gameLogs: gameLogsRef.current,
           lastUpdated: Date.now()
         }).catch(err => console.error('Firebase 상태 저장 실패:', err));
@@ -875,8 +1053,14 @@ const App: React.FC = () => {
     localOperationInProgress.current = true;
     localOperationTimestamp.current = Date.now();
 
+    // 주사위 결과 미리 계산
+    const die1 = Math.ceil(Math.random() * 6);
+    const die2 = Math.ceil(Math.random() * 6);
+    setPendingDice([die1, die2]);
+
     setIsRolling(true);
     setGamePhase(GamePhase.Rolling);
+    setShowDiceOverlay(true);  // 3D 주사위 오버레이 표시
 
     // Firebase에 Rolling 상태 저장 시도 (실패해도 로컬 게임은 계속 진행)
     const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
@@ -886,7 +1070,7 @@ const App: React.FC = () => {
         phase: GamePhase.Rolling,
         currentTeamIndex: currentTurnIndex,
         currentTurn: 0,
-        diceValue: diceValue,
+        diceValue: [die1, die2],
         currentCard: null,
         selectedChoice: null,
         reasoning: '',
@@ -897,16 +1081,25 @@ const App: React.FC = () => {
         lastUpdated: Date.now()
       }).catch(err => console.warn('[Firebase] Rolling 상태 저장 실패 (게임은 계속 진행):', err.message));
     }
+  };
 
-    let rollCount = 0;
-    const interval = setInterval(() => {
-      setDiceValue([Math.ceil(Math.random() * 6), Math.ceil(Math.random() * 6)]);
-      rollCount++;
-      if (rollCount > 10) {
-        clearInterval(interval);
-        finalizeRoll();
-      }
-    }, 100);
+  // 3D 주사위 롤 완료 핸들러
+  const handleDiceRollComplete = () => {
+    setIsRolling(false);
+    setDiceValue(pendingDice);
+
+    // 더블 체크 및 음향 효과
+    if (pendingDice[0] === pendingDice[1]) {
+      soundEffects.playDoubleBonus();
+    } else {
+      soundEffects.playDiceResult();
+    }
+  };
+
+  // 주사위 결과 표시 완료 핸들러 (3초 후)
+  const handleDiceResultComplete = () => {
+    setShowDiceOverlay(false);
+    performMove(pendingDice[0], pendingDice[1]);
   };
 
   const finalizeRoll = () => {
@@ -931,6 +1124,25 @@ const App: React.FC = () => {
     localOperationTimestamp.current = Date.now();
 
     if (!currentTeam) return;
+
+    // 더블 체크 (주사위 2개가 같은 숫자)
+    const isDouble = die1 === die2;
+    if (isDouble && currentSession) {
+      // 더블 보너스 즉시 적용
+      const updatedTeams = currentSession.teams.map(t => {
+        if (t.id === currentTeam.id) {
+          const newResources = { ...t.resources };
+          newResources.energy += DOUBLE_BONUS.energy;        // +5
+          newResources.trust += DOUBLE_BONUS.trust;          // +5
+          newResources.competency += DOUBLE_BONUS.competency; // +5
+          newResources.insight += DOUBLE_BONUS.insight;      // +5
+          return { ...t, resources: newResources };
+        }
+        return t;
+      });
+      updateTeamsInSession(updatedTeams);
+      addLog(`🎲 더블! ${currentTeam.name} 보너스 획득: 에너지+${DOUBLE_BONUS.energy}, 신뢰+${DOUBLE_BONUS.trust}, 스킬+${DOUBLE_BONUS.competency}, 인사이트+${DOUBLE_BONUS.insight}`);
+    }
 
     // Firebase에 주사위 결과와 Moving 상태 저장 (실패해도 로컬 게임은 계속 진행)
     const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
@@ -958,32 +1170,84 @@ const App: React.FC = () => {
 
   const moveTeamLogic = (teamToMove: Team, steps: number) => {
     setGamePhase(GamePhase.Moving);
-    let newPos = teamToMove.position + steps;
+    const startPos = teamToMove.position;
     let passedStart = false;
+    let finalPos = startPos + steps;
 
-    if (newPos >= BOARD_SIZE) {
-      newPos = newPos % BOARD_SIZE;
+    if (finalPos >= BOARD_SIZE) {
+      finalPos = finalPos % BOARD_SIZE;
       passedStart = true;
     }
 
-    if (currentSession) {
+    // 한 칸씩 이동 애니메이션
+    let currentStep = 0;
+    const moveInterval = setInterval(() => {
+      currentStep++;
+      const intermediatePos = (startPos + currentStep) % BOARD_SIZE;
+
+      // 이동 음향 효과
+      soundEffects.playMove();
+
+      // 팀 위치 업데이트 (중간 위치)
+      if (currentSession) {
         const updatedTeams = currentSession.teams.map(t => {
-            if (t.id === teamToMove.id) {
-                let newResources = { ...t.resources };
-                if (passedStart) {
-                    newResources.capital += 20; // Salary
-                }
-                return { ...t, position: newPos, resources: newResources };
-            }
-            return t;
+          if (t.id === teamToMove.id) {
+            return { ...t, position: intermediatePos };
+          }
+          return t;
         });
         updateTeamsInSession(updatedTeams);
+      }
+
+      // 모든 칸 이동 완료
+      if (currentStep >= steps) {
+        clearInterval(moveInterval);
+
+        // 한 바퀴 완주 처리
+        if (currentSession && passedStart) {
+          const updatedTeams = currentSession.teams.map(t => {
+            if (t.id === teamToMove.id) {
+              let newResources = { ...t.resources };
+              newResources.capital += 20; // 기본 급여
+              newResources.energy += LAP_BONUS.energy;        // +40
+              newResources.trust += LAP_BONUS.trust;          // +10
+              newResources.competency += LAP_BONUS.competency; // +10
+              newResources.insight += LAP_BONUS.insight;      // +10
+
+              addLog(`🎉 ${t.name} 한 바퀴 완주! 보너스 획득: 에너지+${LAP_BONUS.energy}, 신뢰+${LAP_BONUS.trust}, 스킬+${LAP_BONUS.competency}, 인사이트+${LAP_BONUS.insight}`);
+              soundEffects.playLapComplete();
+
+              return { ...t, position: finalPos, resources: newResources, lapCount: t.lapCount + 1 };
+            }
+            return t;
+          });
+          updateTeamsInSession(updatedTeams);
+        }
+
+        // 도착 칸 정보 저장 (역량카드 미리보기용)
+        const landingSquare = BOARD_SQUARES.find(s => s.index === finalPos);
+        if (landingSquare && landingSquare.type === SquareType.City) {
+          // 역량카드 미리보기 표시
+          setPendingSquare(landingSquare);
+          setShowCompetencyPreview(true);
+        } else {
+          // 일반 칸은 바로 handleLandOnSquare 호출
+          setTimeout(() => {
+            const updatedTeam = { ...teamToMove, position: finalPos };
+            handleLandOnSquare(updatedTeam, finalPos);
+          }, 500);
+        }
+      }
+    }, 400); // 한 칸당 400ms
+  };
+
+  // 역량카드 미리보기 완료 핸들러
+  const handleCompetencyPreviewComplete = () => {
+    setShowCompetencyPreview(false);
+    if (currentTeam && pendingSquare) {
+      const finalPos = pendingSquare.index;
+      handleLandOnSquare({ ...currentTeam, position: finalPos }, finalPos);
     }
-    
-    setTimeout(() => {
-        const updatedTeam = { ...teamToMove, position: newPos };
-        handleLandOnSquare(updatedTeam, newPos);
-    }, 1000);
   };
 
   // --- 팀 입력 저장 (AI 호출 없이) ---
@@ -1026,6 +1290,29 @@ const App: React.FC = () => {
 
     setIsTeamSaved(true);
     setIsSaving(false);
+  };
+
+  // --- 관람자 투표 핸들러 ---
+  const handleSpectatorVote = async (choice: Choice) => {
+    if (!currentSessionId) return;
+
+    const previousVoteId = mySpectatorVote?.id || null;
+
+    // 같은 옵션을 다시 클릭하면 무시
+    if (previousVoteId === choice.id) return;
+
+    // 로컬 상태 업데이트
+    setMySpectatorVote(choice);
+
+    // Firebase에 투표 업데이트
+    const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+    if (isFirebaseConfigured) {
+      try {
+        await firestoreService.updateSpectatorVote(currentSessionId, choice.id, previousVoteId);
+      } catch (err) {
+        console.error('관람자 투표 저장 실패:', err);
+      }
+    }
   };
 
   // --- 관리자용 AI 평가 실행 ---
@@ -1161,7 +1448,8 @@ const App: React.FC = () => {
       reasoning: sharedReasoning,
       aiFeedback: aiEvaluationResult.feedback,
       scoreChanges: aiEvaluationResult.scoreChanges,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      position: currentTeam.position  // 현재 위치 저장 (이미 푼 카드 체크용)
     };
 
     const scoreChanges = aiEvaluationResult.scoreChanges;
@@ -1206,6 +1494,8 @@ const App: React.FC = () => {
     setIsAiProcessing(false);
     setIsTeamSaved(false);
     setIsSaving(false);
+    setSpectatorVotes({});  // 관람자 투표 초기화
+    setMySpectatorVote(null);  // 내 투표 초기화
     setGamePhase(GamePhase.Idle);
     setTurnTimeLeft(120);
 
@@ -1227,6 +1517,7 @@ const App: React.FC = () => {
           aiResult: null,
           isSubmitted: false,
           isAiProcessing: false,
+          spectatorVotes: {},  // 관람자 투표 초기화
           gameLogs: gameLogsRef.current,
           lastUpdated: Date.now()
         });
@@ -1606,6 +1897,9 @@ const App: React.FC = () => {
           onSubmit={handleTeamSaveOnly}
           isTeamSaved={isTeamSaved}
           isSaving={isSaving}
+          isGameStarted={isGameStarted}
+          spectatorVote={mySpectatorVote}
+          onSpectatorVote={handleSpectatorVote}
         />
 
         {/* 다른 팀 턴 뷰어 모드: 현재 진행 중인 카드가 있고 내 턴이 아니면 읽기 전용 모달 표시 */}
@@ -1623,6 +1917,7 @@ const App: React.FC = () => {
             isProcessing={isAiProcessing}
             readOnly={true}
             teamName={activeTeamForViewer?.name}
+            spectatorVotes={spectatorVotes}
           />
         )}
       </div>
@@ -1680,7 +1975,7 @@ const App: React.FC = () => {
         <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 h-full min-h-0">
           <div className="lg:col-span-2 order-2 lg:order-1 h-full min-h-0 overflow-y-auto">
              {currentTeam && (
-               <ControlPanel 
+               <ControlPanel
                   currentTeam={currentTeam}
                   phase={gamePhase}
                   diceValue={diceValue}
@@ -1691,6 +1986,10 @@ const App: React.FC = () => {
                   onOpenReport={() => setShowReport(true)}
                   onReset={handleResetGame}
                   logs={gameLogs}
+                  isGameStarted={isGameStarted}
+                  onStartGame={handleStartGame}
+                  onPauseGame={handlePauseGame}
+                  onResumeGame={handleResumeGame}
                 />
              )}
           </div>
@@ -1734,6 +2033,7 @@ const App: React.FC = () => {
                  onSubmit={handleTeamSaveOnly}
                  isTeamSaved={isTeamSaved}
                  isSaving={isSaving}
+                 isGameStarted={isGameStarted}
                />
              </div>
            )}
@@ -1760,6 +2060,7 @@ const App: React.FC = () => {
           isAdminView={true}
           isTeamSaved={isTeamSaved}
           onAISubmit={handleAdminAISubmit}
+          spectatorVotes={spectatorVotes}
         />
       )}
 
@@ -1836,6 +2137,29 @@ const App: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* 3D 주사위 오버레이 */}
+      <DiceResultOverlay
+        visible={showDiceOverlay}
+        dice1={pendingDice[0]}
+        dice2={pendingDice[1]}
+        isRolling={isRolling}
+        onRollComplete={handleDiceRollComplete}
+        onShowResultComplete={handleDiceResultComplete}
+        isDouble={pendingDice[0] === pendingDice[1]}
+      />
+
+      {/* 역량카드 미리보기 팝업 */}
+      <CompetencyCardPreview
+        visible={showCompetencyPreview}
+        card={activeCard || (pendingSquare ? SAMPLE_CARDS.find(c =>
+          c.type === getCardTypeFromVersion(currentSession?.version) &&
+          c.competency === pendingSquare.competency
+        ) || null : null)}
+        square={pendingSquare}
+        onComplete={handleCompetencyPreviewComplete}
+        duration={5000}
+      />
     </div>
   );
 };

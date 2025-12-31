@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { GamePhase, Team } from '../types';
 import Dice from './Dice';
-import { Play, SkipForward, BarChart2, RefreshCcw, ArrowRight, Terminal } from 'lucide-react';
+import { Play, SkipForward, BarChart2, RefreshCcw, ArrowRight, Terminal, Pause, PlayCircle } from 'lucide-react';
 
 interface ControlPanelProps {
   currentTeam: Team;
@@ -14,19 +14,28 @@ interface ControlPanelProps {
   onOpenReport: () => void;
   onReset: () => void;
   logs: string[];
+  // 새로운 props
+  isGameStarted: boolean;
+  onStartGame: () => void;
+  onPauseGame: () => void;
+  onResumeGame: () => void;
 }
 
-const ControlPanel: React.FC<ControlPanelProps> = ({ 
-  currentTeam, 
-  phase, 
-  diceValue, 
-  rolling, 
-  onRoll, 
+const ControlPanel: React.FC<ControlPanelProps> = ({
+  currentTeam,
+  phase,
+  diceValue,
+  rolling,
+  onRoll,
   onManualRoll,
   onSkip,
   onOpenReport,
   onReset,
-  logs
+  logs,
+  isGameStarted,
+  onStartGame,
+  onPauseGame,
+  onResumeGame
 }) => {
   const [manualInput, setManualInput] = useState<string>('');
   const logEndRef = useRef<HTMLDivElement>(null);
@@ -93,7 +102,38 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
 
       {/* Action Section */}
       <div className="flex-1 bg-blue-900 border-4 border-black p-4 shadow-hard flex flex-col gap-4 text-white overflow-y-auto">
-        
+
+        {/* START / PAUSE 버튼 */}
+        {!isGameStarted ? (
+          <button
+            onClick={onStartGame}
+            className="w-full py-4 border-4 border-black font-black text-2xl shadow-hard transition-all transform active:translate-x-1 active:translate-y-1 flex items-center justify-center gap-3 bg-green-500 text-white hover:bg-green-400"
+          >
+            <PlayCircle size={28} />
+            START GAME
+          </button>
+        ) : phase === GamePhase.Paused ? (
+          <button
+            onClick={onResumeGame}
+            className="w-full py-4 border-4 border-black font-black text-2xl shadow-hard transition-all transform active:translate-x-1 active:translate-y-1 flex items-center justify-center gap-3 bg-green-500 text-white hover:bg-green-400"
+          >
+            <PlayCircle size={28} />
+            RESUME
+          </button>
+        ) : (
+          <button
+            onClick={onPauseGame}
+            disabled={phase === GamePhase.Rolling || phase === GamePhase.Moving || phase === GamePhase.Decision}
+            className={`w-full py-3 border-4 border-black font-bold text-lg shadow-hard-sm transition-all flex items-center justify-center gap-2
+              ${phase === GamePhase.Rolling || phase === GamePhase.Moving || phase === GamePhase.Decision
+                ? 'bg-gray-500 text-gray-300 cursor-not-allowed border-gray-600'
+                : 'bg-orange-500 text-white hover:bg-orange-400'}`}
+          >
+            <Pause size={20} />
+            PAUSE
+          </button>
+        )}
+
         {/* Dice Display */}
         <div className="flex justify-center gap-6 py-2">
            <Dice value={diceValue[0]} rolling={rolling} />
@@ -103,10 +143,10 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
         {/* Digital Roll Button */}
         <button
           onClick={onRoll}
-          disabled={phase !== GamePhase.Idle || rolling}
+          disabled={!isGameStarted || phase !== GamePhase.Idle || rolling}
           className={`w-full py-4 border-4 border-black font-black text-2xl shadow-hard transition-all transform active:translate-x-1 active:translate-y-1 flex items-center justify-center gap-3
-            ${phase === GamePhase.Idle && !rolling 
-              ? 'bg-yellow-400 text-black hover:bg-yellow-300' 
+            ${isGameStarted && phase === GamePhase.Idle && !rolling
+              ? 'bg-yellow-400 text-black hover:bg-yellow-300'
               : 'bg-gray-500 text-gray-300 cursor-not-allowed border-gray-600'}`}
         >
           <Play size={24} fill="currentColor" strokeWidth={3} />
@@ -117,19 +157,19 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
         <div className="bg-white p-3 border-4 border-black text-black">
           <label className="block text-xs font-bold uppercase mb-1">Offline Dice Input</label>
           <form onSubmit={handleManualSubmit} className="flex gap-2">
-            <input 
-              type="number" 
-              min="2" 
+            <input
+              type="number"
+              min="2"
               max="12"
               value={manualInput}
               onChange={(e) => setManualInput(e.target.value)}
               placeholder="2-12"
               className="w-full border-2 border-black p-1 font-mono font-bold text-lg focus:outline-none focus:bg-yellow-100"
-              disabled={phase !== GamePhase.Idle || rolling}
+              disabled={!isGameStarted || phase !== GamePhase.Idle || rolling}
             />
-            <button 
+            <button
               type="submit"
-              disabled={phase !== GamePhase.Idle || rolling}
+              disabled={!isGameStarted || phase !== GamePhase.Idle || rolling}
               className="bg-purple-900 text-white border-2 border-black px-4 hover:bg-purple-700 disabled:bg-gray-400"
             >
               <ArrowRight strokeWidth={3} />

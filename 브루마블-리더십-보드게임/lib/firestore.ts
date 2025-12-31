@@ -172,6 +172,8 @@ export interface GameState {
   } | null;
   isSubmitted: boolean; // 제출 완료 여부
   isAiProcessing: boolean;
+  // 다른 팀 참여 투표 (옵션별 투표 수)
+  spectatorVotes?: { [optionId: string]: number };
   // 로그
   gameLogs: string[];
   lastUpdated: number;
@@ -213,6 +215,28 @@ export async function addGameLog(sessionId: string, log: string): Promise<void> 
   const currentLogs = state?.gameLogs || [];
   await updateGameState(sessionId, {
     gameLogs: [...currentLogs, `[${new Date().toLocaleTimeString()}] ${log}`]
+  });
+}
+
+// 관람자 투표 업데이트 (옵션 선택)
+export async function updateSpectatorVote(
+  sessionId: string,
+  optionId: string,
+  previousOptionId: string | null
+): Promise<void> {
+  const state = await getGameState(sessionId);
+  const currentVotes = { ...state?.spectatorVotes } || {};
+
+  // 이전 선택 취소 (감소)
+  if (previousOptionId && currentVotes[previousOptionId]) {
+    currentVotes[previousOptionId] = Math.max(0, currentVotes[previousOptionId] - 1);
+  }
+
+  // 새 선택 증가
+  currentVotes[optionId] = (currentVotes[optionId] || 0) + 1;
+
+  await updateGameState(sessionId, {
+    spectatorVotes: currentVotes
   });
 }
 
