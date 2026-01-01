@@ -30,8 +30,8 @@ interface CardModalProps {
   isTeamSaved?: boolean;        // 팀이 입력을 저장했는지
   onAISubmit?: () => Promise<void>;  // 관리자가 AI 분석 실행
 
-  // 관람자 투표 (옵션별 투표 수)
-  spectatorVotes?: { [optionId: string]: number };
+  // 관람자 투표 (옵션별 투표한 팀 이름 목록)
+  spectatorVotes?: { [optionId: string]: string[] };
 }
 
 const CardModal: React.FC<CardModalProps> = ({
@@ -164,65 +164,73 @@ const CardModal: React.FC<CardModalProps> = ({
                 </div>
               )}
 
-              {/* 관리자 뷰: 팀 입력 대기 중 */}
-              {isAdminView && !isTeamSaved && (
-                <div className="bg-blue-100 border-4 border-blue-500 p-8 text-center">
-                  <div className="animate-pulse">
-                    <div className="w-16 h-16 mx-auto mb-4 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                    <span className="font-bold text-blue-800 text-lg">
-                      {teamName ? `${teamName}이(가) 입력 중입니다...` : '팀 입력 대기 중...'}
-                    </span>
-                    <p className="text-blue-600 mt-2 text-sm">팀원이 선택과 사유를 입력하고 저장하면 여기에 표시됩니다.</p>
-                  </div>
-                </div>
-              )}
-
-              {/* 관리자 뷰: 팀 입력 완료 - 팀 응답 표시 + AI 분석 버튼 */}
-              {isAdminView && isTeamSaved && (
+              {/* 관리자 뷰: 옵션과 실시간 팀 입력 표시 */}
+              {isAdminView && (
                 <>
-                  <div className="bg-green-100 border-4 border-green-600 p-4 text-center mb-4">
-                    <span className="font-bold text-green-800">
-                      ✓ {teamName || '팀'}의 입력이 완료되었습니다!
-                    </span>
-                  </div>
+                  {/* 상태 표시 (입력 중 / 완료) */}
+                  {isTeamSaved ? (
+                    <div className="bg-green-100 border-4 border-green-600 p-4 text-center mb-4">
+                      <span className="font-bold text-green-800">
+                        ✓ {teamName || '팀'}의 입력이 완료되었습니다!
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="bg-blue-100 border-4 border-blue-500 p-3 text-center mb-4 flex items-center justify-center gap-3">
+                      <div className="w-6 h-6 border-3 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                      <span className="font-bold text-blue-800">
+                        {teamName ? `${teamName}이(가) 입력 중...` : '팀 입력 대기 중...'}
+                      </span>
+                    </div>
+                  )}
 
-                  {/* 선택한 옵션 표시 (모든 옵션과 투표 수 포함) */}
+                  {/* 옵션 표시 (실시간 팀 선택 + 다른 팀 투표) */}
                   {!isOpenEnded && card.choices && (
-                    <div className="bg-blue-50 border-4 border-blue-300 p-4">
-                      <div className="text-xs font-bold text-blue-700 uppercase mb-2">
-                        선택한 옵션 + 관람자 투표
+                    <div className="bg-gray-50 border-4 border-gray-300 p-4 mb-4">
+                      <div className="text-xs font-bold text-gray-700 uppercase mb-3">
+                        옵션 선택 현황
                       </div>
-                      <div className="space-y-2">
+                      <div className="space-y-3">
                         {card.choices.map((choice) => {
-                          const voteCount = spectatorVotes[choice.id] || 0;
+                          const voterTeams = spectatorVotes[choice.id] || [];
                           const isSelected = selectedChoice?.id === choice.id;
 
                           return (
                             <div
                               key={choice.id}
-                              className={`flex items-center justify-between p-2 rounded ${
-                                isSelected ? 'bg-blue-200 border-2 border-blue-600' : 'bg-white border border-gray-200'
+                              className={`p-3 rounded-lg transition-all ${
+                                isSelected
+                                  ? 'bg-blue-100 border-2 border-blue-600 shadow-md'
+                                  : 'bg-white border-2 border-gray-200'
                               }`}
                             >
-                              <div className="flex items-center gap-2">
-                                <span className={`px-2 py-0.5 text-sm font-bold ${
-                                  isSelected ? 'bg-blue-600 text-white' : 'bg-gray-300 text-gray-700'
-                                }`}>
-                                  {choice.id}
-                                </span>
-                                <span className={`font-medium ${isSelected ? 'text-blue-900' : 'text-gray-600'}`}>
-                                  {choice.text}
-                                </span>
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex items-center gap-2 flex-1">
+                                  <span className={`px-3 py-1 text-sm font-bold shrink-0 ${
+                                    isSelected ? 'bg-blue-600 text-white' : 'bg-gray-300 text-gray-700'
+                                  }`}>
+                                    {choice.id}
+                                  </span>
+                                  <span className={`font-medium ${isSelected ? 'text-blue-900' : 'text-gray-700'}`}>
+                                    {choice.text}
+                                  </span>
+                                </div>
                                 {isSelected && (
-                                  <span className="bg-green-500 text-white text-[10px] px-2 py-0.5 font-bold uppercase rounded-full">
-                                    팀 선택
+                                  <span className="bg-green-500 text-white text-[10px] px-2 py-1 font-bold uppercase rounded shrink-0">
+                                    {teamName} 선택
                                   </span>
                                 )}
                               </div>
-                              {voteCount > 0 && (
-                                <div className="flex items-center gap-1 bg-purple-500 text-white px-2 py-1 rounded-full text-sm font-bold">
-                                  <span>👥</span>
-                                  <span>{voteCount}</span>
+                              {/* 다른 팀 투표 표시 */}
+                              {voterTeams.length > 0 && (
+                                <div className="mt-2 flex flex-wrap gap-1">
+                                  {voterTeams.map((voterName, idx) => (
+                                    <span
+                                      key={idx}
+                                      className="bg-purple-500 text-white text-[11px] px-2 py-0.5 rounded-full font-bold"
+                                    >
+                                      👥 {voterName}
+                                    </span>
+                                  ))}
                                 </div>
                               )}
                             </div>
@@ -232,12 +240,24 @@ const CardModal: React.FC<CardModalProps> = ({
                     </div>
                   )}
 
-                  {/* 응답 내용 표시 */}
-                  <div className="bg-gray-50 border-4 border-gray-300 p-4">
+                  {/* 주관식 답변 표시 */}
+                  {isOpenEnded && (
+                    <div className="bg-purple-50 border-4 border-purple-300 p-4 mb-4">
+                      <div className="text-xs font-bold text-purple-700 uppercase mb-2">주관식 답변</div>
+                      <p className="text-purple-900 font-medium">팀원이 자유롭게 답변을 작성합니다.</p>
+                    </div>
+                  )}
+
+                  {/* 응답 내용 (선택 이유) 표시 */}
+                  <div className="bg-white border-4 border-gray-300 p-4">
                     <div className="text-xs font-bold text-gray-700 uppercase mb-2">
                       {selectedChoice ? '선택 이유' : '응답 내용'}
                     </div>
-                    <p className="font-medium text-lg whitespace-pre-wrap">{reasoning || '(응답 없음)'}</p>
+                    {reasoning ? (
+                      <p className="font-medium text-lg whitespace-pre-wrap text-gray-800">{reasoning}</p>
+                    ) : (
+                      <p className="text-gray-400 italic">아직 입력되지 않았습니다...</p>
+                    )}
                   </div>
 
                   {/* AI 분석 버튼 (관리자 전용) */}
@@ -269,8 +289,8 @@ const CardModal: React.FC<CardModalProps> = ({
                       <h3 className="text-black text-sm font-bold uppercase tracking-widest">1. 당신의 선택은?</h3>
                       <div className="grid md:grid-cols-3 gap-4">
                         {card.choices?.map((choice) => {
-                          const voteCount = spectatorVotes[choice.id] || 0;
-                          const hasVotes = voteCount > 0;
+                          const voterTeams = spectatorVotes[choice.id] || [];
+                          const hasVotes = voterTeams.length > 0;
 
                           return (
                             <button
@@ -291,15 +311,26 @@ const CardModal: React.FC<CardModalProps> = ({
                                 {choice.id}
                               </div>
 
-                              {/* 관람자 투표 수 배지 (있을 때만 표시) */}
+                              {/* 관람자 투표 팀 배지 (있을 때만 표시) */}
                               {hasVotes && (
                                 <div className="absolute top-0 left-0 bg-purple-500 text-white px-2 py-1 text-xs font-bold border-b-2 border-r-2 border-purple-700 flex items-center gap-1">
                                   <span>👥</span>
-                                  <span>{voteCount}</span>
+                                  <span>{voterTeams.length}</span>
                                 </div>
                               )}
 
                               <h4 className="text-lg font-bold mt-6 leading-tight">{choice.text}</h4>
+
+                              {/* 투표한 팀 목록 */}
+                              {hasVotes && (
+                                <div className="mt-2 flex flex-wrap gap-1">
+                                  {voterTeams.map((name, idx) => (
+                                    <span key={idx} className="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">
+                                      {name}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
                             </button>
                           );
                         })}

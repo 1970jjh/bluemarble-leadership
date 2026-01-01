@@ -101,7 +101,7 @@ const App: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);        // 저장 중 여부
 
   // 관람자 투표 상태
-  const [spectatorVotes, setSpectatorVotes] = useState<{ [optionId: string]: number }>({});  // 옵션별 투표 수
+  const [spectatorVotes, setSpectatorVotes] = useState<{ [optionId: string]: string[] }>({});  // 옵션별 투표한 팀 이름 목록
   const [mySpectatorVote, setMySpectatorVote] = useState<Choice | null>(null);  // 내 투표 (참가자 로컬 상태)
   const [spectatorModalDismissed, setSpectatorModalDismissed] = useState(false);  // 관람자가 모달 닫았는지
 
@@ -1295,8 +1295,8 @@ const App: React.FC = () => {
   };
 
   // --- 관람자 투표 핸들러 ---
-  const handleSpectatorVote = async (choice: Choice) => {
-    if (!currentSessionId) return;
+  const handleSpectatorVote = async (choice: Choice, voterTeamName: string) => {
+    if (!currentSessionId || !voterTeamName) return;
 
     const previousVoteId = mySpectatorVote?.id || null;
 
@@ -1306,11 +1306,11 @@ const App: React.FC = () => {
     // 로컬 상태 업데이트
     setMySpectatorVote(choice);
 
-    // Firebase에 투표 업데이트
+    // Firebase에 투표 업데이트 (팀 이름 포함)
     const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
     if (isFirebaseConfigured) {
       try {
-        await firestoreService.updateSpectatorVote(currentSessionId, choice.id, previousVoteId);
+        await firestoreService.updateSpectatorVote(currentSessionId, choice.id, previousVoteId, voterTeamName);
       } catch (err) {
         console.error('관람자 투표 저장 실패:', err);
       }
@@ -1901,7 +1901,7 @@ const App: React.FC = () => {
           isSaving={isSaving}
           isGameStarted={isGameStarted}
           spectatorVote={mySpectatorVote}
-          onSpectatorVote={handleSpectatorVote}
+          onSpectatorVote={(choice) => handleSpectatorVote(choice, participantTeam.name)}
         />
 
         {/* 다른 팀 턴 뷰어 모드: 현재 진행 중인 카드가 있고 내 턴이 아니면 읽기 전용 모달 표시 */}
