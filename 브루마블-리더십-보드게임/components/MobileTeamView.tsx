@@ -47,6 +47,11 @@ const MobileTeamView: React.FC<MobileTeamViewProps> = ({
   const currentSquare = BOARD_SQUARES.find(s => s.index === team.position);
   const isOpenEnded = activeCard && (!activeCard.choices || activeCard.choices.length === 0);
 
+  // ROLLER: 현재 주사위를 굴릴 팀원 이름
+  const currentRollerName = team.members.length > 0
+    ? team.members[team.currentMemberIndex]?.name || team.members[0]?.name || 'Leader'
+    : 'Leader';
+
   const StatBox = ({ icon: Icon, value, label, color, max }: any) => (
     <div className="bg-white border-2 border-black p-3 shadow-hard-sm flex flex-col items-center justify-center relative overflow-hidden">
       <Icon className={`mb-1 ${color}`} size={20} />
@@ -252,6 +257,15 @@ const MobileTeamView: React.FC<MobileTeamViewProps> = ({
                 <h3 className="text-xl font-black uppercase leading-tight">{currentSquare?.name}</h3>
              </div>
           </div>
+
+          {/* ROLLER 표시 - 내 턴일 때만 */}
+          {isMyTurn && team.members.length > 0 && (
+            <div className="mb-3 bg-yellow-100 border-4 border-yellow-500 p-3 text-center">
+              <p className="text-xs text-yellow-700 font-bold uppercase mb-1">🎲 ROLLER</p>
+              <p className="text-2xl font-black text-yellow-800">{currentRollerName}</p>
+              <p className="text-xs text-yellow-600 mt-1">팀원들과 돌아가며 주사위를 굴려보세요!</p>
+            </div>
+          )}
 
           {/* 게임 시작 대기 중 */}
           {!isGameStarted || gamePhase === GamePhase.WaitingToStart ? (
