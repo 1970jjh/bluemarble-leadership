@@ -46,12 +46,12 @@ export const BOARD_SQUARES: BoardSquare[] = [
 ];
 
 export const INITIAL_RESOURCES = {
-  capital: 100,   // Starts at 100
-  energy: 100,    // Starts at 100 (변경됨)
-  reputation: 5,  // Starts at 5, Goal 100
-  trust: 5,       // Starts at 5, Goal 100
-  competency: 5,  // Starts at 5, Goal 100
-  insight: 5,     // Starts at 5, Goal 100
+  capital: 50,    // Starts at 50
+  energy: 50,     // Starts at 50
+  reputation: 30, // Starts at 30, Goal 100
+  trust: 30,      // Starts at 30, Goal 100
+  competency: 30, // Starts at 30, Goal 100
+  insight: 30,    // Starts at 30, Goal 100
 };
 
 // 한 바퀴 완주 보너스
