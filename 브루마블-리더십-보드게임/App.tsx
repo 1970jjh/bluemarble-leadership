@@ -1979,6 +1979,8 @@ const App: React.FC = () => {
             readOnly={true}
             teamName={activeTeamForViewer?.name}
             spectatorVotes={spectatorVotes}
+            spectatorVote={mySpectatorVote}
+            onSpectatorVote={(choice) => handleSpectatorVote(choice, participantTeam.name)}
           />
         )}
 

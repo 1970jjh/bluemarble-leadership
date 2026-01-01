@@ -32,6 +32,9 @@ interface CardModalProps {
 
   // 관람자 투표 (옵션별 투표한 팀 이름 목록)
   spectatorVotes?: { [optionId: string]: string[] };
+  // 관람자 개인 투표 (readOnly 모드에서 사용)
+  spectatorVote?: Choice | null;
+  onSpectatorVote?: (choice: Choice) => void;
 }
 
 const CardModal: React.FC<CardModalProps> = ({
@@ -52,7 +55,9 @@ const CardModal: React.FC<CardModalProps> = ({
   isAdminView = false,
   isTeamSaved = false,
   onAISubmit,
-  spectatorVotes = {}
+  spectatorVotes = {},
+  spectatorVote,
+  onSpectatorVote
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   
@@ -284,6 +289,15 @@ const CardModal: React.FC<CardModalProps> = ({
               {/* 일반 뷰 (팀원/미리보기): 선택지 및 입력 UI */}
               {!isAdminView && (
                 <>
+                  {/* 관람자 투표 안내 (readOnly 모드에서 투표 가능한 경우) */}
+                  {readOnly && onSpectatorVote && !isOpenEnded && (
+                    <div className="bg-purple-100 border-4 border-purple-500 p-3 text-center mb-4">
+                      <span className="font-bold text-purple-800">
+                        💡 나도 선택에 참여할 수 있습니다! (투표만, 점수 반영 없음)
+                      </span>
+                    </div>
+                  )}
+
                   {!isOpenEnded ? (
                     <>
                       <h3 className="text-black text-sm font-bold uppercase tracking-widest">1. 당신의 선택은?</h3>
@@ -291,28 +305,50 @@ const CardModal: React.FC<CardModalProps> = ({
                         {card.choices?.map((choice) => {
                           const voterTeams = spectatorVotes[choice.id] || [];
                           const hasVotes = voterTeams.length > 0;
+                          const isMySpectatorVote = spectatorVote?.id === choice.id;
+                          const canVote = readOnly && onSpectatorVote;
 
                           return (
                             <button
                               key={choice.id}
-                              onClick={() => !readOnly && onSelectionChange(choice)}
-                              disabled={readOnly}
+                              onClick={() => {
+                                if (!readOnly) {
+                                  onSelectionChange(choice);
+                                } else if (onSpectatorVote) {
+                                  onSpectatorVote(choice);
+                                }
+                              }}
+                              disabled={readOnly && !onSpectatorVote}
                               className={`group relative flex flex-col items-start p-4 border-4 transition-all text-left h-full
                                 ${selectedChoice?.id === choice.id
                                   ? 'border-blue-600 bg-blue-50 shadow-hard transform -translate-y-1'
-                                  : 'border-black hover:bg-gray-50'
+                                  : isMySpectatorVote
+                                    ? 'border-purple-600 bg-purple-50 shadow-hard transform -translate-y-1'
+                                    : 'border-black hover:bg-gray-50'
                                 }
-                                ${readOnly ? 'cursor-not-allowed opacity-70' : ''}
+                                ${readOnly && !canVote ? 'cursor-not-allowed opacity-70' : ''}
+                                ${canVote ? 'cursor-pointer hover:border-purple-400' : ''}
                               `}
                             >
                               {/* 옵션 ID 배지 */}
                               <div className={`absolute top-0 right-0 px-3 py-1 text-sm font-bold border-b-2 border-l-2
-                                ${selectedChoice?.id === choice.id ? 'bg-blue-600 text-white border-blue-600' : 'bg-black text-white border-black'}`}>
+                                ${selectedChoice?.id === choice.id
+                                  ? 'bg-blue-600 text-white border-blue-600'
+                                  : isMySpectatorVote
+                                    ? 'bg-purple-600 text-white border-purple-600'
+                                    : 'bg-black text-white border-black'}`}>
                                 {choice.id}
                               </div>
 
-                              {/* 관람자 투표 팀 배지 (있을 때만 표시) */}
-                              {hasVotes && (
+                              {/* 내 투표 배지 */}
+                              {isMySpectatorVote && (
+                                <div className="absolute top-0 left-0 bg-purple-600 text-white px-2 py-1 text-xs font-bold border-b-2 border-r-2 border-purple-800">
+                                  MY VOTE
+                                </div>
+                              )}
+
+                              {/* 관람자 투표 팀 배지 (있을 때만 표시, 내 투표가 없을 때) */}
+                              {hasVotes && !isMySpectatorVote && (
                                 <div className="absolute top-0 left-0 bg-purple-500 text-white px-2 py-1 text-xs font-bold border-b-2 border-r-2 border-purple-700 flex items-center gap-1">
                                   <span>👥</span>
                                   <span>{voterTeams.length}</span>
