@@ -172,6 +172,7 @@ export interface GameState {
   } | null;
   isSubmitted: boolean; // 제출 완료 여부
   isAiProcessing: boolean;
+  isGameStarted?: boolean; // 게임 시작 여부
   // 다른 팀 참여 투표 (옵션별 투표한 팀 이름 목록)
   spectatorVotes?: { [optionId: string]: string[] };
   // 로그

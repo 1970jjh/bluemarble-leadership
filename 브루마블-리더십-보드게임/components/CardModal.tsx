@@ -391,6 +391,63 @@ const CardModal: React.FC<CardModalProps> = ({
             /* Result Phase - 응답 내용 + AI 결과 표시 */
             <div className="animate-in fade-in zoom-in duration-300 space-y-6">
 
+               {/* 옵션 선택 현황 (전체 옵션 + 팀 선택 + 다른 팀 투표) */}
+               {!isOpenEnded && card.choices && (
+                 <div className="bg-gray-50 border-4 border-gray-300 p-4">
+                   <div className="text-xs font-bold text-gray-700 uppercase mb-3">
+                     옵션 선택 현황
+                   </div>
+                   <div className="space-y-3">
+                     {card.choices.map((choice) => {
+                       const voterTeams = spectatorVotes[choice.id] || [];
+                       const isSelected = selectedChoice?.id === choice.id;
+
+                       return (
+                         <div
+                           key={choice.id}
+                           className={`p-3 rounded-lg transition-all ${
+                             isSelected
+                               ? 'bg-blue-100 border-2 border-blue-600 shadow-md'
+                               : 'bg-white border-2 border-gray-200'
+                           }`}
+                         >
+                           <div className="flex items-start justify-between gap-2">
+                             <div className="flex items-center gap-2 flex-1">
+                               <span className={`px-3 py-1 text-sm font-bold shrink-0 ${
+                                 isSelected ? 'bg-blue-600 text-white' : 'bg-gray-300 text-gray-700'
+                               }`}>
+                                 {choice.id}
+                               </span>
+                               <span className={`font-medium ${isSelected ? 'text-blue-900' : 'text-gray-700'}`}>
+                                 {choice.text}
+                               </span>
+                             </div>
+                             {isSelected && (
+                               <span className="bg-green-500 text-white text-[10px] px-2 py-1 font-bold uppercase rounded shrink-0">
+                                 {teamName} 선택
+                               </span>
+                             )}
+                           </div>
+                           {/* 다른 팀 투표 표시 */}
+                           {voterTeams.length > 0 && (
+                             <div className="mt-2 flex flex-wrap gap-1">
+                               {voterTeams.map((voterName, idx) => (
+                                 <span
+                                   key={idx}
+                                   className="bg-purple-500 text-white text-[11px] px-2 py-0.5 rounded-full font-bold"
+                                 >
+                                   👥 {voterName}
+                                 </span>
+                               ))}
+                             </div>
+                           )}
+                         </div>
+                       );
+                     })}
+                   </div>
+                 </div>
+               )}
+
                {/* 팀 응답 내용 표시 */}
                <div className="bg-blue-50 border-4 border-blue-900 p-6">
                  <div className="flex items-center gap-3 mb-4">
@@ -400,8 +457,8 @@ const CardModal: React.FC<CardModalProps> = ({
                    </h3>
                  </div>
 
-                 {/* 선택한 옵션 표시 */}
-                 {selectedChoice && (
+                 {/* 선택한 옵션 표시 (주관식일 때만 표시, 객관식은 위에서 이미 표시됨) */}
+                 {isOpenEnded && selectedChoice && (
                    <div className="mb-4">
                      <div className="text-xs font-bold text-blue-700 uppercase mb-1">선택한 옵션</div>
                      <div className="bg-white border-2 border-blue-300 p-3 font-bold">

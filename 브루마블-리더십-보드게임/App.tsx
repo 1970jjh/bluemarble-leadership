@@ -293,6 +293,11 @@ const App: React.FC = () => {
         setIsTeamSaved(state.isSubmitted || false);  // 팀 저장 완료 여부
         setIsRolling(state.phase === GamePhase.Rolling);
 
+        // 게임 시작 여부 동기화 (참가자가 주사위 굴릴 수 있도록)
+        if (state.isGameStarted !== undefined) {
+          setIsGameStarted(state.isGameStarted);
+        }
+
         // 관람자 투표 동기화
         if (state.spectatorVotes) {
           setSpectatorVotes(state.spectatorVotes);
@@ -344,13 +349,14 @@ const App: React.FC = () => {
         aiResult: aiEvaluationResult,
         isSubmitted: !!aiEvaluationResult,
         isAiProcessing: isAiProcessing,
+        isGameStarted: isGameStarted,  // 게임 시작 여부 저장
         gameLogs: gameLogsRef.current, // ref 사용으로 의존성 루프 방지
         lastUpdated: Date.now()
       });
     } catch (error) {
       console.error('Firebase 게임 상태 저장 실패:', error);
     }
-  }, [currentSessionId, gamePhase, currentTurnIndex, diceValue, activeCard, sharedSelectedChoice, sharedReasoning, aiEvaluationResult, isAiProcessing]);
+  }, [currentSessionId, gamePhase, currentTurnIndex, diceValue, activeCard, sharedSelectedChoice, sharedReasoning, aiEvaluationResult, isAiProcessing, isGameStarted]);
 
   // 게임 상태 변경 시 Firebase에 저장 (디바운스 적용)
   useEffect(() => {
