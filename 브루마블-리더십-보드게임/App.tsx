@@ -2046,7 +2046,7 @@ const App: React.FC = () => {
 
       {/* Content */}
       {adminViewMode === 'dashboard' ? (
-        <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 h-full min-h-0">
+        <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4 h-full min-h-0">
           <div className="lg:col-span-2 order-2 lg:order-1 h-full min-h-0 overflow-y-auto">
              {currentTeam && (
                <ControlPanel
@@ -2067,15 +2067,15 @@ const App: React.FC = () => {
                 />
              )}
           </div>
-          <div className="lg:col-span-8 order-1 lg:order-2 flex flex-col items-center justify-center">
-            <GameBoard 
-              teams={teams} 
-              onSquareClick={handleBoardSquareClick} 
-              gameMode={currentSession?.version || 'Leadership Simulation'} 
+          <div className="lg:col-span-7 order-1 lg:order-2 flex flex-col items-center justify-center">
+            <GameBoard
+              teams={teams}
+              onSquareClick={handleBoardSquareClick}
+              gameMode={currentSession?.version || 'Leadership Simulation'}
             />
           </div>
-          <div className="lg:col-span-2 order-3 h-full min-h-0 overflow-y-auto pr-2">
-            <div className="grid gap-4">
+          <div className="lg:col-span-3 order-3 h-full min-h-0 overflow-y-auto">
+            <div className="grid gap-2">
               {teams.map((team, idx) => (
                 <TeamStatus key={team.id} team={team} active={idx === currentTurnIndex} />
               ))}
