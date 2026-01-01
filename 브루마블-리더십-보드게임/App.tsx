@@ -293,6 +293,13 @@ const App: React.FC = () => {
         setIsTeamSaved(state.isSubmitted || false);  // 팀 저장 완료 여부
         setIsRolling(state.phase === GamePhase.Rolling);
 
+        // 주사위 롤링 상태 동기화 (모바일에서 굴렸을 때 관리자 대시보드에서도 표시)
+        if (state.phase === GamePhase.Rolling && !localOperationInProgress.current) {
+          // 다른 클라이언트에서 주사위를 굴린 경우 - 주사위 오버레이 표시
+          setPendingDice(state.diceValue || [1, 1]);
+          setShowDiceOverlay(true);
+        }
+
         // 게임 시작 여부 동기화 (참가자가 주사위 굴릴 수 있도록)
         if (state.isGameStarted !== undefined) {
           setIsGameStarted(state.isGameStarted);
@@ -1973,6 +1980,17 @@ const App: React.FC = () => {
             spectatorVotes={spectatorVotes}
           />
         )}
+
+        {/* 3D 주사위 오버레이 (모바일 참가자 화면용) */}
+        <DiceResultOverlay
+          visible={showDiceOverlay}
+          dice1={pendingDice[0]}
+          dice2={pendingDice[1]}
+          isRolling={isRolling}
+          onRollComplete={handleDiceRollComplete}
+          onShowResultComplete={handleDiceResultComplete}
+          isDouble={pendingDice[0] === pendingDice[1]}
+        />
       </div>
     );
   }
