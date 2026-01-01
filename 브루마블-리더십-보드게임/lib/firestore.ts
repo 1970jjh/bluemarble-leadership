@@ -172,6 +172,9 @@ export interface GameState {
   } | null;
   isSubmitted: boolean; // 제출 완료 여부
   isAiProcessing: boolean;
+  isGameStarted?: boolean; // 게임 시작 여부
+  // 다른 팀 참여 투표 (옵션별 투표한 팀 이름 목록)
+  spectatorVotes?: { [optionId: string]: string[] };
   // 로그
   gameLogs: string[];
   lastUpdated: number;
@@ -213,6 +216,41 @@ export async function addGameLog(sessionId: string, log: string): Promise<void> 
   const currentLogs = state?.gameLogs || [];
   await updateGameState(sessionId, {
     gameLogs: [...currentLogs, `[${new Date().toLocaleTimeString()}] ${log}`]
+  });
+}
+
+// 관람자 투표 업데이트 (옵션 선택 - 팀 이름 저장)
+export async function updateSpectatorVote(
+  sessionId: string,
+  optionId: string,
+  previousOptionId: string | null,
+  teamName: string
+): Promise<void> {
+  const state = await getGameState(sessionId);
+  const currentVotes: { [key: string]: string[] } = {};
+
+  // 기존 투표 복사
+  if (state?.spectatorVotes) {
+    Object.keys(state.spectatorVotes).forEach(key => {
+      currentVotes[key] = [...(state.spectatorVotes![key] || [])];
+    });
+  }
+
+  // 이전 선택에서 팀 이름 제거
+  if (previousOptionId && currentVotes[previousOptionId]) {
+    currentVotes[previousOptionId] = currentVotes[previousOptionId].filter(name => name !== teamName);
+  }
+
+  // 새 선택에 팀 이름 추가
+  if (!currentVotes[optionId]) {
+    currentVotes[optionId] = [];
+  }
+  if (!currentVotes[optionId].includes(teamName)) {
+    currentVotes[optionId].push(teamName);
+  }
+
+  await updateGameState(sessionId, {
+    spectatorVotes: currentVotes
   });
 }
 

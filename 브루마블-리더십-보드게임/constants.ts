@@ -46,12 +46,28 @@ export const BOARD_SQUARES: BoardSquare[] = [
 ];
 
 export const INITIAL_RESOURCES = {
-  capital: 100,  // Starts at 100
-  energy: 5,     // Starts at 5, Goal 100
-  reputation: 5, // Starts at 5, Goal 100
-  trust: 5,      // Starts at 5, Goal 100
-  competency: 5, // Starts at 5, Goal 100
-  insight: 5,    // Starts at 5, Goal 100
+  capital: 100,   // Starts at 100
+  energy: 100,    // Starts at 100 (변경됨)
+  reputation: 5,  // Starts at 5, Goal 100
+  trust: 5,       // Starts at 5, Goal 100
+  competency: 5,  // Starts at 5, Goal 100
+  insight: 5,     // Starts at 5, Goal 100
+};
+
+// 한 바퀴 완주 보너스
+export const LAP_BONUS = {
+  energy: 40,
+  trust: 10,
+  competency: 10,
+  insight: 10,
+};
+
+// 더블 보너스 (주사위 2개 같은 숫자)
+export const DOUBLE_BONUS = {
+  energy: 5,
+  trust: 5,
+  competency: 5,
+  insight: 5,
 };
 
 export const INITIAL_TEAMS: Team[] = []; // Initialized dynamically in App.tsx

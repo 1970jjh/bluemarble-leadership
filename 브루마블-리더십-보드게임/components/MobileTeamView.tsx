@@ -18,6 +18,12 @@ interface MobileTeamViewProps {
   onSubmit: () => void;
   isTeamSaved: boolean;  // 팀이 저장했는지 여부
   isSaving: boolean;     // 저장 중 여부
+  isGameStarted?: boolean;  // 게임 시작 여부
+
+  // 관람자 투표 (다른 팀 턴일 때)
+  spectatorVote?: Choice | null;  // 관람자의 현재 선택
+  onSpectatorVote?: (choice: Choice) => void;  // 관람자 투표 핸들러
+  spectatorVotes?: { [optionId: string]: string[] };  // 다른 팀들의 투표 현황
 }
 
 const MobileTeamView: React.FC<MobileTeamViewProps> = ({
@@ -32,7 +38,11 @@ const MobileTeamView: React.FC<MobileTeamViewProps> = ({
   onInputChange,
   onSubmit,
   isTeamSaved,
-  isSaving
+  isSaving,
+  isGameStarted = true,
+  spectatorVote,
+  onSpectatorVote,
+  spectatorVotes = {}
 }) => {
   const currentSquare = BOARD_SQUARES.find(s => s.index === team.position);
   const isOpenEnded = activeCard && (!activeCard.choices || activeCard.choices.length === 0);
@@ -100,12 +110,15 @@ const MobileTeamView: React.FC<MobileTeamViewProps> = ({
                <h2 className="text-xl font-black leading-tight">{activeCard.title}</h2>
              </div>
            ) : (
-             <div className="bg-gray-200 text-gray-600 p-3 border-4 border-black mb-2 flex items-center gap-2">
-               <Eye size={20} />
-               <div>
+             <div className="bg-purple-100 text-purple-800 p-3 border-4 border-purple-500 mb-2">
+               <div className="flex items-center gap-2 mb-1">
+                 <Eye size={18} />
                  <h3 className="font-bold text-xs uppercase">Spectating {activeTeamName}</h3>
-                 <h2 className="text-lg font-black leading-tight text-black">{activeCard.title}</h2>
                </div>
+               <h2 className="text-lg font-black leading-tight text-black">{activeCard.title}</h2>
+               <p className="text-xs mt-1 text-purple-600">
+                 💡 나도 선택에 참여할 수 있습니다! (투표만, 점수 반영 없음)
+               </p>
              </div>
            )}
 
@@ -127,22 +140,56 @@ const MobileTeamView: React.FC<MobileTeamViewProps> = ({
                  {/* Choices (Only if not open ended) */}
                  {!isOpenEnded && activeCard.choices && (
                     <div className="space-y-2 mb-4">
-                      {activeCard.choices.map(choice => (
-                        <button
-                          key={choice.id}
-                          onClick={() => isMyTurn && onInputChange(choice, activeInput.reasoning)}
-                          disabled={!isMyTurn}
-                          className={`w-full text-left p-3 border-2 font-bold text-sm flex gap-2 transition-all
-                            ${activeInput.choice?.id === choice.id
-                                ? 'bg-blue-600 text-white border-black transform -translate-y-1'
-                                : 'bg-gray-50 border-gray-300'}
-                            ${!isMyTurn && activeInput.choice?.id !== choice.id ? 'opacity-50' : ''}
-                          `}
-                        >
-                          <span className={`px-2 bg-black text-white text-xs flex items-center`}>{choice.id}</span>
-                          {choice.text}
-                        </button>
-                      ))}
+                      {activeCard.choices.map(choice => {
+                        const isMyChoice = isMyTurn && activeInput.choice?.id === choice.id;
+                        const isMySpectatorVote = !isMyTurn && spectatorVote?.id === choice.id;
+                        const voterTeams = spectatorVotes[choice.id] || [];
+                        const hasOtherVotes = voterTeams.length > 0;
+
+                        return (
+                          <button
+                            key={choice.id}
+                            onClick={() => {
+                              if (isMyTurn) {
+                                onInputChange(choice, activeInput.reasoning);
+                              } else if (onSpectatorVote) {
+                                // 관람자 투표
+                                onSpectatorVote(choice);
+                              }
+                            }}
+                            className={`w-full text-left p-3 border-2 font-bold text-sm transition-all relative
+                              ${isMyChoice
+                                  ? 'bg-blue-600 text-white border-black transform -translate-y-1'
+                                  : isMySpectatorVote
+                                    ? 'bg-purple-500 text-white border-purple-700 transform -translate-y-1'
+                                    : 'bg-gray-50 border-gray-300 hover:bg-gray-100'}
+                            `}
+                          >
+                            <div className="flex gap-2 items-start">
+                              <span className={`px-2 bg-black text-white text-xs flex items-center shrink-0`}>{choice.id}</span>
+                              <span className="flex-1">{choice.text}</span>
+                              {isMySpectatorVote && (
+                                <span className="bg-purple-700 text-white text-[10px] px-2 py-0.5 rounded-full shrink-0">
+                                  MY VOTE
+                                </span>
+                              )}
+                            </div>
+                            {/* 다른 팀들의 투표 표시 */}
+                            {hasOtherVotes && (
+                              <div className="mt-2 flex flex-wrap gap-1 pl-7">
+                                {voterTeams.map((voterName, idx) => (
+                                  <span
+                                    key={idx}
+                                    className="bg-purple-100 text-purple-700 text-[10px] px-1.5 py-0.5 rounded font-medium"
+                                  >
+                                    👥 {voterName}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
                  )}
 
@@ -206,33 +253,47 @@ const MobileTeamView: React.FC<MobileTeamViewProps> = ({
              </div>
           </div>
 
-          <button
-            onClick={onRollDice}
-            disabled={!isMyTurn || gamePhase !== GamePhase.Idle}
-            className={`w-full py-6 border-4 border-black text-xl font-black shadow-hard uppercase flex items-center justify-center gap-3 transition-all
-              ${isMyTurn && gamePhase === GamePhase.Idle
-                ? 'bg-yellow-400 hover:bg-yellow-300 animate-pulse text-black'
-                : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}
-          >
-            {gamePhase === GamePhase.Rolling ? (
-              <>
-                <Dice5 size={28} className="animate-spin" />
-                주사위 굴리는 중...
-              </>
-            ) : gamePhase === GamePhase.Moving ? (
-              <>
-                <MapPin size={28} />
-                이동 중...
-              </>
-            ) : isMyTurn ? (
-              <>
-                <Dice5 size={28} />
-                ROLL DICE
-              </>
-            ) : (
-              `Wait: ${activeTeamName}'s Turn`
-            )}
-          </button>
+          {/* 게임 시작 대기 중 */}
+          {!isGameStarted || gamePhase === GamePhase.WaitingToStart ? (
+            <div className="w-full py-6 border-4 border-black text-xl font-black shadow-hard uppercase flex flex-col items-center justify-center gap-2 bg-gray-200 text-gray-600">
+              <div className="animate-pulse">⏳</div>
+              <span>관리자가 게임을 시작하면</span>
+              <span>주사위를 굴릴 수 있습니다</span>
+            </div>
+          ) : gamePhase === GamePhase.Paused ? (
+            <div className="w-full py-6 border-4 border-black text-xl font-black shadow-hard uppercase flex flex-col items-center justify-center gap-2 bg-orange-100 text-orange-700">
+              <div>⏸️</div>
+              <span>게임 일시정지 중</span>
+            </div>
+          ) : (
+            <button
+              onClick={onRollDice}
+              disabled={!isMyTurn || gamePhase !== GamePhase.Idle}
+              className={`w-full py-6 border-4 border-black text-xl font-black shadow-hard uppercase flex items-center justify-center gap-3 transition-all
+                ${isMyTurn && gamePhase === GamePhase.Idle
+                  ? 'bg-yellow-400 hover:bg-yellow-300 animate-pulse text-black'
+                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}
+            >
+              {gamePhase === GamePhase.Rolling ? (
+                <>
+                  <Dice5 size={28} className="animate-spin" />
+                  주사위 굴리는 중...
+                </>
+              ) : gamePhase === GamePhase.Moving ? (
+                <>
+                  <MapPin size={28} />
+                  이동 중...
+                </>
+              ) : isMyTurn ? (
+                <>
+                  <Dice5 size={28} />
+                  ROLL DICE
+                </>
+              ) : (
+                `Wait: ${activeTeamName}'s Turn`
+              )}
+            </button>
+          )}
         </div>
       )}
 

@@ -29,6 +29,12 @@ interface CardModalProps {
   isAdminView?: boolean;        // 관리자 대시보드 뷰 여부
   isTeamSaved?: boolean;        // 팀이 입력을 저장했는지
   onAISubmit?: () => Promise<void>;  // 관리자가 AI 분석 실행
+
+  // 관람자 투표 (옵션별 투표한 팀 이름 목록)
+  spectatorVotes?: { [optionId: string]: string[] };
+  // 관람자 개인 투표 (readOnly 모드에서 사용)
+  spectatorVote?: Choice | null;
+  onSpectatorVote?: (choice: Choice) => void;
 }
 
 const CardModal: React.FC<CardModalProps> = ({
@@ -48,7 +54,10 @@ const CardModal: React.FC<CardModalProps> = ({
   isPreviewMode = false,
   isAdminView = false,
   isTeamSaved = false,
-  onAISubmit
+  onAISubmit,
+  spectatorVotes = {},
+  spectatorVote,
+  onSpectatorVote
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   
@@ -160,45 +169,100 @@ const CardModal: React.FC<CardModalProps> = ({
                 </div>
               )}
 
-              {/* 관리자 뷰: 팀 입력 대기 중 */}
-              {isAdminView && !isTeamSaved && (
-                <div className="bg-blue-100 border-4 border-blue-500 p-8 text-center">
-                  <div className="animate-pulse">
-                    <div className="w-16 h-16 mx-auto mb-4 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                    <span className="font-bold text-blue-800 text-lg">
-                      {teamName ? `${teamName}이(가) 입력 중입니다...` : '팀 입력 대기 중...'}
-                    </span>
-                    <p className="text-blue-600 mt-2 text-sm">팀원이 선택과 사유를 입력하고 저장하면 여기에 표시됩니다.</p>
-                  </div>
-                </div>
-              )}
-
-              {/* 관리자 뷰: 팀 입력 완료 - 팀 응답 표시 + AI 분석 버튼 */}
-              {isAdminView && isTeamSaved && (
+              {/* 관리자 뷰: 옵션과 실시간 팀 입력 표시 */}
+              {isAdminView && (
                 <>
-                  <div className="bg-green-100 border-4 border-green-600 p-4 text-center mb-4">
-                    <span className="font-bold text-green-800">
-                      ✓ {teamName || '팀'}의 입력이 완료되었습니다!
-                    </span>
-                  </div>
+                  {/* 상태 표시 (입력 중 / 완료) */}
+                  {isTeamSaved ? (
+                    <div className="bg-green-100 border-4 border-green-600 p-4 text-center mb-4">
+                      <span className="font-bold text-green-800">
+                        ✓ {teamName || '팀'}의 입력이 완료되었습니다!
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="bg-blue-100 border-4 border-blue-500 p-3 text-center mb-4 flex items-center justify-center gap-3">
+                      <div className="w-6 h-6 border-3 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                      <span className="font-bold text-blue-800">
+                        {teamName ? `${teamName}이(가) 입력 중...` : '팀 입력 대기 중...'}
+                      </span>
+                    </div>
+                  )}
 
-                  {/* 선택한 옵션 표시 */}
-                  {selectedChoice && (
-                    <div className="bg-blue-50 border-4 border-blue-300 p-4">
-                      <div className="text-xs font-bold text-blue-700 uppercase mb-2">선택한 옵션</div>
-                      <div className="flex items-center gap-2">
-                        <span className="bg-blue-600 text-white px-3 py-1 text-sm font-bold">{selectedChoice.id}</span>
-                        <span className="font-bold text-lg">{selectedChoice.text}</span>
+                  {/* 옵션 표시 (실시간 팀 선택 + 다른 팀 투표) */}
+                  {!isOpenEnded && card.choices && (
+                    <div className="bg-gray-50 border-4 border-gray-300 p-4 mb-4">
+                      <div className="text-xs font-bold text-gray-700 uppercase mb-3">
+                        옵션 선택 현황
+                      </div>
+                      <div className="space-y-3">
+                        {card.choices.map((choice) => {
+                          const voterTeams = spectatorVotes[choice.id] || [];
+                          const isSelected = selectedChoice?.id === choice.id;
+
+                          return (
+                            <div
+                              key={choice.id}
+                              className={`p-3 rounded-lg transition-all ${
+                                isSelected
+                                  ? 'bg-blue-100 border-2 border-blue-600 shadow-md'
+                                  : 'bg-white border-2 border-gray-200'
+                              }`}
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex items-center gap-2 flex-1">
+                                  <span className={`px-3 py-1 text-sm font-bold shrink-0 ${
+                                    isSelected ? 'bg-blue-600 text-white' : 'bg-gray-300 text-gray-700'
+                                  }`}>
+                                    {choice.id}
+                                  </span>
+                                  <span className={`font-medium ${isSelected ? 'text-blue-900' : 'text-gray-700'}`}>
+                                    {choice.text}
+                                  </span>
+                                </div>
+                                {isSelected && (
+                                  <span className="bg-green-500 text-white text-[10px] px-2 py-1 font-bold uppercase rounded shrink-0">
+                                    {teamName} 선택
+                                  </span>
+                                )}
+                              </div>
+                              {/* 다른 팀 투표 표시 */}
+                              {voterTeams.length > 0 && (
+                                <div className="mt-2 flex flex-wrap gap-1">
+                                  {voterTeams.map((voterName, idx) => (
+                                    <span
+                                      key={idx}
+                                      className="bg-purple-500 text-white text-[11px] px-2 py-0.5 rounded-full font-bold"
+                                    >
+                                      👥 {voterName}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   )}
 
-                  {/* 응답 내용 표시 */}
-                  <div className="bg-gray-50 border-4 border-gray-300 p-4">
+                  {/* 주관식 답변 표시 */}
+                  {isOpenEnded && (
+                    <div className="bg-purple-50 border-4 border-purple-300 p-4 mb-4">
+                      <div className="text-xs font-bold text-purple-700 uppercase mb-2">주관식 답변</div>
+                      <p className="text-purple-900 font-medium">팀원이 자유롭게 답변을 작성합니다.</p>
+                    </div>
+                  )}
+
+                  {/* 응답 내용 (선택 이유) 표시 */}
+                  <div className="bg-white border-4 border-gray-300 p-4">
                     <div className="text-xs font-bold text-gray-700 uppercase mb-2">
                       {selectedChoice ? '선택 이유' : '응답 내용'}
                     </div>
-                    <p className="font-medium text-lg whitespace-pre-wrap">{reasoning || '(응답 없음)'}</p>
+                    {reasoning ? (
+                      <p className="font-medium text-lg whitespace-pre-wrap text-gray-800">{reasoning}</p>
+                    ) : (
+                      <p className="text-gray-400 italic">아직 입력되지 않았습니다...</p>
+                    )}
                   </div>
 
                   {/* AI 분석 버튼 (관리자 전용) */}
@@ -225,30 +289,87 @@ const CardModal: React.FC<CardModalProps> = ({
               {/* 일반 뷰 (팀원/미리보기): 선택지 및 입력 UI */}
               {!isAdminView && (
                 <>
+                  {/* 관람자 투표 안내 (readOnly 모드에서 투표 가능한 경우) */}
+                  {readOnly && onSpectatorVote && !isOpenEnded && (
+                    <div className="bg-purple-100 border-4 border-purple-500 p-3 text-center mb-4">
+                      <span className="font-bold text-purple-800">
+                        💡 나도 선택에 참여할 수 있습니다! (투표만, 점수 반영 없음)
+                      </span>
+                    </div>
+                  )}
+
                   {!isOpenEnded ? (
                     <>
                       <h3 className="text-black text-sm font-bold uppercase tracking-widest">1. 당신의 선택은?</h3>
                       <div className="grid md:grid-cols-3 gap-4">
-                        {card.choices?.map((choice) => (
-                          <button
-                            key={choice.id}
-                            onClick={() => !readOnly && onSelectionChange(choice)}
-                            disabled={readOnly}
-                            className={`group relative flex flex-col items-start p-4 border-4 transition-all text-left h-full
-                              ${selectedChoice?.id === choice.id
-                                ? 'border-blue-600 bg-blue-50 shadow-hard transform -translate-y-1'
-                                : 'border-black hover:bg-gray-50'
-                              }
-                              ${readOnly ? 'cursor-not-allowed opacity-70' : ''}
-                            `}
-                          >
-                            <div className={`absolute top-0 right-0 px-3 py-1 text-sm font-bold border-b-2 border-l-2
-                              ${selectedChoice?.id === choice.id ? 'bg-blue-600 text-white border-blue-600' : 'bg-black text-white border-black'}`}>
-                              {choice.id}
-                            </div>
-                            <h4 className="text-lg font-bold mt-6 leading-tight">{choice.text}</h4>
-                          </button>
-                        ))}
+                        {card.choices?.map((choice) => {
+                          const voterTeams = spectatorVotes[choice.id] || [];
+                          const hasVotes = voterTeams.length > 0;
+                          const isMySpectatorVote = spectatorVote?.id === choice.id;
+                          const canVote = readOnly && onSpectatorVote;
+
+                          return (
+                            <button
+                              key={choice.id}
+                              onClick={() => {
+                                if (!readOnly) {
+                                  onSelectionChange(choice);
+                                } else if (onSpectatorVote) {
+                                  onSpectatorVote(choice);
+                                }
+                              }}
+                              disabled={readOnly && !onSpectatorVote}
+                              className={`group relative flex flex-col items-start p-4 border-4 transition-all text-left h-full
+                                ${selectedChoice?.id === choice.id
+                                  ? 'border-blue-600 bg-blue-50 shadow-hard transform -translate-y-1'
+                                  : isMySpectatorVote
+                                    ? 'border-purple-600 bg-purple-50 shadow-hard transform -translate-y-1'
+                                    : 'border-black hover:bg-gray-50'
+                                }
+                                ${readOnly && !canVote ? 'cursor-not-allowed opacity-70' : ''}
+                                ${canVote ? 'cursor-pointer hover:border-purple-400' : ''}
+                              `}
+                            >
+                              {/* 옵션 ID 배지 */}
+                              <div className={`absolute top-0 right-0 px-3 py-1 text-sm font-bold border-b-2 border-l-2
+                                ${selectedChoice?.id === choice.id
+                                  ? 'bg-blue-600 text-white border-blue-600'
+                                  : isMySpectatorVote
+                                    ? 'bg-purple-600 text-white border-purple-600'
+                                    : 'bg-black text-white border-black'}`}>
+                                {choice.id}
+                              </div>
+
+                              {/* 내 투표 배지 */}
+                              {isMySpectatorVote && (
+                                <div className="absolute top-0 left-0 bg-purple-600 text-white px-2 py-1 text-xs font-bold border-b-2 border-r-2 border-purple-800">
+                                  MY VOTE
+                                </div>
+                              )}
+
+                              {/* 관람자 투표 팀 배지 (있을 때만 표시, 내 투표가 없을 때) */}
+                              {hasVotes && !isMySpectatorVote && (
+                                <div className="absolute top-0 left-0 bg-purple-500 text-white px-2 py-1 text-xs font-bold border-b-2 border-r-2 border-purple-700 flex items-center gap-1">
+                                  <span>👥</span>
+                                  <span>{voterTeams.length}</span>
+                                </div>
+                              )}
+
+                              <h4 className="text-lg font-bold mt-6 leading-tight">{choice.text}</h4>
+
+                              {/* 투표한 팀 목록 */}
+                              {hasVotes && (
+                                <div className="mt-2 flex flex-wrap gap-1">
+                                  {voterTeams.map((name, idx) => (
+                                    <span key={idx} className="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">
+                                      {name}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </button>
+                          );
+                        })}
                       </div>
                     </>
                   ) : (
@@ -306,6 +427,63 @@ const CardModal: React.FC<CardModalProps> = ({
             /* Result Phase - 응답 내용 + AI 결과 표시 */
             <div className="animate-in fade-in zoom-in duration-300 space-y-6">
 
+               {/* 옵션 선택 현황 (전체 옵션 + 팀 선택 + 다른 팀 투표) */}
+               {!isOpenEnded && card.choices && (
+                 <div className="bg-gray-50 border-4 border-gray-300 p-4">
+                   <div className="text-xs font-bold text-gray-700 uppercase mb-3">
+                     옵션 선택 현황
+                   </div>
+                   <div className="space-y-3">
+                     {card.choices.map((choice) => {
+                       const voterTeams = spectatorVotes[choice.id] || [];
+                       const isSelected = selectedChoice?.id === choice.id;
+
+                       return (
+                         <div
+                           key={choice.id}
+                           className={`p-3 rounded-lg transition-all ${
+                             isSelected
+                               ? 'bg-blue-100 border-2 border-blue-600 shadow-md'
+                               : 'bg-white border-2 border-gray-200'
+                           }`}
+                         >
+                           <div className="flex items-start justify-between gap-2">
+                             <div className="flex items-center gap-2 flex-1">
+                               <span className={`px-3 py-1 text-sm font-bold shrink-0 ${
+                                 isSelected ? 'bg-blue-600 text-white' : 'bg-gray-300 text-gray-700'
+                               }`}>
+                                 {choice.id}
+                               </span>
+                               <span className={`font-medium ${isSelected ? 'text-blue-900' : 'text-gray-700'}`}>
+                                 {choice.text}
+                               </span>
+                             </div>
+                             {isSelected && (
+                               <span className="bg-green-500 text-white text-[10px] px-2 py-1 font-bold uppercase rounded shrink-0">
+                                 {teamName} 선택
+                               </span>
+                             )}
+                           </div>
+                           {/* 다른 팀 투표 표시 */}
+                           {voterTeams.length > 0 && (
+                             <div className="mt-2 flex flex-wrap gap-1">
+                               {voterTeams.map((voterName, idx) => (
+                                 <span
+                                   key={idx}
+                                   className="bg-purple-500 text-white text-[11px] px-2 py-0.5 rounded-full font-bold"
+                                 >
+                                   👥 {voterName}
+                                 </span>
+                               ))}
+                             </div>
+                           )}
+                         </div>
+                       );
+                     })}
+                   </div>
+                 </div>
+               )}
+
                {/* 팀 응답 내용 표시 */}
                <div className="bg-blue-50 border-4 border-blue-900 p-6">
                  <div className="flex items-center gap-3 mb-4">
@@ -315,8 +493,8 @@ const CardModal: React.FC<CardModalProps> = ({
                    </h3>
                  </div>
 
-                 {/* 선택한 옵션 표시 */}
-                 {selectedChoice && (
+                 {/* 선택한 옵션 표시 (주관식일 때만 표시, 객관식은 위에서 이미 표시됨) */}
+                 {isOpenEnded && selectedChoice && (
                    <div className="mb-4">
                      <div className="text-xs font-bold text-blue-700 uppercase mb-1">선택한 옵션</div>
                      <div className="bg-white border-2 border-blue-300 p-3 font-bold">
@@ -343,9 +521,29 @@ const CardModal: React.FC<CardModalProps> = ({
                    <div className="bg-black text-white p-2 rounded-full"><Sparkles size={24} /></div>
                    <h3 className="text-xl font-black uppercase">AI Evaluation Result</h3>
                  </div>
-                 <p className="text-lg font-medium leading-relaxed whitespace-pre-wrap mb-6">
-                   {result.feedback}
-                 </p>
+                 <div className="text-base leading-relaxed mb-6 space-y-3">
+                   {result.feedback.split(/(\*\*\[.+?\]\*\*)/).map((part, idx) => {
+                     // 섹션 헤더 처리 (**[장점]**, **[단점/리스크]**, **[총평]**)
+                     if (part.match(/^\*\*\[.+?\]\*\*$/)) {
+                       const label = part.replace(/\*\*/g, '').replace(/[\[\]]/g, '');
+                       const colorClass = label.includes('장점')
+                         ? 'text-green-700 bg-green-100 border-green-300'
+                         : label.includes('단점') || label.includes('리스크')
+                           ? 'text-red-700 bg-red-100 border-red-300'
+                           : 'text-blue-700 bg-blue-100 border-blue-300';
+                       return (
+                         <div key={idx} className={`inline-block px-3 py-1 rounded font-black text-sm border-2 mt-2 ${colorClass}`}>
+                           {label}
+                         </div>
+                       );
+                     }
+                     // 일반 텍스트
+                     if (part.trim()) {
+                       return <p key={idx} className="font-medium text-gray-800">{part.trim()}</p>;
+                     }
+                     return null;
+                   })}
+                 </div>
 
                  <div className="grid grid-cols-2 md:grid-cols-5 gap-2 border-t-2 border-gray-300 pt-4">
                    {['Capital', 'Energy', 'Trust', 'Competency', 'Insight'].map((label, i) => {
