@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import Dice3D from './Dice3D';
+import { X } from 'lucide-react';
 
 interface DiceResultOverlayProps {
   visible: boolean;
@@ -69,6 +70,17 @@ const DiceResultOverlay: React.FC<DiceResultOverlayProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black/90 z-[100] flex flex-col items-center justify-center backdrop-blur-sm">
+      {/* 건너뛰기 버튼 (결과 표시 중에만) */}
+      {showTotal && (
+        <button
+          onClick={onShowResultComplete}
+          className="absolute top-4 right-4 bg-white/20 hover:bg-white/40 text-white p-3 rounded-full transition-all border-2 border-white/30"
+          title="건너뛰기"
+        >
+          <X size={24} />
+        </button>
+      )}
+
       {/* 3D 주사위 */}
       <div className="flex gap-8 mb-8">
         <Dice3D

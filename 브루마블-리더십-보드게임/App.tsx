@@ -103,6 +103,7 @@ const App: React.FC = () => {
   // 관람자 투표 상태
   const [spectatorVotes, setSpectatorVotes] = useState<{ [optionId: string]: number }>({});  // 옵션별 투표 수
   const [mySpectatorVote, setMySpectatorVote] = useState<Choice | null>(null);  // 내 투표 (참가자 로컬 상태)
+  const [spectatorModalDismissed, setSpectatorModalDismissed] = useState(false);  // 관람자가 모달 닫았는지
 
   // Ref to track local operations in progress (to prevent Firebase from overriding local state)
   const localOperationInProgress = useRef(false);
@@ -1020,6 +1021,7 @@ const App: React.FC = () => {
       setAiEvaluationResult(null);
       setSpectatorVotes({});  // 관람자 투표 초기화
       setMySpectatorVote(null);  // 내 투표 초기화
+      setSpectatorModalDismissed(false);  // 관람자 모달 닫기 상태 초기화
       setGamePhase(GamePhase.Decision);
       setShowCardModal(true);
 
@@ -1903,7 +1905,7 @@ const App: React.FC = () => {
         />
 
         {/* 다른 팀 턴 뷰어 모드: 현재 진행 중인 카드가 있고 내 턴이 아니면 읽기 전용 모달 표시 */}
-        {!isMyTurn && activeCard && gamePhase === GamePhase.Decision && (
+        {!isMyTurn && activeCard && gamePhase === GamePhase.Decision && !spectatorModalDismissed && (
           <CardModal
             card={activeCard}
             visible={true}
@@ -1915,6 +1917,7 @@ const App: React.FC = () => {
             onSubmit={async () => {}} // 읽기 전용
             result={aiEvaluationResult}
             isProcessing={isAiProcessing}
+            onClose={() => setSpectatorModalDismissed(true)}
             readOnly={true}
             teamName={activeTeamForViewer?.name}
             spectatorVotes={spectatorVotes}

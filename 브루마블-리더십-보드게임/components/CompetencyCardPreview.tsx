@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { GameCard, BoardSquare } from '../types';
-import { Target, Lightbulb, Users, User, Sparkles } from 'lucide-react';
+import { Target, Lightbulb, Users, User, Sparkles, X } from 'lucide-react';
 
 interface CompetencyCardPreviewProps {
   visible: boolean;
@@ -82,6 +82,15 @@ const CompetencyCardPreview: React.FC<CompetencyCardPreviewProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black/90 z-[100] flex items-center justify-center backdrop-blur-sm">
+      {/* 닫기(건너뛰기) 버튼 */}
+      <button
+        onClick={onComplete}
+        className="absolute top-4 right-4 bg-white/20 hover:bg-white/40 text-white p-3 rounded-full transition-all border-2 border-white/30"
+        title="건너뛰기"
+      >
+        <X size={24} />
+      </button>
+
       <div className={`bg-gradient-to-br ${getTypeColor()} p-8 rounded-2xl border-4 border-white shadow-2xl animate-in zoom-in duration-500 max-w-lg mx-4`}>
         {/* 아이콘 */}
         <div className="flex justify-center mb-6">
