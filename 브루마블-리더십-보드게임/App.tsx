@@ -1355,38 +1355,60 @@ const App: React.FC = () => {
 
     try {
       const prompt = `
-        Role: Strict, insightful, financially savvy Leadership Assessor.
+        Role: Strict, insightful, financially savvy Leadership Assessor. You are a fair but critical evaluator who identifies both strengths AND weaknesses in every decision.
+
         Context:
         - Card Type: "${activeCard.type}"
         - Scenario: "${activeCard.situation}"
         - Learning Point: "${activeCard.learningPoint}"
-        ${isOpenEnded 
-          ? `- User Open-Ended Answer: "${sharedReasoning}"` 
+        ${isOpenEnded
+          ? `- User Open-Ended Answer: "${sharedReasoning}"`
           : `- User Choice: "${sharedSelectedChoice?.text}" \n- User Reasoning: "${sharedReasoning}"`
         }
-        
-        Evaluation Rules:
+
+        CRITICAL SCORING PRINCIPLES:
+        1. ALWAYS identify BOTH advantages AND disadvantages/trade-offs of the choice.
+        2. Score Range: Each category should be between -3 to +3.
+           - +3: Exceptional strategic thinking with minimal downsides
+           - +1~+2: Good decision but with notable trade-offs
+           - 0: Neutral or mixed impact
+           - -1~-2: Poor decision with some merit
+           - -3: Seriously flawed approach
+        3. Total score for sincere, well-reasoned answers should be MILDLY POSITIVE (+2 to +6 total).
+        4. Do NOT give all positive scores. Every choice has opportunity costs or potential risks - reflect them.
+        5. Be specific about what could go wrong or what was sacrificed by this choice.
+
+        Evaluation Rules by Card Type:
         1. IF Card Type is 'Event' (Chance/Golden Key):
-           - ALL outcomes MUST be POSITIVE scores. Award HIGHER positive scores for logical/strategic reasoning.
+           - Outcomes lean POSITIVE but still identify risks. Good reasoning gets +1~+2 per category, not +3~+5.
 
         2. IF Card Type is 'Burnout':
-           - ALL outcomes MUST be NEGATIVE scores. Award SMALLER penalties for good damage control.
+           - Outcomes lean NEGATIVE. Good damage control reduces penalties. Poor handling: -2~-3 per category.
 
         3. IF Card Type is 'Challenge' (Open-Ended Innovation):
-           - Evaluate the creativity, feasibility, and strategic alignment of the user's answer.
-           - High Quality Answer: Award substantial Competency and Insight.
-           - Low Quality Answer: No change or slight deduction in Insight.
+           - Evaluate creativity, feasibility, and strategic alignment.
+           - High Quality: +2 Competency, +1~+2 Insight. BUT identify implementation risks.
+           - Low Quality: 0 or -1 in relevant categories.
 
         4. IF Card Type is 'CoreValue' (Dilemma):
-           - Evaluate how well the choice aligns with the value described in the choice text.
-           - Ensure reasoning reflects the chosen value.
-        
-        5. General:
-           - Deduct Capital if spending is mentioned.
-        
+           - Dilemmas inherently involve trade-offs. The choice MUST show both value gained AND value sacrificed.
+           - If choosing efficiency over relationships: +Competency but -Trust.
+           - If choosing safety over innovation: +Trust but -Insight.
+
+        5. General (Self, Team, Leader, Follower types):
+           - Identify at least ONE negative impact or risk from the choice.
+           - If resources are spent, deduct Capital.
+           - If the approach is time/effort intensive, consider Energy cost.
+           - If the choice might damage relationships, reflect in Trust.
+
+        Feedback Format (in Korean):
+        1. 장점: What was good about the decision (1-2 sentences)
+        2. 단점/리스크: What could go wrong or what trade-offs exist (1-2 sentences)
+        3. 총평: Overall assessment and learning point (1 sentence)
+
         Output JSON:
-        - feedback: Detailed paragraph (Korean).
-        - scores: { capital, energy, trust, competency, insight } (integers)
+        - feedback: Detailed paragraph following the format above (Korean).
+        - scores: { capital, energy, trust, competency, insight } (integers between -3 and +3)
       `;
 
       const response = await genAI.models.generateContent({
@@ -1607,7 +1629,8 @@ const App: React.FC = () => {
 
     try {
       const prompt = `
-        Role: Strict, insightful, financially savvy Leadership Assessor.
+        Role: Strict, insightful, financially savvy Leadership Assessor. You are a fair but critical evaluator who identifies both strengths AND weaknesses in every decision.
+
         Context:
         - Card Type: "${previewCard.type}"
         - Scenario: "${previewCard.situation}"
@@ -1617,28 +1640,49 @@ const App: React.FC = () => {
           : `- User Choice: "${previewSelectedChoice?.text}" \n- User Reasoning: "${previewReasoning}"`
         }
 
-        Evaluation Rules:
+        CRITICAL SCORING PRINCIPLES:
+        1. ALWAYS identify BOTH advantages AND disadvantages/trade-offs of the choice.
+        2. Score Range: Each category should be between -3 to +3.
+           - +3: Exceptional strategic thinking with minimal downsides
+           - +1~+2: Good decision but with notable trade-offs
+           - 0: Neutral or mixed impact
+           - -1~-2: Poor decision with some merit
+           - -3: Seriously flawed approach
+        3. Total score for sincere, well-reasoned answers should be MILDLY POSITIVE (+2 to +6 total).
+        4. Do NOT give all positive scores. Every choice has opportunity costs or potential risks - reflect them.
+        5. Be specific about what could go wrong or what was sacrificed by this choice.
+
+        Evaluation Rules by Card Type:
         1. IF Card Type is 'Event' (Chance/Golden Key):
-           - ALL outcomes MUST be POSITIVE scores. Award HIGHER positive scores for logical/strategic reasoning.
+           - Outcomes lean POSITIVE but still identify risks. Good reasoning gets +1~+2 per category, not +3~+5.
 
         2. IF Card Type is 'Burnout':
-           - ALL outcomes MUST be NEGATIVE scores. Award SMALLER penalties for good damage control.
+           - Outcomes lean NEGATIVE. Good damage control reduces penalties. Poor handling: -2~-3 per category.
 
         3. IF Card Type is 'Challenge' (Open-Ended Innovation):
-           - Evaluate the creativity, feasibility, and strategic alignment of the user's answer.
-           - High Quality Answer: Award substantial Competency and Insight.
-           - Low Quality Answer: No change or slight deduction in Insight.
+           - Evaluate creativity, feasibility, and strategic alignment.
+           - High Quality: +2 Competency, +1~+2 Insight. BUT identify implementation risks.
+           - Low Quality: 0 or -1 in relevant categories.
 
         4. IF Card Type is 'CoreValue' (Dilemma):
-           - Evaluate how well the choice aligns with the value described in the choice text.
-           - Ensure reasoning reflects the chosen value.
+           - Dilemmas inherently involve trade-offs. The choice MUST show both value gained AND value sacrificed.
+           - If choosing efficiency over relationships: +Competency but -Trust.
+           - If choosing safety over innovation: +Trust but -Insight.
 
-        5. General:
-           - Deduct Capital if spending is mentioned.
+        5. General (Self, Team, Leader, Follower types):
+           - Identify at least ONE negative impact or risk from the choice.
+           - If resources are spent, deduct Capital.
+           - If the approach is time/effort intensive, consider Energy cost.
+           - If the choice might damage relationships, reflect in Trust.
+
+        Feedback Format (in Korean):
+        1. 장점: What was good about the decision (1-2 sentences)
+        2. 단점/리스크: What could go wrong or what trade-offs exist (1-2 sentences)
+        3. 총평: Overall assessment and learning point (1 sentence)
 
         Output JSON:
-        - feedback: Detailed paragraph (Korean).
-        - scores: { capital, energy, trust, competency, insight } (integers)
+        - feedback: Detailed paragraph following the format above (Korean).
+        - scores: { capital, energy, trust, competency, insight } (integers between -3 and +3)
       `;
 
       const response = await genAI.models.generateContent({
