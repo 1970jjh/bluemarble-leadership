@@ -23,6 +23,7 @@ interface MobileTeamViewProps {
   // 관람자 투표 (다른 팀 턴일 때)
   spectatorVote?: Choice | null;  // 관람자의 현재 선택
   onSpectatorVote?: (choice: Choice) => void;  // 관람자 투표 핸들러
+  spectatorVotes?: { [optionId: string]: string[] };  // 다른 팀들의 투표 현황
 }
 
 const MobileTeamView: React.FC<MobileTeamViewProps> = ({
@@ -40,7 +41,8 @@ const MobileTeamView: React.FC<MobileTeamViewProps> = ({
   isSaving,
   isGameStarted = true,
   spectatorVote,
-  onSpectatorVote
+  onSpectatorVote,
+  spectatorVotes = {}
 }) => {
   const currentSquare = BOARD_SQUARES.find(s => s.index === team.position);
   const isOpenEnded = activeCard && (!activeCard.choices || activeCard.choices.length === 0);
@@ -141,6 +143,8 @@ const MobileTeamView: React.FC<MobileTeamViewProps> = ({
                       {activeCard.choices.map(choice => {
                         const isMyChoice = isMyTurn && activeInput.choice?.id === choice.id;
                         const isMySpectatorVote = !isMyTurn && spectatorVote?.id === choice.id;
+                        const voterTeams = spectatorVotes[choice.id] || [];
+                        const hasOtherVotes = voterTeams.length > 0;
 
                         return (
                           <button
@@ -153,7 +157,7 @@ const MobileTeamView: React.FC<MobileTeamViewProps> = ({
                                 onSpectatorVote(choice);
                               }
                             }}
-                            className={`w-full text-left p-3 border-2 font-bold text-sm flex gap-2 transition-all relative
+                            className={`w-full text-left p-3 border-2 font-bold text-sm transition-all relative
                               ${isMyChoice
                                   ? 'bg-blue-600 text-white border-black transform -translate-y-1'
                                   : isMySpectatorVote
@@ -161,12 +165,27 @@ const MobileTeamView: React.FC<MobileTeamViewProps> = ({
                                     : 'bg-gray-50 border-gray-300 hover:bg-gray-100'}
                             `}
                           >
-                            <span className={`px-2 bg-black text-white text-xs flex items-center`}>{choice.id}</span>
-                            {choice.text}
-                            {isMySpectatorVote && (
-                              <span className="absolute right-2 top-1/2 -translate-y-1/2 bg-purple-700 text-white text-[10px] px-2 py-0.5 rounded-full">
-                                MY VOTE
-                              </span>
+                            <div className="flex gap-2 items-start">
+                              <span className={`px-2 bg-black text-white text-xs flex items-center shrink-0`}>{choice.id}</span>
+                              <span className="flex-1">{choice.text}</span>
+                              {isMySpectatorVote && (
+                                <span className="bg-purple-700 text-white text-[10px] px-2 py-0.5 rounded-full shrink-0">
+                                  MY VOTE
+                                </span>
+                              )}
+                            </div>
+                            {/* 다른 팀들의 투표 표시 */}
+                            {hasOtherVotes && (
+                              <div className="mt-2 flex flex-wrap gap-1 pl-7">
+                                {voterTeams.map((voterName, idx) => (
+                                  <span
+                                    key={idx}
+                                    className="bg-purple-100 text-purple-700 text-[10px] px-1.5 py-0.5 rounded font-medium"
+                                  >
+                                    👥 {voterName}
+                                  </span>
+                                ))}
+                              </div>
                             )}
                           </button>
                         );

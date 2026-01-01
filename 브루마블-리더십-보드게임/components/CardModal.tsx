@@ -485,9 +485,29 @@ const CardModal: React.FC<CardModalProps> = ({
                    <div className="bg-black text-white p-2 rounded-full"><Sparkles size={24} /></div>
                    <h3 className="text-xl font-black uppercase">AI Evaluation Result</h3>
                  </div>
-                 <p className="text-lg font-medium leading-relaxed whitespace-pre-wrap mb-6">
-                   {result.feedback}
-                 </p>
+                 <div className="text-base leading-relaxed mb-6 space-y-3">
+                   {result.feedback.split(/(\*\*\[.+?\]\*\*)/).map((part, idx) => {
+                     // 섹션 헤더 처리 (**[장점]**, **[단점/리스크]**, **[총평]**)
+                     if (part.match(/^\*\*\[.+?\]\*\*$/)) {
+                       const label = part.replace(/\*\*/g, '').replace(/[\[\]]/g, '');
+                       const colorClass = label.includes('장점')
+                         ? 'text-green-700 bg-green-100 border-green-300'
+                         : label.includes('단점') || label.includes('리스크')
+                           ? 'text-red-700 bg-red-100 border-red-300'
+                           : 'text-blue-700 bg-blue-100 border-blue-300';
+                       return (
+                         <div key={idx} className={`inline-block px-3 py-1 rounded font-black text-sm border-2 mt-2 ${colorClass}`}>
+                           {label}
+                         </div>
+                       );
+                     }
+                     // 일반 텍스트
+                     if (part.trim()) {
+                       return <p key={idx} className="font-medium text-gray-800">{part.trim()}</p>;
+                     }
+                     return null;
+                   })}
+                 </div>
 
                  <div className="grid grid-cols-2 md:grid-cols-5 gap-2 border-t-2 border-gray-300 pt-4">
                    {['Capital', 'Energy', 'Trust', 'Competency', 'Insight'].map((label, i) => {

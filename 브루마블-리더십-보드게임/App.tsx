@@ -1375,27 +1375,27 @@ const App: React.FC = () => {
 
         CRITICAL SCORING PRINCIPLES:
         1. ALWAYS identify BOTH advantages AND disadvantages/trade-offs of the choice.
-        2. Score Range: Each category should be between -3 to +3.
-           - +3: Exceptional strategic thinking with minimal downsides
-           - +1~+2: Good decision but with notable trade-offs
-           - 0: Neutral or mixed impact
-           - -1~-2: Poor decision with some merit
-           - -3: Seriously flawed approach
-        3. Total score for sincere, well-reasoned answers should be MILDLY POSITIVE (+2 to +6 total).
+        2. Score Range: Each category should be between -10 to +10.
+           - +8~+10: Exceptional strategic thinking with minimal downsides
+           - +4~+7: Good decision but with notable trade-offs
+           - 0~+3: Average or neutral impact
+           - -3~-1: Poor decision with some merit
+           - -10~-4: Seriously flawed approach
+        3. Total score for sincere, well-reasoned answers should be POSITIVE (+8 to +20 total).
         4. Do NOT give all positive scores. Every choice has opportunity costs or potential risks - reflect them.
         5. Be specific about what could go wrong or what was sacrificed by this choice.
 
         Evaluation Rules by Card Type:
         1. IF Card Type is 'Event' (Chance/Golden Key):
-           - Outcomes lean POSITIVE but still identify risks. Good reasoning gets +1~+2 per category, not +3~+5.
+           - Outcomes lean POSITIVE but still identify risks. Good reasoning gets +4~+7 per category.
 
         2. IF Card Type is 'Burnout':
-           - Outcomes lean NEGATIVE. Good damage control reduces penalties. Poor handling: -2~-3 per category.
+           - Outcomes lean NEGATIVE. Good damage control reduces penalties. Poor handling: -6~-10 per category.
 
         3. IF Card Type is 'Challenge' (Open-Ended Innovation):
            - Evaluate creativity, feasibility, and strategic alignment.
-           - High Quality: +2 Competency, +1~+2 Insight. BUT identify implementation risks.
-           - Low Quality: 0 or -1 in relevant categories.
+           - High Quality: +6~+8 Competency, +4~+6 Insight. BUT identify implementation risks.
+           - Low Quality: 0 or -2 in relevant categories.
 
         4. IF Card Type is 'CoreValue' (Dilemma):
            - Dilemmas inherently involve trade-offs. The choice MUST show both value gained AND value sacrificed.
@@ -1408,14 +1408,14 @@ const App: React.FC = () => {
            - If the approach is time/effort intensive, consider Energy cost.
            - If the choice might damage relationships, reflect in Trust.
 
-        Feedback Format (in Korean):
-        1. 장점: What was good about the decision (1-2 sentences)
-        2. 단점/리스크: What could go wrong or what trade-offs exist (1-2 sentences)
-        3. 총평: Overall assessment and learning point (1 sentence)
+        Feedback Format (in Korean) - USE CLEAR SECTION MARKERS:
+        **[장점]** What was good about the decision (1-2 sentences)
+        **[단점/리스크]** What could go wrong or what trade-offs exist (1-2 sentences)
+        **[총평]** Overall assessment and learning point (1 sentence)
 
         Output JSON:
-        - feedback: Detailed paragraph following the format above (Korean).
-        - scores: { capital, energy, trust, competency, insight } (integers between -3 and +3)
+        - feedback: Detailed paragraph with **[장점]**, **[단점/리스크]**, **[총평]** section markers (Korean).
+        - scores: { capital, energy, trust, competency, insight } (integers between -10 and +10)
       `;
 
       const response = await genAI.models.generateContent({
@@ -1649,27 +1649,27 @@ const App: React.FC = () => {
 
         CRITICAL SCORING PRINCIPLES:
         1. ALWAYS identify BOTH advantages AND disadvantages/trade-offs of the choice.
-        2. Score Range: Each category should be between -3 to +3.
-           - +3: Exceptional strategic thinking with minimal downsides
-           - +1~+2: Good decision but with notable trade-offs
-           - 0: Neutral or mixed impact
-           - -1~-2: Poor decision with some merit
-           - -3: Seriously flawed approach
-        3. Total score for sincere, well-reasoned answers should be MILDLY POSITIVE (+2 to +6 total).
+        2. Score Range: Each category should be between -10 to +10.
+           - +8~+10: Exceptional strategic thinking with minimal downsides
+           - +4~+7: Good decision but with notable trade-offs
+           - 0~+3: Average or neutral impact
+           - -3~-1: Poor decision with some merit
+           - -10~-4: Seriously flawed approach
+        3. Total score for sincere, well-reasoned answers should be POSITIVE (+8 to +20 total).
         4. Do NOT give all positive scores. Every choice has opportunity costs or potential risks - reflect them.
         5. Be specific about what could go wrong or what was sacrificed by this choice.
 
         Evaluation Rules by Card Type:
         1. IF Card Type is 'Event' (Chance/Golden Key):
-           - Outcomes lean POSITIVE but still identify risks. Good reasoning gets +1~+2 per category, not +3~+5.
+           - Outcomes lean POSITIVE but still identify risks. Good reasoning gets +4~+7 per category.
 
         2. IF Card Type is 'Burnout':
-           - Outcomes lean NEGATIVE. Good damage control reduces penalties. Poor handling: -2~-3 per category.
+           - Outcomes lean NEGATIVE. Good damage control reduces penalties. Poor handling: -6~-10 per category.
 
         3. IF Card Type is 'Challenge' (Open-Ended Innovation):
            - Evaluate creativity, feasibility, and strategic alignment.
-           - High Quality: +2 Competency, +1~+2 Insight. BUT identify implementation risks.
-           - Low Quality: 0 or -1 in relevant categories.
+           - High Quality: +6~+8 Competency, +4~+6 Insight. BUT identify implementation risks.
+           - Low Quality: 0 or -2 in relevant categories.
 
         4. IF Card Type is 'CoreValue' (Dilemma):
            - Dilemmas inherently involve trade-offs. The choice MUST show both value gained AND value sacrificed.
@@ -1682,14 +1682,14 @@ const App: React.FC = () => {
            - If the approach is time/effort intensive, consider Energy cost.
            - If the choice might damage relationships, reflect in Trust.
 
-        Feedback Format (in Korean):
-        1. 장점: What was good about the decision (1-2 sentences)
-        2. 단점/리스크: What could go wrong or what trade-offs exist (1-2 sentences)
-        3. 총평: Overall assessment and learning point (1 sentence)
+        Feedback Format (in Korean) - USE CLEAR SECTION MARKERS:
+        **[장점]** What was good about the decision (1-2 sentences)
+        **[단점/리스크]** What could go wrong or what trade-offs exist (1-2 sentences)
+        **[총평]** Overall assessment and learning point (1 sentence)
 
         Output JSON:
-        - feedback: Detailed paragraph following the format above (Korean).
-        - scores: { capital, energy, trust, competency, insight } (integers between -3 and +3)
+        - feedback: Detailed paragraph with **[장점]**, **[단점/리스크]**, **[총평]** section markers (Korean).
+        - scores: { capital, energy, trust, competency, insight } (integers between -10 and +10)
       `;
 
       const response = await genAI.models.generateContent({
@@ -1959,6 +1959,7 @@ const App: React.FC = () => {
           isGameStarted={isGameStarted}
           spectatorVote={mySpectatorVote}
           onSpectatorVote={(choice) => handleSpectatorVote(choice, participantTeam.name)}
+          spectatorVotes={spectatorVotes}
         />
 
         {/* 다른 팀 턴 뷰어 모드: 현재 진행 중인 카드가 있고 내 턴이 아니면 읽기 전용 모달 표시 */}
@@ -2105,6 +2106,7 @@ const App: React.FC = () => {
                  isTeamSaved={isTeamSaved}
                  isSaving={isSaving}
                  isGameStarted={isGameStarted}
+                 spectatorVotes={spectatorVotes}
                />
              </div>
            )}
