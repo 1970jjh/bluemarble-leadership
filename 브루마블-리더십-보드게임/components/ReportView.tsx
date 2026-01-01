@@ -14,7 +14,7 @@ interface TeamFeedbackData {
   overall: string;
   strengths: string[];
   improvements: string[];
-  advice: string;
+  advice: string[];  // 3가지 구체적 액션플랜
   discussion_topics: string[];
 }
 
@@ -25,16 +25,17 @@ interface TeamAIFeedback {
 
 // 종합 AI 분석 타입
 interface OverallAnalysis {
-  summary: string;
+  summary: string[];  // 3가지 종합 요약
   perspectives: {
     self_leadership: PerspectiveAnalysis;
     followership: PerspectiveAnalysis;
     leadership: PerspectiveAnalysis;
     teamship: PerspectiveAnalysis;
   };
-  common_mistakes: string;
+  common_mistakes: string[];  // 3가지 공통 실수 및 개선 팁
   discussion_topics: string[];
   conclusion: string;
+  encouragement: string;  // 응원 메시지
 }
 
 interface PerspectiveAnalysis {
@@ -184,7 +185,7 @@ const ReportView: React.FC<ReportViewProps> = ({ teams, onClose }) => {
           최종 점수: ${calculateTotal(team)}점
           리소스 현황: 자본 ${team.resources.capital}, 에너지 ${team.resources.energy}, 신뢰 ${team.resources.trust}, 역량 ${team.resources.competency}, 통찰 ${team.resources.insight}
 
-          게임 기록:
+          게임 기록 (각 상황에서의 옵션 선택, 선택 이유, AI 분석 결과):
           ${historyContext || '기록 없음'}
 
           다음 JSON 형식으로 한글 종합 피드백을 작성해주세요:
@@ -192,7 +193,11 @@ const ReportView: React.FC<ReportViewProps> = ({ teams, onClose }) => {
             "overall": "전반적 평가 (2-3문장)",
             "strengths": ["강점 1", "강점 2", "강점 3"],
             "improvements": ["개선점 1", "개선점 2", "개선점 3"],
-            "advice": "성장을 위한 조언 (2-3문장)",
+            "advice": [
+              "1) [액션플랜 제목]: 구체적이고 현실적인 실천 방안 (예: 매일 아침 5분 감정일기 작성하기)",
+              "2) [액션플랜 제목]: 구체적이고 현실적인 실천 방안 (예: 주 1회 팀원에게 긍정 피드백 전달하기)",
+              "3) [액션플랜 제목]: 구체적이고 현실적인 실천 방안 (예: 월 1회 1:1 미팅에서 성장 목표 공유하기)"
+            ],
             "discussion_topics": ["토의주제 1", "토의주제 2", "토의주제 3"]
           }
 
@@ -200,6 +205,9 @@ const ReportView: React.FC<ReportViewProps> = ({ teams, onClose }) => {
           - 마크다운 기호(##, **, * 등)를 절대 사용하지 마세요
           - 토의주제는 팀원들이 함께 대화할 수 있는 열린 질문으로 작성해주세요
           - 모든 내용은 한글로 작성해주세요
+          - advice는 반드시 3가지 구체적인 액션플랜으로 작성해주세요
+          - 팀의 실제 선택과 선택 이유, AI 분석 결과를 바탕으로 현실적이고 구체적인 조언을 해주세요
+          - 각 액션플랜은 "언제, 무엇을, 어떻게" 할 수 있는지 명확하게 제시해주세요
         `;
 
         try {
@@ -257,12 +265,16 @@ const ReportView: React.FC<ReportViewProps> = ({ teams, onClose }) => {
       const prompt = `
         당신은 리더십 교육 전문가입니다. 다음 리더십 시뮬레이션 게임 결과를 분석하여 종합 리포트를 한글로 작성해주세요.
 
-        게임 결과:
+        게임 결과 (각 팀의 의사결정 내용 포함):
         ${context}
 
         다음 JSON 형식으로 한글로 상세하게 작성해주세요:
         {
-          "summary": "전체 게임에 대한 종합 요약 (3-4문장, 한글)",
+          "summary": [
+            "1) [핵심 인사이트 1]: 전체 팀들의 의사결정 패턴에서 발견된 주요 특징 (실제 선택 근거 기반)",
+            "2) [핵심 인사이트 2]: 점수 분포와 리소스 관리 측면에서의 분석 (구체적 수치 기반)",
+            "3) [핵심 인사이트 3]: 이번 게임에서 얻을 수 있는 가장 중요한 교훈 (현업 적용 관점)"
+          ],
           "perspectives": {
             "self_leadership": {
               "title": "셀프리더십 관점",
@@ -293,7 +305,11 @@ const ReportView: React.FC<ReportViewProps> = ({ teams, onClose }) => {
               "action_plan": "향후 성장을 위한 구체적 액션플랜 (2-3가지)"
             }
           },
-          "common_mistakes": "게임에서 관찰된 공통적인 실수와 개선 팁 (3-4문장)",
+          "common_mistakes": [
+            "1) [실수 유형]: 구체적인 실수 패턴과 개선 방법 (예: 단기 이익 추구로 인한 신뢰 하락 - 장기적 관점에서 이해관계자 영향 고려하기)",
+            "2) [실수 유형]: 구체적인 실수 패턴과 개선 방법 (예: 에너지 소진 무시 - 지속가능한 업무 속도 유지하기)",
+            "3) [실수 유형]: 구체적인 실수 패턴과 개선 방법 (예: 소통 부재로 인한 갈등 - 선제적 의사소통 습관화하기)"
+          ],
           "discussion_topics": [
             "토의주제 1: 구체적인 토의 질문",
             "토의주제 2: 구체적인 토의 질문",
@@ -303,10 +319,16 @@ const ReportView: React.FC<ReportViewProps> = ({ teams, onClose }) => {
             "토의주제 6: 구체적인 토의 질문",
             "토의주제 7: 구체적인 토의 질문"
           ],
-          "conclusion": "마무리 격려 및 영감을 주는 메시지 (2-3문장)"
+          "conclusion": "오늘 게임에서 경험한 내용을 현업에서 적용할 때 기억해야 할 핵심 메시지 (2-3문장)",
+          "encouragement": "참가자들에게 전하는 따뜻한 응원과 격려의 메시지 (진정성 있고 동기부여가 되는 2-3문장)"
         }
 
-        모든 내용은 반드시 한글로 작성해주세요. 토의주제는 학습자들이 서로 깊이 있는 대화를 나눌 수 있는 열린 질문으로 작성해주세요.
+        중요:
+        - 모든 내용은 반드시 한글로 작성해주세요
+        - summary는 실제 팀들의 선택과 결과를 바탕으로 구체적으로 작성해주세요
+        - common_mistakes는 실제 게임에서 관찰된 패턴을 기반으로 현실적인 개선 팁을 제시해주세요
+        - 토의주제는 학습자들이 서로 깊이 있는 대화를 나눌 수 있는 열린 질문으로 작성해주세요
+        - encouragement는 진심어린 응원의 메시지로 참가자들이 용기를 얻을 수 있도록 작성해주세요
       `;
 
       const response = await genAI.models.generateContent({
@@ -649,11 +671,17 @@ const ReportView: React.FC<ReportViewProps> = ({ teams, onClose }) => {
                                  </div>
                                )}
 
-                               {/* 성장을 위한 조언 */}
-                               {feedback.feedback.advice && (
+                               {/* 성장을 위한 조언 - 3가지 액션플랜 */}
+                               {feedback.feedback.advice?.length > 0 && (
                                  <div className="bg-blue-100 p-3 rounded border-l-4 border-blue-500">
-                                   <h5 className="font-bold text-blue-800 mb-2">성장을 위한 조언</h5>
-                                   <p className="text-gray-700 italic">{feedback.feedback.advice}</p>
+                                   <h5 className="font-bold text-blue-800 mb-2">성장을 위한 조언 (3가지 액션플랜)</h5>
+                                   <ol className="space-y-2">
+                                     {feedback.feedback.advice.map((item: string, i: number) => (
+                                       <li key={i} className="text-gray-700 bg-white p-2 rounded border">
+                                         {item}
+                                       </li>
+                                     ))}
+                                   </ol>
                                  </div>
                                )}
 
@@ -699,10 +727,16 @@ const ReportView: React.FC<ReportViewProps> = ({ teams, onClose }) => {
                  <div ref={overallReportRef} className="space-y-6">
                    <h1 className="text-2xl font-bold text-blue-900 border-b-2 border-blue-900 pb-2">BL 아카데미 - 리더십 종합 리포트</h1>
 
-                   {/* 종합 요약 */}
+                   {/* 종합 요약 - 3가지 */}
                    <div className="bg-white p-4 rounded-lg border-2 border-gray-300">
                      <h2 className="text-xl font-bold mb-3 text-blue-900">1. 종합 요약</h2>
-                     <p className="text-gray-700">{overallAnalysis.summary}</p>
+                     <ol className="space-y-3">
+                       {overallAnalysis.summary.map((item, idx) => (
+                         <li key={idx} className="text-gray-700 bg-blue-50 p-3 rounded-lg border-l-4 border-blue-500">
+                           {item}
+                         </li>
+                       ))}
+                     </ol>
                    </div>
 
                    {/* 모드별 분석 */}
@@ -743,10 +777,16 @@ const ReportView: React.FC<ReportViewProps> = ({ teams, onClose }) => {
                      })}
                    </div>
 
-                   {/* 공통 실수 */}
+                   {/* 공통 실수 - 3가지 */}
                    <div className="bg-white p-4 rounded-lg border-2 border-gray-300">
                      <h2 className="text-xl font-bold mb-3 text-blue-900">3. 공통 실수 및 개선 팁</h2>
-                     <p className="text-gray-700">{overallAnalysis.common_mistakes}</p>
+                     <ol className="space-y-3">
+                       {overallAnalysis.common_mistakes.map((item, idx) => (
+                         <li key={idx} className="text-gray-700 bg-orange-50 p-3 rounded-lg border-l-4 border-orange-500">
+                           {item}
+                         </li>
+                       ))}
+                     </ol>
                    </div>
 
                    {/* 토의주제 7가지 */}
@@ -761,10 +801,19 @@ const ReportView: React.FC<ReportViewProps> = ({ teams, onClose }) => {
                      </div>
                    </div>
 
-                   {/* 결론 */}
+                   {/* 결론 및 응원 */}
                    <div className="conclusion-box bg-yellow-100 p-4 rounded-lg border-2 border-yellow-500">
                      <h2 className="text-xl font-bold mb-3 text-yellow-800">마무리</h2>
-                     <p className="text-gray-800 font-medium">{overallAnalysis.conclusion}</p>
+                     <p className="text-gray-800 font-medium mb-4">{overallAnalysis.conclusion}</p>
+
+                     {/* 응원 메시지 */}
+                     {overallAnalysis.encouragement && (
+                       <div className="bg-gradient-to-r from-yellow-200 to-orange-200 p-4 rounded-lg border-2 border-yellow-400 mt-4">
+                         <p className="text-center text-lg font-bold text-yellow-900 italic">
+                           💪 {overallAnalysis.encouragement}
+                         </p>
+                       </div>
+                     )}
                    </div>
                  </div>
                </div>
