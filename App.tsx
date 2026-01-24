@@ -2996,7 +2996,7 @@ ${teamResponsesList.map((resp) => `
             />
           </div>
           <div className="lg:col-span-3 order-3 h-full min-h-0 overflow-y-auto flex justify-end">
-            <div className="grid gap-2 w-48">
+            <div className="flex flex-col gap-2 w-48">
               {(() => {
                 // 팀별 점수 기준 순위 정렬
                 const sortedByScore = [...teams].sort((a, b) => (b.score ?? INITIAL_SCORE) - (a.score ?? INITIAL_SCORE));
