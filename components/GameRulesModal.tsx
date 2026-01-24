@@ -205,11 +205,11 @@ const GameRulesModal: React.FC<GameRulesModalProps> = ({
           <section>
             <h3 className="text-lg font-black text-gray-800 mb-3 flex items-center gap-2">
               <Dice5 className="text-yellow-600" size={20} />
-              더블 보너스 (주사위 더블)
+              주사위 더블 보너스
             </h3>
             <div className="bg-yellow-100 p-4 rounded-lg border-2 border-yellow-400">
               <p className="text-gray-700">
-                주사위 두 개가 <strong className="text-yellow-700">같은 숫자</strong>가 나오면 <span className="bg-yellow-400 text-black px-2 py-0.5 rounded font-bold">DOUBLE!</span>
+                주사위 두 개가 <strong className="text-yellow-700">같은 숫자</strong>가 나오면
               </p>
               <p className="text-sm text-gray-600 mt-2">
                 🎲 즉시 <strong className="text-yellow-700">보너스 30점</strong>을 획득합니다!
