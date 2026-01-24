@@ -359,7 +359,7 @@ const ReportView: React.FC<ReportViewProps> = ({ teams, onClose }) => {
       return;
     }
 
-    const title = reportType === 'team' ? 'BL 아카데미 - 팀별 리포트' : 'BL 아카데미 - 종합 리포트';
+    const title = reportType === 'team' ? 'Bluemable Gamification - 팀별 리포트' : 'Bluemable Gamification - 종합 리포트';
 
     printWindow.document.write(`
       <!DOCTYPE html>
@@ -597,7 +597,7 @@ const ReportView: React.FC<ReportViewProps> = ({ teams, onClose }) => {
 
                  {/* 프린트용 숨겨진 콘텐츠 */}
                  <div ref={teamReportRef} className="space-y-6">
-                   <h1 style={{ display: 'none' }}>BL 아카데미 - 팀별 리포트</h1>
+                   <h1 style={{ display: 'none' }}>Bluemable Gamification - 팀별 리포트</h1>
 
                    {rankedTeams.map((team, idx) => {
                      const feedback = teamFeedbacks.find(f => f.teamName === team.name);
@@ -835,7 +835,7 @@ const ReportView: React.FC<ReportViewProps> = ({ teams, onClose }) => {
 
                  {/* 프린트용 콘텐츠 */}
                  <div ref={overallReportRef} className="space-y-6">
-                   <h1 className="text-2xl font-bold text-blue-900 border-b-2 border-blue-900 pb-2">BL 아카데미 - 리더십 종합 리포트</h1>
+                   <h1 className="text-2xl font-bold text-blue-900 border-b-2 border-blue-900 pb-2">Bluemable Gamification - 리더십 종합 리포트</h1>
 
                    {/* 종합 요약 - 3가지 */}
                    <div className="bg-white p-4 rounded-lg border-2 border-gray-300">
