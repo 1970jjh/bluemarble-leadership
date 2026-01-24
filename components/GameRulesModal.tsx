@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Dice5, MessageSquare, Trophy, Users, Target, Zap, Star, RefreshCw } from 'lucide-react';
+import { X, Dice5, MessageSquare, Trophy, Users, Target, Zap, Star, RefreshCw, Eye, Sparkles, Home, Coins } from 'lucide-react';
 import { GameVersion } from '../types';
 
 interface GameRulesModalProps {
@@ -16,13 +16,10 @@ const GameRulesModal: React.FC<GameRulesModalProps> = ({
   if (!visible) return null;
 
   // 커스텀 모드 제목
-  const getModeTitle = () => '커스텀 시뮬레이션';
+  const getModeTitle = () => 'Bluemable Gamification';
 
   // 커스텀 모드 설명
-  const getModeDescription = () => '관리자가 업로드한 커스텀 상황 카드로 진행되는 맞춤형 시뮬레이션입니다. 31개의 상황 카드와 특수 효과를 가진 칸들이 있습니다.';
-
-  // 커스텀 모드 역량
-  const getModeCompetencies = () => ['커스텀 상황 카드'];
+  const getModeDescription = () => '모든 팀이 동시에 상황에 응답하고, AI가 비교 분석하여 순위를 매기는 경쟁형 교육 시뮬레이션입니다. 31개의 상황 카드와 영토 시스템으로 전략적인 게임을 즐기세요.';
 
   return (
     <div className="fixed inset-0 bg-black/80 z-[200] flex items-center justify-center p-4 backdrop-blur-sm">
@@ -53,16 +50,6 @@ const GameRulesModal: React.FC<GameRulesModalProps> = ({
             <p className="text-gray-700 leading-relaxed bg-blue-50 p-4 rounded-lg border-2 border-blue-200">
               {getModeDescription()}
             </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {getModeCompetencies().slice(0, 6).map((comp, idx) => (
-                <span key={idx} className="bg-gray-100 text-gray-700 px-2 py-1 text-sm rounded-lg font-medium">
-                  {comp}
-                </span>
-              ))}
-              {getModeCompetencies().length > 6 && (
-                <span className="text-gray-500 text-sm py-1">+{getModeCompetencies().length - 6}개 역량</span>
-              )}
-            </div>
           </section>
 
           {/* 게임 진행 순서 */}
@@ -76,10 +63,9 @@ const GameRulesModal: React.FC<GameRulesModalProps> = ({
                 <div className="flex items-start gap-3">
                   <div className="bg-yellow-400 text-black w-8 h-8 flex items-center justify-center rounded-full font-black shrink-0">1</div>
                   <div>
-                    <div className="font-bold text-gray-800">주사위 굴리기 🎲</div>
+                    <div className="font-bold text-gray-800">시작 팀 선택 & 주사위 굴리기 🎲</div>
                     <p className="text-sm text-gray-600 mt-1">
-                      자신의 턴이 되면 <strong>ROLLER</strong>로 지정된 팀원이 주사위를 굴립니다.
-                      <br />팀원들이 돌아가며 ROLLER가 됩니다.
+                      관리자가 시작 팀을 선택합니다. 해당 팀이 주사위를 굴려 칸을 이동합니다.
                     </p>
                   </div>
                 </div>
@@ -89,10 +75,10 @@ const GameRulesModal: React.FC<GameRulesModalProps> = ({
                 <div className="flex items-start gap-3">
                   <div className="bg-blue-500 text-white w-8 h-8 flex items-center justify-center rounded-full font-black shrink-0">2</div>
                   <div>
-                    <div className="font-bold text-gray-800">상황 카드 확인 📋</div>
+                    <div className="font-bold text-gray-800">전체 팀 동시 응답 📋</div>
                     <p className="text-sm text-gray-600 mt-1">
-                      도착한 칸에 해당하는 상황 카드가 나타납니다.
-                      <br />상황을 팀원들과 함께 읽고 토의하세요.
+                      상황 카드가 공개되면 <strong className="text-blue-700">모든 팀이 동시에</strong> 자신의 답변을 작성합니다.
+                      <br />선택지를 고르고 이유를 상세히 작성하세요.
                     </p>
                   </div>
                 </div>
@@ -102,10 +88,10 @@ const GameRulesModal: React.FC<GameRulesModalProps> = ({
                 <div className="flex items-start gap-3">
                   <div className="bg-purple-500 text-white w-8 h-8 flex items-center justify-center rounded-full font-black shrink-0">3</div>
                   <div>
-                    <div className="font-bold text-gray-800">선택 & 이유 작성 ✍️</div>
+                    <div className="font-bold text-gray-800">공개 & AI 비교 분석 ✨</div>
                     <p className="text-sm text-gray-600 mt-1">
-                      제시된 선택지 중 하나를 고르고, <strong>선택 이유를 상세히 작성</strong>합니다.
-                      <br />⚠️ <span className="text-red-600 font-bold">성의 있고 구체적인 답변</span>이 AI 평가에서 높은 점수를 받습니다!
+                      관리자가 <span className="bg-yellow-200 px-1 font-bold">공개</span> 버튼을 누르면 모든 응답이 공개됩니다.
+                      <br /><span className="bg-purple-200 px-1 font-bold">AI 분석</span> 버튼으로 모든 팀의 응답을 비교 분석합니다.
                     </p>
                   </div>
                 </div>
@@ -115,12 +101,74 @@ const GameRulesModal: React.FC<GameRulesModalProps> = ({
                 <div className="flex items-start gap-3">
                   <div className="bg-green-500 text-white w-8 h-8 flex items-center justify-center rounded-full font-black shrink-0">4</div>
                   <div>
-                    <div className="font-bold text-gray-800">AI 평가 & 점수 반영 🤖</div>
+                    <div className="font-bold text-gray-800">순위 & 점수 부여 🏆</div>
                     <p className="text-sm text-gray-600 mt-1">
-                      AI가 팀의 응답을 분석하여 자원(시간), 에너지, 신뢰, 역량, 통찰력 점수를 평가합니다.
-                      <br />실제 자원과 에너지 소모를 반영하여 현실적인 피드백을 제공합니다.
+                      AI가 팀별 응답을 평가하여 순위를 매기고, 순위에 따른 점수가 부여됩니다.
+                      <br /><strong className="text-green-700">1위: 100점</strong>, 순위별 점수 차감
                     </p>
                   </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* 순위별 배점 */}
+          <section>
+            <h3 className="text-lg font-black text-gray-800 mb-3 flex items-center gap-2">
+              <Trophy className="text-yellow-500" size={20} />
+              순위별 배점 시스템
+            </h3>
+            <div className="bg-gradient-to-r from-yellow-50 to-amber-50 p-4 rounded-lg border-2 border-yellow-400">
+              <p className="text-gray-700 mb-3">
+                팀 수에 따라 꼴등 배점이 달라집니다:
+              </p>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div className="bg-white p-2 rounded border">
+                  <strong>2~4팀</strong>: 1위 100점 → 꼴등 50점
+                </div>
+                <div className="bg-white p-2 rounded border">
+                  <strong>5~6팀</strong>: 1위 100점 → 꼴등 40점
+                </div>
+                <div className="bg-white p-2 rounded border">
+                  <strong>7~9팀</strong>: 1위 100점 → 꼴등 20점
+                </div>
+                <div className="bg-white p-2 rounded border">
+                  <strong>10~12팀</strong>: 1위 100점 → 꼴등 10점
+                </div>
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
+                * 점수 = 100 - ((순위 - 1) × 간격)
+              </p>
+            </div>
+          </section>
+
+          {/* 영토 시스템 */}
+          <section>
+            <h3 className="text-lg font-black text-gray-800 mb-3 flex items-center gap-2">
+              <Home className="text-indigo-600" size={20} />
+              영토 소유권 시스템
+            </h3>
+            <div className="bg-indigo-50 p-4 rounded-lg border-2 border-indigo-300">
+              <div className="space-y-3">
+                <div>
+                  <div className="font-bold text-indigo-800">🏠 영토 획득</div>
+                  <p className="text-sm text-gray-600 mt-1">
+                    각 라운드에서 <strong>1위 팀</strong>이 해당 칸의 영토 소유권을 획득합니다.
+                    <br />영토는 소유 팀의 색상으로 표시됩니다.
+                  </p>
+                </div>
+                <div>
+                  <div className="font-bold text-indigo-800">💰 통행료 시스템</div>
+                  <p className="text-sm text-gray-600 mt-1">
+                    다른 팀이 소유한 칸에 도착하면 <strong className="text-red-600">15포인트</strong>를 통행료로 지불합니다.
+                    <br />통행료는 영토 소유자에게 지급됩니다.
+                  </p>
+                </div>
+                <div>
+                  <div className="font-bold text-indigo-800">🎲 재굴림 기회</div>
+                  <p className="text-sm text-gray-600 mt-1">
+                    다른 팀 영토에 도착한 팀은 통행료 지불 후 <strong>주사위를 다시 굴릴 수 있습니다.</strong>
+                  </p>
                 </div>
               </div>
             </div>
@@ -137,58 +185,8 @@ const GameRulesModal: React.FC<GameRulesModalProps> = ({
                 주사위 두 개가 <strong className="text-yellow-700">같은 숫자</strong>가 나오면 <span className="bg-yellow-400 text-black px-2 py-0.5 rounded font-bold">DOUBLE CHANCE!</span>
               </p>
               <p className="text-sm text-gray-600 mt-2">
-                🎲 AI 평가 점수가 <strong className="text-yellow-700">2배</strong>로 적용됩니다! (양수/음수 모두)
+                🎲 해당 라운드에서 얻는 점수가 <strong className="text-yellow-700">2배</strong>로 적용됩니다!
               </p>
-            </div>
-          </section>
-
-          {/* 특수 칸 효과 (커스텀 모드) */}
-          <section>
-            <h3 className="text-lg font-black text-gray-800 mb-3 flex items-center gap-2">
-              <Zap className="text-orange-600" size={20} />
-              특수 칸
-            </h3>
-            <div className="space-y-3">
-              <div className="bg-blue-50 p-4 rounded-lg border-2 border-blue-400">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="font-bold text-blue-700">🎲 2배 찬스</span>
-                </div>
-                <p className="text-sm text-gray-600">
-                  해당 팀이 얻는 AI 평가 점수가 <strong>2배</strong>로 적용됩니다.
-                </p>
-              </div>
-              <div className="bg-purple-50 p-4 rounded-lg border-2 border-purple-400">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="font-bold text-purple-700">🚀 3배 찬스</span>
-                </div>
-                <p className="text-sm text-gray-600">
-                  해당 팀이 얻는 AI 평가 점수가 <strong>3배</strong>로 적용됩니다.
-                </p>
-              </div>
-              <div className="bg-green-50 p-4 rounded-lg border-2 border-green-400">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="font-bold text-green-700">🤝 나눔카드</span>
-                </div>
-                <p className="text-sm text-gray-600">
-                  해당 팀이 얻은 점수가 <strong>모든 팀에게 동일하게</strong> 적용됩니다.
-                </p>
-              </div>
-              <div className="bg-red-50 p-4 rounded-lg border-2 border-red-400">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="font-bold text-red-700">🔥 번아웃존</span>
-                </div>
-                <p className="text-sm text-gray-600">
-                  해당 칸에 도착하면 5개 영역에서 <strong>각각 -10 POINT</strong>를 잃고 시작합니다.
-                </p>
-              </div>
-              <div className="bg-amber-50 p-4 rounded-lg border-2 border-amber-400">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="font-bold text-amber-700">📈 성장펀드</span>
-                </div>
-                <p className="text-sm text-gray-600">
-                  해당 칸에 도착하면 5개 영역에서 <strong>각각 +10 POINT</strong>를 받고 시작합니다.
-                </p>
-              </div>
             </div>
           </section>
 
@@ -212,38 +210,27 @@ const GameRulesModal: React.FC<GameRulesModalProps> = ({
             </div>
           </section>
 
-          {/* 다른 팀 턴일 때 */}
-          <section>
-            <h3 className="text-lg font-black text-gray-800 mb-3 flex items-center gap-2">
-              <Users className="text-indigo-600" size={20} />
-              다른 팀 턴일 때
-            </h3>
-            <div className="bg-indigo-50 p-4 rounded-lg border-2 border-indigo-300">
-              <p className="text-gray-700">
-                다른 팀의 턴에도 <strong>관람자 투표</strong>에 참여할 수 있습니다!
-              </p>
-              <p className="text-sm text-gray-600 mt-2">
-                👁️ 상황 카드를 보고 나라면 어떤 선택을 할지 투표해보세요.
-                <br />관람자 투표는 점수에 반영되지 않습니다.
-              </p>
-            </div>
-          </section>
-
           {/* AI 평가 기준 */}
           <section>
             <h3 className="text-lg font-black text-gray-800 mb-3 flex items-center gap-2">
-              <MessageSquare className="text-teal-600" size={20} />
-              AI 평가 기준
+              <Sparkles className="text-purple-600" size={20} />
+              AI 비교 분석 기준
             </h3>
-            <div className="bg-teal-50 p-4 rounded-lg border-2 border-teal-300">
-              <p className="text-gray-700 mb-3">AI는 다음 기준으로 응답을 평가합니다:</p>
+            <div className="bg-purple-50 p-4 rounded-lg border-2 border-purple-300">
+              <p className="text-gray-700 mb-3">AI는 모든 팀의 응답을 비교하여 다음 기준으로 순위를 매깁니다:</p>
               <ul className="text-sm text-gray-600 space-y-2">
-                <li>✅ <strong>성실성</strong>: 구체적이고 상세한 이유 작성</li>
+                <li>✅ <strong>구체성</strong>: 상세하고 명확한 이유 설명</li>
                 <li>✅ <strong>논리성</strong>: 상황에 맞는 합리적 판단</li>
+                <li>✅ <strong>창의성</strong>: 다양한 관점과 해결책 제시</li>
                 <li>✅ <strong>현실성</strong>: 실제 업무 환경을 고려한 답변</li>
-                <li>❌ <strong>성의 없는 답변</strong>: 짧고 모호한 답변은 감점!</li>
-                <li>⚠️ <strong>자원/에너지 소모</strong>: 현실적인 자원 소모 반영</li>
+                <li>❌ <strong>성의 없는 답변</strong>: 짧고 모호한 답변은 하위 순위!</li>
               </ul>
+              <div className="mt-3 bg-white p-3 rounded border-2 border-purple-200">
+                <div className="text-sm font-bold text-purple-700">💡 이럴 땐, 이렇게...</div>
+                <p className="text-xs text-gray-600 mt-1">
+                  AI 분석 결과에는 상황에 대한 모범적인 접근 방법 가이드도 제공됩니다.
+                </p>
+              </div>
             </div>
           </section>
 
@@ -259,7 +246,7 @@ const GameRulesModal: React.FC<GameRulesModalProps> = ({
               </p>
               <div className="text-sm text-gray-600">
                 <p>📊 총 점수 = 자원(시간) + 에너지 + 신뢰 + 역량 + 통찰력</p>
-                <p className="mt-2">💡 팁: 모든 자원의 균형 있는 관리가 중요합니다!</p>
+                <p className="mt-2">💡 팁: 매 라운드 높은 순위를 유지하고, 영토를 확보하여 통행료 수입을 올리세요!</p>
               </div>
             </div>
           </section>

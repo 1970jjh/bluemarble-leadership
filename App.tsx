@@ -70,6 +70,7 @@ const App: React.FC = () => {
   const [adminViewMode, setAdminViewMode] = useState<AdminViewMode>('dashboard');
   const [monitoringTeamId, setMonitoringTeamId] = useState<string | null>(null);
   const [currentTurnIndex, setCurrentTurnIndex] = useState(0);
+  const [startingTeamIndex, setStartingTeamIndex] = useState(0);  // 시작 팀 인덱스 (관리자가 선택)
   const [gamePhase, setGamePhase] = useState<GamePhase>(GamePhase.WaitingToStart);
   const [diceValue, setDiceValue] = useState<[number, number]>([1, 1]);
   const [isRolling, setIsRolling] = useState(false);
@@ -578,9 +579,13 @@ const App: React.FC = () => {
 
   // 게임 시작 핸들러
   const handleStartGame = async () => {
+    // 시작 팀 인덱스로 현재 턴 설정
+    setCurrentTurnIndex(startingTeamIndex);
     setIsGameStarted(true);
     setGamePhase(GamePhase.Idle);
-    addLog('🎮 게임이 시작되었습니다!');
+
+    const startingTeam = teams[startingTeamIndex];
+    addLog(`🎮 게임이 시작되었습니다! ${startingTeam?.name || '1조'}부터 시작합니다.`);
     soundEffects.playGameStart();
 
     // Firebase에 게임 상태 저장
@@ -590,7 +595,7 @@ const App: React.FC = () => {
         await firestoreService.updateGameState(currentSessionId, {
           sessionId: currentSessionId,
           phase: GamePhase.Idle,
-          currentTeamIndex: 0,
+          currentTeamIndex: startingTeamIndex,
           currentTurn: 0,
           diceValue: [1, 1],
           currentCard: null,
@@ -1134,97 +1139,7 @@ const App: React.FC = () => {
     if (sessionCards.length > 0) {
       const customCard = sessionCards.find((c: any) => c.boardIndex === square.index);
       selectedCard = customCard || sessionCards[0];
-      console.log(`[Card Selection] Custom Mode - Square: ${square.index}, Type: ${square.type}, Found: ${customCard?.title || 'fallback'}`);
-
-      // 특수 칸 효과 적용
-      // 2배 찬스: 인덱스 2, 12, 31
-      if ([2, 12, 31].includes(square.index)) {
-        setCustomScoreMultiplier(2);
-        addLog(`🎲 [${team.name}] 2배 찬스! AI 평가 점수가 2배로 적용됩니다.`);
-      }
-      // 나눔카드: 인덱스 7, 19
-      else if ([7, 19].includes(square.index)) {
-        setIsSharingMode(true);
-        addLog(`🤝 [${team.name}] 나눔카드! 이 팀이 얻는 점수가 모든 팀에게 동일하게 적용됩니다.`);
-      }
-      // 3배 찬스: 인덱스 16, 24
-      else if ([16, 24].includes(square.index)) {
-        setCustomScoreMultiplier(3);
-        addLog(`🚀 [${team.name}] 3배 찬스! AI 평가 점수가 3배로 적용됩니다.`);
-      }
-      // 번아웃존: 인덱스 8 - 5개 영역 각 -10점 즉시 적용
-      else if (square.index === 8) {
-        const burnoutPenalty = { capital: -10, energy: -10, trust: -10, competency: -10, insight: -10 };
-        updateTeamResources(team.id, burnoutPenalty);
-        addLog(`🔥 [${team.name}] 번아웃존! 5개 영역에서 각각 -10 POINT 감점됩니다.`);
-      }
-      // 성장펀드: 인덱스 27 - 5개 영역 각 +10점 즉시 적용
-      else if (square.index === 27) {
-        const growthBonus = { capital: 10, energy: 10, trust: 10, competency: 10, insight: 10 };
-        updateTeamResources(team.id, growthBonus);
-        addLog(`📈 [${team.name}] 성장펀드! 5개 영역에서 각각 +10 POINT 보너스를 받습니다.`);
-      }
-    }
-    else if (square.type === SquareType.GoldenKey) {
-      // 찬스카드 타입 확인 (1/3/5 → lottery, 2/4 → risk)
-      const chanceCardType = getChanceCardType(square.index);
-      const chanceCardOrder = CHANCE_CARD_SQUARES.indexOf(square.index) + 1; // 1-based
-
-      if (chanceCardType === 'lottery') {
-        // 복권 보너스 팝업 표시
-        setLotteryBonusInfo({ teamName: team.name, chanceCardNumber: chanceCardOrder });
-        setShowLotteryBonus(true);
-        addLog(`🎫 [${team.name}] ${chanceCardOrder}번째 찬스카드 - 복권 보너스 획득!`);
-      } else if (chanceCardType === 'risk') {
-        // 리스크 카드 모드 설정 (AI 평가 시 모든 점수 마이너스)
-        setRiskCardInfo({ teamName: team.name, chanceCardNumber: chanceCardOrder });
-        setShowRiskCard(true);
-        setIsRiskCardMode(true);
-        addLog(`⚠️ [${team.name}] ${chanceCardOrder}번째 찬스카드 - 리스크 카드!`);
-      }
-
-      // 우연한 기회 - Event 카드 중 랜덤
-      // 세션에 customCards가 있으면 사용 (모든 모드에서 세션별 카드 수정 반영)
-      const eventCardPool = sessionCards.length > 0
-        ? sessionCards.filter((c: any) => c.type === 'Event')
-        : EVENT_CARDS.filter(c => c.type === 'Event');
-      selectedCard = eventCardPool.length > 0
-        ? eventCardPool[Math.floor(Math.random() * eventCardPool.length)]
-        : EVENT_CARDS[0];
-    }
-    else if (square.type === SquareType.Fund) {
-      // 성장 기회 - Growth 카드
-      const growthCardPool = sessionCards.length > 0
-        ? sessionCards.filter((c: any) => c.type === 'Growth')
-        : EVENT_CARDS.filter(c => c.type === 'Growth');
-      selectedCard = growthCardPool[0] || EVENT_CARDS.find(c => c.type === 'Growth') || EVENT_CARDS[0];
-    }
-    else if (square.type === SquareType.Space) {
-      // 도전 과제 - Challenge 카드
-      const challengeCardPool = sessionCards.length > 0
-        ? sessionCards.filter((c: any) => c.type === 'Challenge')
-        : EVENT_CARDS.filter(c => c.type === 'Challenge');
-      selectedCard = challengeCardPool[0] || EVENT_CARDS.find(c => c.type === 'Challenge') || EVENT_CARDS[0];
-    }
-    else if (square.type === SquareType.WorldTour) {
-      // 특별 이벤트 - Event 카드 중 랜덤
-      const worldTourCardPool = sessionCards.length > 0
-        ? sessionCards.filter((c: any) => c.type === 'Event')
-        : EVENT_CARDS.filter(c => c.type === 'Event');
-      selectedCard = worldTourCardPool.length > 0
-        ? worldTourCardPool[Math.floor(Math.random() * worldTourCardPool.length)]
-        : EVENT_CARDS[0];
-    }
-    else if (square.type === SquareType.Island) {
-      // 번아웃 - Burnout 카드
-      const burnoutCardPool = sessionCards.length > 0
-        ? sessionCards.filter((c: any) => c.type === 'Burnout')
-        : EVENT_CARDS.filter(c => c.type === 'Burnout');
-      selectedCard = burnoutCardPool[0] || EVENT_CARDS.find(c => c.type === 'Burnout') || EVENT_CARDS[0];
-    }
-    else {
-      nextTurn();
-      return;
+      console.log(`[Card Selection] City Square - Index: ${square.index}, Found: ${customCard?.title || 'fallback'}`);
     }
 
     if (selectedCard) {
@@ -1511,14 +1426,9 @@ const App: React.FC = () => {
     // 도착 칸 정보 저장 (카드 미리보기용)
     const landingSquare = BOARD_SQUARES.find(s => s.index === finalPos);
 
-    // 미리보기를 표시할 특수 칸 타입들 (출발 칸 제외)
+    // 미리보기를 표시할 칸 타입 (출발 칸 제외, 모든 City 칸에서 카드 표시)
     const previewSquareTypes = [
-      SquareType.City,       // 역량카드
-      SquareType.GoldenKey,  // 찬스 카드
-      SquareType.Island,     // 번아웃 존
-      SquareType.WorldTour,  // 글로벌 기회
-      SquareType.Space,      // 도전 과제
-      SquareType.Fund,       // 성장 펀드
+      SquareType.City,       // 모든 카드 칸
     ];
 
     if (landingSquare && previewSquareTypes.includes(landingSquare.type)) {
@@ -2030,39 +1940,13 @@ const App: React.FC = () => {
 
     switch (square.type) {
       case SquareType.City:
-        // 커스텀 모드: boardIndex로 카드 찾기
+        // boardIndex로 카드 찾기 (모든 City 칸에서 사용)
         if (sessionCards.length > 0) {
           cardToPreview = sessionCards.find((c: any) => c.boardIndex === index);
         }
         break;
-      case SquareType.GoldenKey:
-        // 우연한 기회 - Event 카드
-        cardToPreview = findCardByType('Event');
-        break;
-      case SquareType.Fund:
-        // 성장 펀드 - Growth 카드
-        cardToPreview = findCardByType('Growth');
-        if (!cardToPreview) {
-          cardToPreview = findCardByType('Event');  // fallback
-        }
-        break;
-      case SquareType.Space:
-        // 도전 과제 - Challenge 카드
-        cardToPreview = findCardByType('Challenge');
-        break;
-      case SquareType.WorldTour:
-        // 특별 이벤트 - Special 또는 Event 카드
-        cardToPreview = findCardByType('Special');
-        if (!cardToPreview) {
-          cardToPreview = findCardByType('Event');
-        }
-        break;
-      case SquareType.Island:
-        // 번아웃 - Burnout 카드
-        cardToPreview = findCardByType('Burnout');
-        break;
       case SquareType.Start:
-        // 출발 칸 - 특별한 카드 없음, 안내 메시지
+        // 출발 칸 - 특별한 카드 없음
         break;
     }
 
@@ -2558,6 +2442,7 @@ const App: React.FC = () => {
              {currentTeam && (
                <ControlPanel
                   currentTeam={currentTeam}
+                  teams={teams}
                   phase={gamePhase}
                   diceValue={diceValue}
                   rolling={isRolling}
@@ -2571,6 +2456,8 @@ const App: React.FC = () => {
                   onStartGame={handleStartGame}
                   onPauseGame={handlePauseGame}
                   onResumeGame={handleResumeGame}
+                  startingTeamIndex={startingTeamIndex}
+                  onStartingTeamChange={setStartingTeamIndex}
                 />
              )}
           </div>

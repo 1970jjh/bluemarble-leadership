@@ -5,12 +5,21 @@ import {
 } from '../constants';
 import { BoardSquare, SquareType, Team, TeamColor, GameVersion, GameCard } from '../types';
 
+// 영토 소유권 정보
+interface TerritoryInfo {
+  ownerTeamId: string;
+  ownerTeamName: string;
+  ownerTeamColor: string;
+  acquiredAt: number;
+}
+
 interface GameBoardProps {
   teams: Team[];
   onSquareClick: (index: number) => void;
   gameMode: string;
   customBoardImage?: string;  // 커스텀 모드용 배경 이미지 URL
   customCards?: GameCard[];   // 커스텀 카드 (보드 이름 표시용)
+  territories?: { [squareIndex: string]: TerritoryInfo };  // 영토 소유권 정보
 }
 
 // 팀별 캐릭터 이미지 (8개)
@@ -25,7 +34,28 @@ const CHARACTER_IMAGES = [
   'https://i.ibb.co/kgqKfW7Q/8.png',  // 8조
 ];
 
-const GameBoard: React.FC<GameBoardProps> = ({ teams, onSquareClick, gameMode, customBoardImage, customCards }) => {
+const GameBoard: React.FC<GameBoardProps> = ({ teams, onSquareClick, gameMode, customBoardImage, customCards, territories = {} }) => {
+  // 팀 색상을 CSS 색상으로 변환
+  const getTeamColorCSS = (color: string): string => {
+    const colorMap: { [key: string]: string } = {
+      'Red': '#ef4444',
+      'Blue': '#3b82f6',
+      'Green': '#22c55e',
+      'Yellow': '#eab308',
+      'Purple': '#a855f7',
+      'Orange': '#f97316',
+      'Pink': '#ec4899',
+      'Teal': '#14b8a6',
+      'Cyan': '#06b6d4',
+      'Lime': '#84cc16',
+      'Indigo': '#6366f1',
+      'Amber': '#f59e0b',
+      'Emerald': '#10b981',
+      'Slate': '#64748b',
+      'Rose': '#f43f5e'
+    };
+    return colorMap[color] || '#6b7280';
+  };
   // 팀 번호에 해당하는 캐릭터 이미지 가져오기 (9조 이상은 순환)
   const getCharacterImage = (teamNumber: number): string => {
     const index = (teamNumber - 1) % CHARACTER_IMAGES.length;
@@ -98,30 +128,44 @@ const GameBoard: React.FC<GameBoardProps> = ({ teams, onSquareClick, gameMode, c
           </div>
 
         {/* Board Squares */}
-        {BOARD_SQUARES.map((square) => (
+        {BOARD_SQUARES.map((square) => {
+          // 영토 소유권 확인
+          const territory = territories[square.index.toString()];
+          const hasOwner = !!territory;
+          const ownerColor = territory ? getTeamColorCSS(territory.ownerTeamColor) : undefined;
+
+          return (
           <div
             key={square.index}
-            style={getGridStyle(square.index)}
+            style={{
+              ...getGridStyle(square.index),
+              ...(hasOwner ? { borderColor: ownerColor, borderWidth: '4px' } : {})
+            }}
             onClick={() => onSquareClick(square.index)}
-            className={`relative border-[3px] border-black flex flex-col shadow-[2px_2px_0_0_rgba(0,0,0,0.3)] transition-all hover:scale-105 hover:z-50 hover:shadow-[8px_8px_0_0_rgba(0,0,0,1)] cursor-pointer bg-white group overflow-hidden`}
+            className={`relative border-[3px] ${hasOwner ? '' : 'border-black'} flex flex-col shadow-[2px_2px_0_0_rgba(0,0,0,0.3)] transition-all hover:scale-105 hover:z-50 hover:shadow-[8px_8px_0_0_rgba(0,0,0,1)] cursor-pointer bg-white group overflow-hidden`}
           >
-            {/* Special Square Styling (Corners & Event) */}
-            {square.type !== SquareType.City ? (
-              <div className={`w-full h-full flex flex-col items-center justify-center p-1 text-center font-black leading-tight
-                ${square.type === SquareType.Start ? 'bg-green-200' : 
-                  square.type === SquareType.Island ? 'bg-gray-200' :
-                  square.type === SquareType.Space ? 'bg-purple-200' :
-                  square.type === SquareType.WorldTour ? 'bg-blue-200' :
-                  'bg-yellow-300' // GoldenKey
-                }
-              `}>
-                <span className="text-xs md:text-sm uppercase tracking-tighter mb-1">{square.type === SquareType.Start ? 'START' : square.type}</span>
+            {/* Square Styling */}
+            {square.type === SquareType.Start ? (
+              <div className="w-full h-full flex flex-col items-center justify-center p-1 text-center font-black leading-tight bg-green-200">
+                <span className="text-xs md:text-sm uppercase tracking-tighter mb-1">START</span>
                 <span className="text-sm md:text-lg">{getSquareDisplayName(square)}</span>
               </div>
             ) : (
               /* City/Competency Card Styling - 커스텀 모드 */
               <>
-                <div className="h-[20%] w-full border-b-2 border-black bg-gray-800"></div>
+                <div
+                  className="h-[20%] w-full border-b-2 border-black"
+                  style={{ backgroundColor: hasOwner ? ownerColor : '#1f2937' }}
+                >
+                  {/* 영토 소유자 표시 */}
+                  {hasOwner && (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <span className="text-[8px] md:text-[10px] text-white font-bold truncate px-1">
+                        🏠 {territory?.ownerTeamName}
+                      </span>
+                    </div>
+                  )}
+                </div>
                 <div className="flex-1 flex flex-col items-center justify-center p-1 text-center bg-[#fafafa]">
                   <span className="text-xs md:text-sm font-black text-gray-900 leading-tight break-keep">
                     {getSquareDisplayName(square)}
@@ -164,7 +208,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ teams, onSquareClick, gameMode, c
               })}
             </div>
           </div>
-        ))}
+        );
+        })}
         </div>
       </div>
 

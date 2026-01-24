@@ -57,41 +57,31 @@ const CompetencyCardPreview: React.FC<CompetencyCardPreviewProps> = ({
     if (!square) return <Sparkles size={48} />;
 
     switch (square.type) {
-      case SquareType.GoldenKey: return <Zap size={48} />;
-      case SquareType.Island: return <Flame size={48} />;
-      case SquareType.WorldTour: return <Globe size={48} />;
-      case SquareType.Space: return <Rocket size={48} />;
-      case SquareType.Fund: return <TrendingUp size={48} />;
+      case SquareType.Start: return <Sparkles size={48} />;
+      case SquareType.City: return <Sparkles size={48} />;
       default: return <Sparkles size={48} />;
     }
   };
 
   // 칸 타입에 따른 색상 반환
   const getSquareTypeColor = () => {
-    if (!square) return 'from-purple-600 to-purple-900';
+    if (!square) return 'from-gray-600 to-gray-900';
 
     switch (square.type) {
-      case SquareType.GoldenKey: return 'from-yellow-500 to-yellow-700';
-      case SquareType.Island: return 'from-red-600 to-red-900';
-      case SquareType.WorldTour: return 'from-cyan-500 to-cyan-700';
-      case SquareType.Space: return 'from-indigo-600 to-indigo-900';
-      case SquareType.Fund: return 'from-emerald-500 to-emerald-700';
-      default: return 'from-purple-600 to-purple-900';
+      case SquareType.Start: return 'from-purple-600 to-purple-900';
+      case SquareType.City: return 'from-gray-600 to-gray-900';
+      default: return 'from-gray-600 to-gray-900';
     }
   };
 
   // 칸 타입에 따른 라벨 반환
   const getSquareTypeLabel = () => {
-    if (!square) return 'SPECIAL';
+    if (!square) return 'CARD';
 
     switch (square.type) {
+      case SquareType.Start: return 'START';
       case SquareType.City: return 'COMPETENCY';
-      case SquareType.GoldenKey: return 'CHANCE CARD';
-      case SquareType.Island: return 'BURNOUT ZONE';
-      case SquareType.WorldTour: return 'GLOBAL OPPORTUNITY';
-      case SquareType.Space: return 'CHALLENGE';
-      case SquareType.Fund: return 'GROWTH FUND';
-      default: return 'SPECIAL';
+      default: return 'CARD';
     }
   };
 

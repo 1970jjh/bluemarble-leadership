@@ -497,7 +497,7 @@ JSON만 응답하세요.`;
             <div className="flex items-center gap-3">
               <Settings className="w-8 h-8" />
               <div>
-                <h2 className="text-2xl font-bold">관리자 대시보드</h2>
+                <h2 className="text-2xl font-bold">Bluemable Gamification</h2>
                 <p className="text-indigo-200 text-sm">
                   커스텀 모드 카드 관리 (JSON 업로드)
                 </p>
