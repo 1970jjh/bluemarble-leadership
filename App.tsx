@@ -1638,12 +1638,12 @@ const App: React.FC = () => {
         return;
       }
 
-      // 다음 스텝 예약
-      setTimeout(moveOneStep, 1000);
+      // 다음 스텝 예약 (1.5초에 한 칸)
+      setTimeout(moveOneStep, 1500);
     };
 
     // 첫 스텝 시작
-    setTimeout(moveOneStep, 1000);
+    setTimeout(moveOneStep, 1500);
   };
 
   // 이동 완료 후 처리
@@ -1657,28 +1657,30 @@ const App: React.FC = () => {
     ];
 
     if (landingSquare && previewSquareTypes.includes(landingSquare.type)) {
-      // 카드 미리보기 표시
-      setPendingSquare(landingSquare);
-      setShowCompetencyPreview(true);
-
-      // 3초 후 자동으로 진행 (모바일에서 주사위 굴린 경우 대비)
+      // 도착 후 1초 대기 후 카드 미리보기 표시
       setTimeout(() => {
-        // 아직 미리보기가 표시 중이면 자동으로 진행
-        setShowCompetencyPreview(prev => {
-          if (prev) {
-            const updatedTeam = { ...teamToMove, position: finalPos };
-            handleLandOnSquare(updatedTeam, finalPos);
-            return false;
-          }
-          return prev;
-        });
-      }, 3000);
+        setPendingSquare(landingSquare);
+        setShowCompetencyPreview(true);
+
+        // 3초 후 자동으로 진행 (모바일에서 주사위 굴린 경우 대비)
+        setTimeout(() => {
+          // 아직 미리보기가 표시 중이면 자동으로 진행
+          setShowCompetencyPreview(prev => {
+            if (prev) {
+              const updatedTeam = { ...teamToMove, position: finalPos };
+              handleLandOnSquare(updatedTeam, finalPos);
+              return false;
+            }
+            return prev;
+          });
+        }, 3000);
+      }, 1000);
     } else {
-      // 출발 칸 등은 바로 handleLandOnSquare 호출
+      // 출발 칸 등은 1초 대기 후 handleLandOnSquare 호출
       setTimeout(() => {
         const updatedTeam = { ...teamToMove, position: finalPos };
         handleLandOnSquare(updatedTeam, finalPos);
-      }, 500);
+      }, 1000);
     }
   };
 
@@ -1783,10 +1785,11 @@ const App: React.FC = () => {
         return;
       }
 
-      setTimeout(moveOneStep, 1000);
+      // 다음 스텝 예약 (1.5초에 한 칸)
+      setTimeout(moveOneStep, 1500);
     };
 
-    setTimeout(moveOneStep, 1000);
+    setTimeout(moveOneStep, 1500);
   };
 
   // 역량카드 미리보기 완료 핸들러
