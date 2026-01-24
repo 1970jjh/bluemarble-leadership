@@ -1347,32 +1347,33 @@ const App: React.FC = () => {
         setPendingCardAfterAlert(selectedCard);
         setShowMultiplierAlert(true);
         addLog(`🎯 ${multiplier}배 찬스 칸에 도착!`);
+        // Firebase 업데이트는 알림 확인 후 handleMultiplierAlertComplete에서 수행
       } else {
         // 일반 칸이면 바로 카드 표시
         setActiveCard(selectedCard);
         setGamePhase(GamePhase.Decision);
         setShowCardModal(true);
-      }
 
-      // 즉시 Firebase에 게임 상태 저장 (팀원들이 카드를 볼 수 있도록)
-      const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
-      if (isFirebaseConfigured && currentSessionId) {
-        firestoreService.updateGameState(currentSessionId, {
-          sessionId: currentSessionId,
-          phase: GamePhase.Decision,
-          currentTeamIndex: currentTurnIndex,
-          currentTurn: 0,
-          diceValue: diceValue,
-          currentCard: selectedCard,
-          selectedChoice: null,
-          reasoning: '',
-          aiResult: null,
-          isSubmitted: false,
-          isAiProcessing: false,
-          spectatorVotes: {},  // 관람자 투표 초기화
-          gameLogs: gameLogsRef.current,
-          lastUpdated: Date.now()
-        }).catch(err => console.error('Firebase 상태 저장 실패:', err));
+        // 즉시 Firebase에 게임 상태 저장 (팀원들이 카드를 볼 수 있도록)
+        const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+        if (isFirebaseConfigured && currentSessionId) {
+          firestoreService.updateGameState(currentSessionId, {
+            sessionId: currentSessionId,
+            phase: GamePhase.Decision,
+            currentTeamIndex: currentTurnIndex,
+            currentTurn: 0,
+            diceValue: diceValue,
+            currentCard: selectedCard,
+            selectedChoice: null,
+            reasoning: '',
+            aiResult: null,
+            isSubmitted: false,
+            isAiProcessing: false,
+            spectatorVotes: {},  // 관람자 투표 초기화
+            gameLogs: gameLogsRef.current,
+            lastUpdated: Date.now()
+          }).catch(err => console.error('Firebase 상태 저장 실패:', err));
+        }
       }
     }
   };
