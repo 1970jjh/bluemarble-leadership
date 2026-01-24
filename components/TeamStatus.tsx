@@ -29,9 +29,9 @@ const TeamStatus: React.FC<TeamStatusProps> = ({ team, active, rank, totalTeams 
 
   return (
     <div className={`border-2 border-black bg-white transition-all duration-300 ${active ? 'shadow-hard translate-x-[-1px] translate-y-[-1px] ring-2 ring-yellow-400' : 'opacity-90'}`}>
-      <div className={`px-2 py-1 border-b-2 border-black ${getHeaderColor(team.color)}`}>
+      <div className={`px-3 py-2 border-b-2 border-black ${getHeaderColor(team.color)}`}>
         <div className="flex justify-between items-center">
-          <h3 className="font-black text-sm uppercase truncate">{team.name}</h3>
+          <h3 className="font-black text-2xl uppercase truncate">{team.name}</h3>
           <div className="flex items-center gap-1">
             {team.isBurnout && <span className="bg-black text-white text-[8px] px-1 py-0.5 font-bold">BURN</span>}
             {active && <span className="text-sm animate-bounce">▼</span>}
@@ -39,7 +39,7 @@ const TeamStatus: React.FC<TeamStatusProps> = ({ team, active, rank, totalTeams 
         </div>
         {/* 팀원 목록 표시 */}
         {team.members.length > 0 && (
-          <div className="text-[9px] opacity-80 truncate">
+          <div className="text-xs opacity-80 truncate mt-1">
             {team.members.map(m => m.name).join(', ')}
           </div>
         )}
@@ -50,7 +50,7 @@ const TeamStatus: React.FC<TeamStatusProps> = ({ team, active, rank, totalTeams 
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             {rank !== undefined && (
-              <span className={`text-2xl font-black ${
+              <span className={`text-3xl font-black ${
                 rank === 1 ? 'text-yellow-600' :
                 rank === 2 ? 'text-gray-500' :
                 rank === 3 ? 'text-orange-600' :
@@ -63,7 +63,7 @@ const TeamStatus: React.FC<TeamStatusProps> = ({ team, active, rank, totalTeams 
           <div className="text-right">
             <div className="text-3xl font-black text-blue-800">{teamScore}점</div>
             {totalTeams !== undefined && (
-              <div className="text-[10px] text-gray-500">/ {totalTeams}팀 중</div>
+              <div className="text-xs text-gray-500">/ {totalTeams}팀 중</div>
             )}
           </div>
         </div>
