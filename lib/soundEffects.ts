@@ -122,6 +122,31 @@ class SoundEffects {
     }
   }
 
+  // 축하 효과 (일반 축하)
+  playCelebration(): void {
+    try {
+      const ctx = this.getContext();
+      // 화려한 축하 팡파레
+      const notes = [523, 659, 784, 880, 1047]; // C5, E5, G5, A5, C6
+      notes.forEach((freq, i) => {
+        setTimeout(() => {
+          const oscillator = ctx.createOscillator();
+          const gainNode = ctx.createGain();
+          oscillator.connect(gainNode);
+          gainNode.connect(ctx.destination);
+          oscillator.frequency.value = freq;
+          oscillator.type = 'sine';
+          gainNode.gain.value = 0.15;
+          gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
+          oscillator.start();
+          oscillator.stop(ctx.currentTime + 0.35);
+        }, i * 120);
+      });
+    } catch (e) {
+      console.warn('Sound not supported');
+    }
+  }
+
   // 카드 등장
   playCardAppear(): void {
     try {
