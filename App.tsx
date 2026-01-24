@@ -37,6 +37,7 @@ import {
   SAMPLE_CARDS,
   BOARD_SIZE,
   INITIAL_RESOURCES,
+  INITIAL_SCORE,
   LAP_BONUS_PER_TEAM,
   DOUBLE_BONUS_POINTS,
   EVENT_CARDS,
@@ -527,6 +528,7 @@ const App: React.FC = () => {
         name: `${i + 1}팀`,
         color: colors[i % colors.length],
         position: 0,
+        score: INITIAL_SCORE,
         resources: { ...INITIAL_RESOURCES },
         isBurnout: false,
         burnoutCounter: 0,
@@ -993,6 +995,7 @@ const App: React.FC = () => {
     const resetTeams = currentSession.teams.map(team => ({
       ...team,
       position: 0,
+      score: INITIAL_SCORE,
       resources: { ...INITIAL_RESOURCES },
       isBurnout: false,
       burnoutCounter: 0,
@@ -1820,13 +1823,12 @@ ${teamResponsesList.map((resp, idx) => `
 
     const rankings = aiComparativeResult.rankings;
 
-    // 각 팀에 점수 적용
+    // 각 팀에 점수 적용 (단일 점수 체계)
     const updatedTeams = currentSession.teams.map(team => {
       const ranking = rankings.find(r => r.teamId === team.id);
       if (ranking) {
-        const newResources = { ...team.resources };
-        newResources.capital += ranking.score;
-        return { ...team, resources: newResources };
+        const currentScore = team.score ?? INITIAL_SCORE;
+        return { ...team, score: currentScore + ranking.score };
       }
       return team;
     });
@@ -2758,18 +2760,11 @@ ${teamResponsesList.map((resp, idx) => `
           <div className="lg:col-span-3 order-3 h-full min-h-0 overflow-y-auto">
             <div className="grid gap-2">
               {(() => {
-                // 팀별 총점 계산 및 순위 정렬
-                const teamsWithScores = teams.map(t => ({
-                  team: t,
-                  totalScore: t.resources.capital + t.resources.energy + t.resources.trust + t.resources.competency + t.resources.insight
-                }));
-                const sortedByScore = [...teamsWithScores].sort((a, b) => b.totalScore - a.totalScore);
-                const firstPlaceScore = sortedByScore[0]?.totalScore || 0;
+                // 팀별 점수 기준 순위 정렬
+                const sortedByScore = [...teams].sort((a, b) => (b.score ?? INITIAL_SCORE) - (a.score ?? INITIAL_SCORE));
 
                 return teams.map((team, idx) => {
-                  const teamScore = team.resources.capital + team.resources.energy + team.resources.trust + team.resources.competency + team.resources.insight;
-                  const rank = sortedByScore.findIndex(t => t.team.id === team.id) + 1;
-                  const gapFrom1st = firstPlaceScore - teamScore;
+                  const rank = sortedByScore.findIndex(t => t.id === team.id) + 1;
 
                   return (
                     <TeamStatus
@@ -2777,7 +2772,6 @@ ${teamResponsesList.map((resp, idx) => `
                       team={team}
                       active={idx === currentTurnIndex}
                       rank={rank}
-                      gapFrom1st={gapFrom1st}
                       totalTeams={teams.length}
                     />
                   );
@@ -2845,7 +2839,7 @@ ${teamResponsesList.map((resp, idx) => `
           isRiskCardMode={isRiskCardMode}
           // 동시 응답 시스템 props
           allTeamResponses={allTeamResponses}
-          allTeams={currentSession?.teams.map(t => ({ id: t.id, name: t.name })) || []}
+          allTeams={currentSession?.teams.map(t => ({ id: t.id, name: t.name, score: t.score ?? INITIAL_SCORE })) || []}
           isResponsesRevealed={isResponsesRevealed}
           aiComparativeResult={aiComparativeResult}
           isComparingTeams={isComparingTeams}

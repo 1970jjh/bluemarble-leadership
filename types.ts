@@ -67,7 +67,8 @@ export interface Team {
   name: string;
   color: TeamColor;
   position: number; // 0 to 31
-  resources: ResourceState;
+  score: number; // 단일 점수 (시작: 100점)
+  resources: ResourceState; // Legacy - 기존 호환용
   isBurnout: boolean;
   burnoutCounter: number;
   lapCount: number;

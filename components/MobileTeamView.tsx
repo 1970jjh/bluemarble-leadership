@@ -1,6 +1,6 @@
 import React from 'react';
 import { Team, GamePhase, GameCard, Choice } from '../types';
-import { Battery, Coins, Handshake, Lightbulb, TrendingUp, MapPin, Dice5, Save, CheckCircle, Eye, MessageSquare, LogOut, BookOpen } from 'lucide-react';
+import { MapPin, Dice5, Save, CheckCircle, Eye, MessageSquare, LogOut, BookOpen } from 'lucide-react';
 import { BOARD_SQUARES, getCharacterImage } from '../constants';
 
 interface MobileTeamViewProps {
@@ -86,24 +86,6 @@ const MobileTeamView: React.FC<MobileTeamViewProps> = ({
   const currentRollerName = team.members.length > 0
     ? team.members[team.currentMemberIndex]?.name || team.members[0]?.name || 'Leader'
     : 'Leader';
-
-  const StatBox = ({ icon: Icon, value, label, color, max }: any) => (
-    <div className="bg-white border-2 border-black p-3 shadow-hard-sm flex flex-col items-center justify-center relative overflow-hidden">
-      <Icon className={`mb-1 ${color}`} size={20} />
-      <span className={`text-xl font-black ${value < 0 ? 'text-red-600' : ''}`}>{value}</span>
-      <span className="text-[10px] uppercase font-bold text-gray-500">{label}</span>
-      {max && (
-        <div className="w-full h-1 bg-gray-200 mt-1 relative">
-          <div 
-             className={`h-full bg-black transition-all duration-300`} 
-             style={{ width: `${Math.min(100, Math.max(0, (value/max)*100))}%` }}
-          ></div>
-        </div>
-      )}
-      {value > max && <div className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full animate-ping"></div>}
-      {value < 0 && <div className="absolute bottom-0 right-0 text-[8px] text-red-500 font-bold px-1">NEG</div>}
-    </div>
-  );
 
   return (
     <div className="min-h-screen bg-gray-100 p-4 pb-8 flex flex-col font-sans max-w-md mx-auto border-x-4 border-black bg-white">
@@ -381,13 +363,10 @@ const MobileTeamView: React.FC<MobileTeamViewProps> = ({
         </div>
       )}
 
-      {/* Resources Grid */}
-      <div className="grid grid-cols-3 gap-3">
-        <StatBox icon={Coins} value={team.resources.capital} label="Resource" color="text-yellow-600" max={100} />
-        <StatBox icon={Battery} value={team.resources.energy} label="Energy" color="text-orange-500" max={100} />
-        <StatBox icon={Handshake} value={team.resources.trust} label="Trust" color="text-blue-500" max={100} />
-        <StatBox icon={TrendingUp} value={team.resources.competency} label="Skill" color="text-green-600" max={100} />
-        <StatBox icon={Lightbulb} value={team.resources.insight} label="Insight" color="text-purple-600" max={100} />
+      {/* Team Score */}
+      <div className="bg-gradient-to-br from-blue-50 to-indigo-100 border-4 border-blue-500 p-6 shadow-hard text-center">
+        <div className="text-sm font-bold uppercase text-blue-600 mb-2">우리 팀 점수</div>
+        <div className="text-5xl font-black text-blue-800">{team.score ?? 100}점</div>
       </div>
     </div>
   );
