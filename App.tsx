@@ -252,10 +252,26 @@ const App: React.FC = () => {
     }
   }, [isJoinedTeam, currentSessionId, participantTeamId, participantName]);
 
-  // --- URL 파라미터 확인 (접속 코드) ---
+  // --- URL 파라미터 확인 (접속 코드 및 관리자 모드) ---
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const joinCode = urlParams.get('join');
+    const adminMode = urlParams.get('admin');
+
+    // ?admin=true: 관리자 모드 강제 진입 (참가자 세션 삭제)
+    if (adminMode === 'true') {
+      localStorage.removeItem('bluemarble_participant_session');
+      setCurrentSessionId(null);
+      setParticipantTeamId(null);
+      setParticipantName('');
+      setIsJoinedTeam(false);
+      setView('intro');
+      // URL에서 admin 파라미터 제거 (새로고침 시 반복 방지)
+      const newUrl = new URL(window.location.href);
+      newUrl.searchParams.delete('admin');
+      window.history.replaceState({}, '', newUrl.toString());
+    }
+
     if (joinCode) {
       setInitialAccessCode(joinCode);
       // URL로 접속한 경우 저장된 세션 무시
@@ -2903,6 +2919,7 @@ ${teamResponsesList.map((resp) => `
             aiResult={aiComparativeResult}
             onSubmit={(choice, reasoning) => handleTeamSubmitResponse(participantTeam.id, participantTeam.name, choice, reasoning)}
             onClose={() => {}}
+            onLogout={handleParticipantLogout}
           />
         )}
 
