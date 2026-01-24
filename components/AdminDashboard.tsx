@@ -7,13 +7,9 @@ import {
   SquareType
 } from '../types';
 import {
-  CORE_VALUE_CARDS,
-  COMMUNICATION_CARDS,
-  NEW_EMPLOYEE_CARDS,
   EVENT_CARDS,
   COMPETENCY_INFO,
   BOARD_SQUARES,
-  NEW_EMPLOYEE_BOARD_NAMES
 } from '../constants';
 import {
   Settings,
@@ -63,131 +59,34 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   customBoardImage: initialBoardImage,
   sessionId
 }) => {
-  // 현재 모드에 맞는 기본 카드 가져오기 (보드 순서대로 정렬)
+  // 커스텀 모드용 기본 카드 가져오기 (보드 순서대로 정렬)
   const getDefaultCards = (): ExtendedGameCard[] => {
-    // Custom 모드는 빈 카드 리스트로 시작 (JSON 업로드 또는 개별 추가)
-    if (gameMode === GameVersion.Custom) {
-      // 31개의 빈 커스텀 카드 생성 (출발 칸 제외한 모든 칸)
-      const customEmptyCards: ExtendedGameCard[] = [];
-      // 출발 칸(index 0) 제외한 모든 칸
-      const allSquaresExceptStart = BOARD_SQUARES.filter(s => s.type !== SquareType.Start);
-      // boardIndex 순으로 정렬
-      allSquaresExceptStart.sort((a, b) => a.index - b.index);
+    // 31개의 빈 커스텀 카드 생성 (출발 칸 제외한 모든 칸)
+    const customEmptyCards: ExtendedGameCard[] = [];
+    // 출발 칸(index 0) 제외한 모든 칸
+    const allSquaresExceptStart = BOARD_SQUARES.filter(s => s.type !== SquareType.Start);
+    // boardIndex 순으로 정렬
+    allSquaresExceptStart.sort((a, b) => a.index - b.index);
 
-      allSquaresExceptStart.forEach((square, idx) => {
-        customEmptyCards.push({
-          id: `custom-${idx + 1}`,
-          type: 'Custom',
-          title: `카드 ${idx + 1}`,
-          situation: '상황을 입력하세요...',
-          choices: [
-            { id: 'A', text: '선택지 A' },
-            { id: 'B', text: '선택지 B' },
-            { id: 'C', text: '선택지 C' }
-          ],
-          learningPoint: '학습 포인트를 입력하세요...',
-          competencyNameKo: `카드 ${idx + 1}`,
-          competencyNameEn: `Card ${idx + 1}`,
-          boardIndex: square.index
-        });
+    allSquaresExceptStart.forEach((square, idx) => {
+      customEmptyCards.push({
+        id: `custom-${idx + 1}`,
+        type: 'Custom',
+        title: `카드 ${idx + 1}`,
+        situation: '상황을 입력하세요...',
+        choices: [
+          { id: 'A', text: '선택지 A' },
+          { id: 'B', text: '선택지 B' },
+          { id: 'C', text: '선택지 C' }
+        ],
+        learningPoint: '학습 포인트를 입력하세요...',
+        competencyNameKo: `카드 ${idx + 1}`,
+        competencyNameEn: `Card ${idx + 1}`,
+        boardIndex: square.index
       });
-      // 커스텀 모드에서는 이벤트 카드를 추가하지 않음 (31개 칸 모두 커스텀 카드 사용)
-      return customEmptyCards;
-    }
-
-    let modeCards: GameCard[];
-    let modeType: 'CoreValue' | 'Communication' | 'NewEmployee';
-
-    switch (gameMode) {
-      case GameVersion.CoreValue:
-        modeCards = CORE_VALUE_CARDS;
-        modeType = 'CoreValue';
-        break;
-      case GameVersion.Communication:
-        modeCards = COMMUNICATION_CARDS;
-        modeType = 'Communication';
-        break;
-      case GameVersion.NewEmployee:
-        modeCards = NEW_EMPLOYEE_CARDS;
-        modeType = 'NewEmployee';
-        break;
-      default:
-        modeCards = CORE_VALUE_CARDS;
-        modeType = 'CoreValue';
-    }
-
-    // 보드 순서에 따라 역량 카드 정렬
-    const sortedCompetencyCards: ExtendedGameCard[] = [];
-    const usedCardIds = new Set<string>();
-
-    // 1. 현재 모드에 해당하는 보드 칸의 카드 추가 (직접 배정된 역량)
-    BOARD_SQUARES.forEach(square => {
-      if (square.competency && square.module === modeType) {
-        const card = modeCards.find(c => c.competency === square.competency);
-        if (card && !usedCardIds.has(card.id)) {
-          const competencyInfo = COMPETENCY_INFO.find(c => c.id === card.competency);
-          sortedCompetencyCards.push({
-            ...card,
-            competencyNameKo: competencyInfo?.nameKo || '',
-            competencyNameEn: competencyInfo?.nameEn || '',
-            boardIndex: square.index  // 보드 위치 추가
-          });
-          usedCardIds.add(card.id);
-        }
-      }
     });
-
-    // 2. 반대 모드의 보드 칸에 나머지 역량 카드 배정
-    const oppositeSquares = BOARD_SQUARES
-      .filter(sq => sq.type === SquareType.City && sq.module !== modeType)
-      .sort((a, b) => a.index - b.index);
-
-    const remainingCards = modeCards.filter(card => !usedCardIds.has(card.id));
-
-    oppositeSquares.forEach((square, idx) => {
-      if (idx < remainingCards.length) {
-        const card = remainingCards[idx];
-        const competencyInfo = card.competency ? COMPETENCY_INFO.find(c => c.id === card.competency) : null;
-        sortedCompetencyCards.push({
-          ...card,
-          competencyNameKo: competencyInfo?.nameKo || '',
-          competencyNameEn: competencyInfo?.nameEn || '',
-          boardIndex: square.index  // 반대 모드 칸 인덱스
-        });
-        usedCardIds.add(card.id);
-      }
-    });
-
-    // 3. 혹시 아직 추가되지 않은 카드가 있으면 추가 (보드 인덱스 없이)
-    modeCards.forEach(card => {
-      if (!usedCardIds.has(card.id)) {
-        const competencyInfo = card.competency ? COMPETENCY_INFO.find(c => c.id === card.competency) : null;
-        sortedCompetencyCards.push({
-          ...card,
-          competencyNameKo: competencyInfo?.nameKo || '',
-          competencyNameEn: competencyInfo?.nameEn || ''
-        });
-      }
-    });
-
-    // 4. 전체 카드를 보드 인덱스 순서로 정렬
-    sortedCompetencyCards.sort((a, b) => {
-      if (a.boardIndex !== undefined && b.boardIndex !== undefined) {
-        return a.boardIndex - b.boardIndex;
-      }
-      if (a.boardIndex !== undefined) return -1;
-      if (b.boardIndex !== undefined) return 1;
-      return 0;
-    });
-
-    // 이벤트 카드 추가 (역량 정보 없음)
-    const eventCards: ExtendedGameCard[] = EVENT_CARDS.map(card => ({
-      ...card,
-      competencyNameKo: '',
-      competencyNameEn: ''
-    }));
-
-    return [...sortedCompetencyCards, ...eventCards];
+    // 커스텀 모드에서는 이벤트 카드를 추가하지 않음 (31개 칸 모두 커스텀 카드 사용)
+    return customEmptyCards;
   };
 
   // 상태 관리
@@ -339,16 +238,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   // JSON 내보내기 (다운로드)
   const handleExportJSON = () => {
-    // 커스텀 모드: 모든 카드 내보내기 (이벤트 카드 포함, 총 31개)
-    // 다른 모드: 역량 카드만 내보내기 (이벤트 카드 제외)
-    const cardsToExport = gameMode === GameVersion.Custom
-      ? cards
-      : cards.filter(card => card.competency);
+    // 커스텀 모드: 모든 카드 내보내기
+    const cardsToExport = cards;
 
     // 내보내기용 간소화된 형식으로 변환
     const exportData = cardsToExport.map(card => ({
       id: card.id,
-      type: card.type,  // 커스텀 모드에서 이벤트 카드 구분용
+      type: card.type,
       competency: card.competency,
       competencyNameKo: card.competencyNameKo || '',
       competencyNameEn: card.competencyNameEn || '',
@@ -365,10 +261,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
     const link = document.createElement('a');
     link.href = url;
-    const modePrefix = gameMode === GameVersion.CoreValue ? 'corevalue' :
-                       gameMode === GameVersion.Communication ? 'communication' :
-                       gameMode === GameVersion.NewEmployee ? 'newemployee' : 'custom';
-    link.download = `${modePrefix}_cards_${new Date().toISOString().split('T')[0]}.json`;
+    link.download = `custom_cards_${new Date().toISOString().split('T')[0]}.json`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -446,25 +339,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
           return;
         }
 
-        // 커스텀 모드: 모든 카드 완전 덮어쓰기 (이벤트 카드 포함)
-        // 다른 모드: 기존 이벤트 카드는 유지하고, 역량 카드만 덮어쓰기
-        let updatedCards: ExtendedGameCard[];
-        if (gameMode === GameVersion.Custom) {
-          // 커스텀 모드에서는 가져온 카드로 완전히 대체
-          updatedCards = validatedCards;
-        } else {
-          // 다른 모드에서는 이벤트 카드 유지
-          const eventCards = cards.filter(c => c.type === 'Event' || !c.boardIndex);
-          updatedCards = [...validatedCards, ...eventCards];
-        }
-
-        setCards(updatedCards);
+        // 커스텀 모드: 가져온 카드로 완전히 대체
+        setCards(validatedCards);
         setHasChanges(true);
         setImportStatus('success');
-        const importModeMessage = gameMode === GameVersion.Custom
-          ? `${validatedCards.length}개 카드를 성공적으로 가져왔습니다. (모든 카드 덮어쓰기)`
-          : `${validatedCards.length}개 카드를 성공적으로 가져왔습니다. (역량 카드 덮어쓰기)`;
-        setImportMessage(importModeMessage);
+        setImportMessage(`${validatedCards.length}개 카드를 성공적으로 가져왔습니다.`);
         setTimeout(() => setImportStatus('idle'), 3000);
 
       } catch (error) {
@@ -521,7 +400,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 다음 역량에 대한 교육용 시나리오 카드를 만들어주세요.
 
 역량명: ${aiInputName}
-게임 모드: ${gameMode === GameVersion.CoreValue ? '핵심가치' : gameMode === GameVersion.Communication ? '소통&갈등관리' : '신입직원 직장생활'}
+게임 모드: 커스텀
 
 다음 JSON 형식으로 응답해주세요:
 {
@@ -620,9 +499,7 @@ JSON만 응답하세요.`;
               <div>
                 <h2 className="text-2xl font-bold">관리자 대시보드</h2>
                 <p className="text-indigo-200 text-sm">
-                  {gameMode === GameVersion.CoreValue ? '핵심가치' :
-                   gameMode === GameVersion.Communication ? '소통&갈등관리' :
-                   gameMode === GameVersion.NewEmployee ? '신입직원 직장생활' : '커스텀'} 모드 카드 관리
+                  커스텀 모드 카드 관리 (JSON 업로드)
                 </p>
               </div>
             </div>
@@ -833,12 +710,10 @@ JSON만 응답하세요.`;
         {/* 카드 목록 */}
         <div className="flex-1 overflow-y-auto p-4">
           <div className="text-sm text-gray-500 mb-4">
-            총 {filteredCards.length}개 카드 (역량 카드 22개 + 이벤트 카드 9개)
-            {gameMode === GameVersion.Custom && (
-              <span className="ml-2 text-purple-600 font-medium">
-                ※ 커스텀 모드: 모든 카드 수정 가능
-              </span>
-            )}
+            총 {filteredCards.length}개 카드 (31개 칸)
+            <span className="ml-2 text-purple-600 font-medium">
+              ※ 커스텀 모드: JSON 파일을 업로드하여 카드를 설정하세요
+            </span>
           </div>
 
           <div className="space-y-3">

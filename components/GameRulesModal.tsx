@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Dice5, MessageSquare, Trophy, Gift, AlertTriangle, Users, Target, Zap, Star, Award, RefreshCw } from 'lucide-react';
+import { X, Dice5, MessageSquare, Trophy, Users, Target, Zap, Star, RefreshCw } from 'lucide-react';
 import { GameVersion } from '../types';
 
 interface GameRulesModalProps {
@@ -15,56 +15,14 @@ const GameRulesModal: React.FC<GameRulesModalProps> = ({
 }) => {
   if (!visible) return null;
 
-  // 커스텀 모드 확인
-  const isCustomMode = gameMode === GameVersion.Custom;
+  // 커스텀 모드 제목
+  const getModeTitle = () => '커스텀 시뮬레이션';
 
-  // 모드별 제목
-  const getModeTitle = () => {
-    switch (gameMode) {
-      case GameVersion.CoreValue:
-        return '핵심가치 리더십 시뮬레이션';
-      case GameVersion.Communication:
-        return '소통&갈등관리 시뮬레이션';
-      case GameVersion.NewEmployee:
-        return '신입직원 직장생활 시뮬레이션';
-      case GameVersion.Custom:
-        return '커스텀 시뮬레이션';
-      default:
-        return '리더십 시뮬레이션';
-    }
-  };
+  // 커스텀 모드 설명
+  const getModeDescription = () => '관리자가 업로드한 커스텀 상황 카드로 진행되는 맞춤형 시뮬레이션입니다. 31개의 상황 카드와 특수 효과를 가진 칸들이 있습니다.';
 
-  // 모드별 설명
-  const getModeDescription = () => {
-    switch (gameMode) {
-      case GameVersion.CoreValue:
-        return '조직의 핵심가치를 실제 상황에서 어떻게 적용하는지 체험하는 게임입니다. 인재제일, 최고지향, 변화선도, 상생추구 등 22개의 핵심가치 상황을 경험하며 올바른 의사결정 역량을 키웁니다.';
-      case GameVersion.Communication:
-        return '직장 내 다양한 소통 상황과 갈등 상황에서 효과적으로 대처하는 방법을 배우는 게임입니다. 경청, 피드백, 협상, 갈등 해결 등 실제 업무에서 자주 마주하는 상황을 시뮬레이션합니다.';
-      case GameVersion.NewEmployee:
-        return '신입사원으로서 직장생활 초기에 겪는 다양한 상황을 미리 경험해보는 게임입니다. 비즈니스 매너, 업무 보고, 선후배 관계 등 실무에서 필요한 기본기를 익힙니다.';
-      case GameVersion.Custom:
-        return '관리자가 업로드한 커스텀 상황 카드로 진행되는 맞춤형 시뮬레이션입니다. 31개의 상황 카드와 특수 효과를 가진 칸들이 있습니다.';
-      default:
-        return '';
-    }
-  };
-
-  // 모드별 주요 역량
-  const getModeCompetencies = () => {
-    switch (gameMode) {
-      case GameVersion.CoreValue:
-        return ['인재제일', '최고지향', '변화선도', '정도경영', '상생추구', '고객 최우선', '도전적 실행', '소통과 협력', '안전', '글로벌 지향', '윤리', '창의'];
-      case GameVersion.Communication:
-        return ['경청의 기술', '전달의 기술', '피드백 달인', '갈등 해결사', '협상의 달인', '중재의 기술', '감정 컨트롤', '비언어적 소통', '당당한 표현'];
-      case GameVersion.NewEmployee:
-        return ['비즈니스 매너', '업무 보고', '일정 관리', '이메일 작성', '회의 참여', '선후배 관계', '실수 대처', '질문 스킬'];
-      case GameVersion.Custom:
-        return ['커스텀 상황 카드'];
-      default:
-        return [];
-    }
-  };
+  // 커스텀 모드 역량
+  const getModeCompetencies = () => ['커스텀 상황 카드'];
 
   return (
     <div className="fixed inset-0 bg-black/80 z-[200] flex items-center justify-center p-4 backdrop-blur-sm">
@@ -184,86 +142,55 @@ const GameRulesModal: React.FC<GameRulesModalProps> = ({
             </div>
           </section>
 
-          {/* 찬스카드 & 리스크카드 (일반 모드) / 특수 칸 효과 (커스텀 모드) */}
-          {isCustomMode ? (
-            <section>
-              <h3 className="text-lg font-black text-gray-800 mb-3 flex items-center gap-2">
-                <Zap className="text-orange-600" size={20} />
-                커스텀 모드 특수 칸
-              </h3>
-              <div className="space-y-3">
-                <div className="bg-blue-50 p-4 rounded-lg border-2 border-blue-400">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="font-bold text-blue-700">🎲 2배 찬스</span>
-                  </div>
-                  <p className="text-sm text-gray-600">
-                    해당 팀이 얻는 AI 평가 점수가 <strong>2배</strong>로 적용됩니다.
-                  </p>
+          {/* 특수 칸 효과 (커스텀 모드) */}
+          <section>
+            <h3 className="text-lg font-black text-gray-800 mb-3 flex items-center gap-2">
+              <Zap className="text-orange-600" size={20} />
+              특수 칸
+            </h3>
+            <div className="space-y-3">
+              <div className="bg-blue-50 p-4 rounded-lg border-2 border-blue-400">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="font-bold text-blue-700">🎲 2배 찬스</span>
                 </div>
-                <div className="bg-purple-50 p-4 rounded-lg border-2 border-purple-400">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="font-bold text-purple-700">🚀 3배 찬스</span>
-                  </div>
-                  <p className="text-sm text-gray-600">
-                    해당 팀이 얻는 AI 평가 점수가 <strong>3배</strong>로 적용됩니다.
-                  </p>
-                </div>
-                <div className="bg-green-50 p-4 rounded-lg border-2 border-green-400">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="font-bold text-green-700">🤝 나눔카드</span>
-                  </div>
-                  <p className="text-sm text-gray-600">
-                    해당 팀이 얻은 점수가 <strong>모든 팀에게 동일하게</strong> 적용됩니다.
-                  </p>
-                </div>
-                <div className="bg-red-50 p-4 rounded-lg border-2 border-red-400">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="font-bold text-red-700">🔥 번아웃존</span>
-                  </div>
-                  <p className="text-sm text-gray-600">
-                    해당 칸에 도착하면 5개 영역에서 <strong>각각 -10 POINT</strong>를 잃고 시작합니다.
-                  </p>
-                </div>
-                <div className="bg-amber-50 p-4 rounded-lg border-2 border-amber-400">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="font-bold text-amber-700">📈 성장펀드</span>
-                  </div>
-                  <p className="text-sm text-gray-600">
-                    해당 칸에 도착하면 5개 영역에서 <strong>각각 +10 POINT</strong>를 받고 시작합니다.
-                  </p>
-                </div>
+                <p className="text-sm text-gray-600">
+                  해당 팀이 얻는 AI 평가 점수가 <strong>2배</strong>로 적용됩니다.
+                </p>
               </div>
-            </section>
-          ) : (
-            <section>
-              <h3 className="text-lg font-black text-gray-800 mb-3 flex items-center gap-2">
-                <Zap className="text-orange-600" size={20} />
-                찬스카드 & 리스크카드
-              </h3>
-              <div className="grid md:grid-cols-2 gap-4">
-                <div className="bg-green-50 p-4 rounded-lg border-2 border-green-400">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Gift className="text-green-600" size={20} />
-                    <span className="font-bold text-green-700">🎫 찬스 카드 (1/2/3번째)</span>
-                  </div>
-                  <p className="text-sm text-gray-600">
-                    복권 보너스! 강사님에게 팀 복권을 받으세요.
-                    <br />게임 종료 시 추가 보상 기회!
-                  </p>
+              <div className="bg-purple-50 p-4 rounded-lg border-2 border-purple-400">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="font-bold text-purple-700">🚀 3배 찬스</span>
                 </div>
-                <div className="bg-red-50 p-4 rounded-lg border-2 border-red-400">
-                  <div className="flex items-center gap-2 mb-2">
-                    <AlertTriangle className="text-red-600" size={20} />
-                    <span className="font-bold text-red-700">💀 리스크 카드 (2/4번째)</span>
-                  </div>
-                  <p className="text-sm text-gray-600">
-                    위험! 모든 AI 점수가 마이너스로 적용됩니다.
-                    <br />보유 복권을 다른 팀에게 양도해야 할 수도!
-                  </p>
-                </div>
+                <p className="text-sm text-gray-600">
+                  해당 팀이 얻는 AI 평가 점수가 <strong>3배</strong>로 적용됩니다.
+                </p>
               </div>
-            </section>
-          )}
+              <div className="bg-green-50 p-4 rounded-lg border-2 border-green-400">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="font-bold text-green-700">🤝 나눔카드</span>
+                </div>
+                <p className="text-sm text-gray-600">
+                  해당 팀이 얻은 점수가 <strong>모든 팀에게 동일하게</strong> 적용됩니다.
+                </p>
+              </div>
+              <div className="bg-red-50 p-4 rounded-lg border-2 border-red-400">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="font-bold text-red-700">🔥 번아웃존</span>
+                </div>
+                <p className="text-sm text-gray-600">
+                  해당 칸에 도착하면 5개 영역에서 <strong>각각 -10 POINT</strong>를 잃고 시작합니다.
+                </p>
+              </div>
+              <div className="bg-amber-50 p-4 rounded-lg border-2 border-amber-400">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="font-bold text-amber-700">📈 성장펀드</span>
+                </div>
+                <p className="text-sm text-gray-600">
+                  해당 칸에 도착하면 5개 영역에서 <strong>각각 +10 POINT</strong>를 받고 시작합니다.
+                </p>
+              </div>
+            </div>
+          </section>
 
           {/* 한 바퀴 보너스 */}
           <section>
@@ -337,33 +264,6 @@ const GameRulesModal: React.FC<GameRulesModalProps> = ({
             </div>
           </section>
 
-          {/* 특수 칸 설명 (일반 모드만) */}
-          {!isCustomMode && (
-            <section>
-              <h3 className="text-lg font-black text-gray-800 mb-3 flex items-center gap-2">
-                <Award className="text-pink-600" size={20} />
-                특수 칸 안내
-              </h3>
-              <div className="grid gap-2 text-sm">
-                <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
-                  <span className="font-bold w-24">🔥 번아웃 존</span>
-                  <span className="text-gray-600">에너지 감소 주의! 번아웃 상황 카드 등장</span>
-                </div>
-                <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
-                  <span className="font-bold w-24">🌍 글로벌 기회</span>
-                  <span className="text-gray-600">글로벌 상황 카드 등장</span>
-                </div>
-                <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
-                  <span className="font-bold w-24">🚀 도전 과제</span>
-                  <span className="text-gray-600">도전적인 상황 카드 등장</span>
-                </div>
-                <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
-                  <span className="font-bold w-24">📈 성장 펀드</span>
-                  <span className="text-gray-600">성장 기회 상황 카드 등장</span>
-                </div>
-              </div>
-            </section>
-          )}
         </div>
 
         {/* 푸터 */}

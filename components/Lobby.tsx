@@ -21,7 +21,6 @@ const Lobby: React.FC<LobbyProps> = ({
 }) => {
   // --- Create Session Form State ---
   const [newName, setNewName] = useState('');
-  const [newVersion, setNewVersion] = useState<GameVersion>(GameVersion.CoreValue);
   const [newTeamCount, setNewTeamCount] = useState(4);
   const [isCreating, setIsCreating] = useState(false);
 
@@ -64,7 +63,8 @@ const Lobby: React.FC<LobbyProps> = ({
 
     setIsCreating(true);
     try {
-      await onCreateSession(newName, newVersion, newTeamCount);
+      // 항상 커스텀 모드로 세션 생성
+      await onCreateSession(newName, GameVersion.Custom, newTeamCount);
       setNewName('');
       setNewTeamCount(4);
       alert("새로운 세션이 생성되었습니다.");
@@ -90,7 +90,7 @@ const Lobby: React.FC<LobbyProps> = ({
         <header className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-end border-b-4 border-black pb-4">
           <div>
             <h1 className="text-4xl font-black italic uppercase text-blue-900">Admin Dashboard</h1>
-            <p className="font-bold text-gray-500">핵심가치 & 소통 교육 세션 관리자</p>
+            <p className="font-bold text-gray-500">커스텀 교육 세션 관리자 (JSON 업로드)</p>
           </div>
           <div className="mt-4 md:mt-0 bg-white border-2 border-black p-2 shadow-hard-sm">
              <span className="font-bold text-sm">진행 중인 세션: {sessions.filter(s => s.status === 'active').length}개</span>
@@ -117,19 +117,6 @@ const Lobby: React.FC<LobbyProps> = ({
                     placeholder="예: 12월 신입사원 교육"
                     className="w-full p-3 border-4 border-black font-bold focus:bg-yellow-50 focus:outline-none"
                   />
-                </div>
-
-                <div>
-                  <label className="block font-bold mb-1 text-sm uppercase">게임 모드</label>
-                  <select 
-                    value={newVersion}
-                    onChange={(e) => setNewVersion(e.target.value as GameVersion)}
-                    className="w-full p-3 border-4 border-black font-bold bg-white focus:bg-yellow-50 focus:outline-none"
-                  >
-                    {Object.values(GameVersion).map(v => (
-                      <option key={v} value={v}>{v}</option>
-                    ))}
-                  </select>
                 </div>
 
                 <div>

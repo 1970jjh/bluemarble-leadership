@@ -1,15 +1,7 @@
 import React from 'react';
 import {
   BOARD_SQUARES,
-  BOARD_SIZE,
-  CORE_VALUE_BOARD_NAMES,
-  COMMUNICATION_BOARD_NAMES,
-  NEW_EMPLOYEE_BOARD_NAMES,
   CUSTOM_BOARD_NAMES,
-  CORE_VALUE_CARDS,
-  COMMUNICATION_CARDS,
-  NEW_EMPLOYEE_CARDS,
-  getCompetencyForSquare
 } from '../constants';
 import { BoardSquare, SquareType, Team, TeamColor, GameVersion, GameCard } from '../types';
 
@@ -40,58 +32,17 @@ const GameBoard: React.FC<GameBoardProps> = ({ teams, onSquareClick, gameMode, c
     return CHARACTER_IMAGES[index];
   };
 
-  // 모드별 보드 칸 이름 가져오기
+  // 보드 칸 이름 가져오기 (커스텀 모드 전용)
   const getSquareDisplayName = (square: BoardSquare): string => {
-    // 커스텀 모드: 모든 칸(특수 칸 포함)에서 customCards 또는 CUSTOM_BOARD_NAMES 사용
-    if (gameMode === GameVersion.Custom || gameMode === '커스텀') {
-      // 먼저 customCards에서 해당 boardIndex의 카드 제목 찾기
-      if (customCards && customCards.length > 0) {
-        const customCard = customCards.find((c: any) => c.boardIndex === square.index);
-        if (customCard) {
-          return customCard.title || CUSTOM_BOARD_NAMES[square.index] || `카드 ${square.index}`;
-        }
+    // customCards에서 해당 boardIndex의 카드 제목 찾기
+    if (customCards && customCards.length > 0) {
+      const customCard = customCards.find((c: any) => c.boardIndex === square.index);
+      if (customCard) {
+        return customCard.title || CUSTOM_BOARD_NAMES[square.index] || `카드 ${square.index}`;
       }
-      // customCards에 없으면 CUSTOM_BOARD_NAMES 사용
-      return CUSTOM_BOARD_NAMES[square.index] || square.name.split('(')[0];
     }
-
-    // 일반 모드: 역량 칸이 아니면 기본 이름 사용
-    if (square.type !== SquareType.City) {
-      return square.name.split('(')[0];
-    }
-
-    // 모드별 이름 매핑 사용
-    if (gameMode === GameVersion.CoreValue || gameMode === '핵심가치') {
-      return CORE_VALUE_BOARD_NAMES[square.index] || square.name.split('(')[0];
-    }
-    if (gameMode === GameVersion.Communication || gameMode === '소통&갈등관리') {
-      return COMMUNICATION_BOARD_NAMES[square.index] || square.name.split('(')[0];
-    }
-    if (gameMode === GameVersion.NewEmployee || gameMode === '신입직원 직장생활') {
-      return NEW_EMPLOYEE_BOARD_NAMES[square.index] || square.name.split('(')[0];
-    }
-
-    return square.name.split('(')[0];
-  };
-
-  // 모드별 카드 제목 가져오기 (핵심가치 모드에서 상황 카드 제목 표시용)
-  const getCardTitle = (square: BoardSquare): string | null => {
-    if (square.type !== SquareType.City) return null;
-
-    const mode = gameMode === GameVersion.CoreValue || gameMode === '핵심가치' ? 'CoreValue'
-      : gameMode === GameVersion.Communication || gameMode === '소통&갈등관리' ? 'Communication'
-      : gameMode === GameVersion.NewEmployee || gameMode === '신입직원 직장생활' ? 'NewEmployee'
-      : 'CoreValue';
-
-    const competency = getCompetencyForSquare(square.index, mode);
-    if (!competency) return null;
-
-    const cards = mode === 'CoreValue' ? CORE_VALUE_CARDS
-      : mode === 'Communication' ? COMMUNICATION_CARDS
-      : NEW_EMPLOYEE_CARDS;
-
-    const card = cards.find(c => c.competency === competency);
-    return card?.title || null;
+    // customCards에 없으면 CUSTOM_BOARD_NAMES 사용
+    return CUSTOM_BOARD_NAMES[square.index] || square.name.split('(')[0];
   };
 
   const getGridStyle = (index: number) => {
@@ -118,36 +69,11 @@ const GameBoard: React.FC<GameBoardProps> = ({ teams, onSquareClick, gameMode, c
     };
   };
 
-  const getModuleColor = (module?: string) => {
-    switch(module) {
-      case 'Self': return 'bg-blue-600';
-      case 'Team': return 'bg-green-600';
-      case 'Leader': return 'bg-red-600';
-      case 'Follower': return 'bg-orange-500';
-      default: return 'bg-gray-800';
-    }
-  };
+  // 커스텀 모드 기본 배경 이미지
+  const defaultBgImage = 'https://i.ibb.co/YF5PkBKv/Infographic-5.png';
 
-  const getTeamTokenColor = (color: TeamColor) => {
-    switch(color) {
-      case TeamColor.Red: return 'bg-red-600 border-red-800 text-white';
-      case TeamColor.Blue: return 'bg-blue-600 border-blue-800 text-white';
-      case TeamColor.Green: return 'bg-green-600 border-green-800 text-white';
-      case TeamColor.Yellow: return 'bg-yellow-400 border-yellow-600 text-black';
-      default: return `bg-${color.toLowerCase()}-500 text-white`;
-    }
-  };
-
-  // 모드별 기본 배경 이미지
-  const defaultBgImages: Record<string, string> = {
-    [GameVersion.CoreValue]: 'https://i.ibb.co/YF5PkBKv/Infographic-5.png',           // 핵심가치
-    [GameVersion.Communication]: 'https://i.ibb.co/hxvfdNgW/Infographic-6.png',       // 소통&갈등관리
-    [GameVersion.NewEmployee]: 'https://i.ibb.co/QvXK8zqD/Infographic-7.png',         // 신입사원 직장생활
-    [GameVersion.Custom]: 'https://i.ibb.co/YF5PkBKv/Infographic-5.png',              // 커스텀 (기본값)
-  };
-
-  // 현재 게임 모드에 맞는 배경 이미지 선택 (커스텀 이미지 우선)
-  const currentBgImage = customBoardImage || defaultBgImages[gameMode] || defaultBgImages[GameVersion.CoreValue];
+  // 배경 이미지 선택 (커스텀 이미지 우선)
+  const currentBgImage = customBoardImage || defaultBgImage;
 
   return (
     <div className="flex flex-col items-center gap-4">
@@ -193,34 +119,14 @@ const GameBoard: React.FC<GameBoardProps> = ({ teams, onSquareClick, gameMode, c
                 <span className="text-sm md:text-lg">{getSquareDisplayName(square)}</span>
               </div>
             ) : (
-              /* City/Competency Card Styling - 모드별 다른 표시 */
+              /* City/Competency Card Styling - 커스텀 모드 */
               <>
-                {/* Top Header Bar - 모드별 다른 내용 */}
-                {(gameMode === GameVersion.CoreValue || gameMode === '핵심가치') ? (
-                  /* 핵심가치 모드: 검정배경에 핵심가치명, 흰배경에 카드제목 */
-                  <>
-                    <div className="h-[30%] w-full border-b-2 border-black bg-gray-900 flex items-center justify-center px-1">
-                      <span className="text-xs md:text-sm text-white font-black leading-tight break-keep text-center">
-                        {getSquareDisplayName(square)}
-                      </span>
-                    </div>
-                    <div className="flex-1 flex flex-col items-center justify-center p-1 text-center bg-white">
-                      <span className="text-xs md:text-sm font-bold text-gray-800 leading-tight break-keep">
-                        {getCardTitle(square) || '상황카드'}
-                      </span>
-                    </div>
-                  </>
-                ) : (
-                  /* 소통&갈등관리 / 신입직원 모드: 색상바만, 모듈명 없이 카드제목만 */
-                  <>
-                    <div className={`h-[20%] w-full border-b-2 border-black ${getModuleColor(square.module)}`}></div>
-                    <div className="flex-1 flex flex-col items-center justify-center p-1 text-center bg-[#fafafa]">
-                      <span className="text-xs md:text-sm font-black text-gray-900 leading-tight break-keep">
-                        {getSquareDisplayName(square)}
-                      </span>
-                    </div>
-                  </>
-                )}
+                <div className="h-[20%] w-full border-b-2 border-black bg-gray-800"></div>
+                <div className="flex-1 flex flex-col items-center justify-center p-1 text-center bg-[#fafafa]">
+                  <span className="text-xs md:text-sm font-black text-gray-900 leading-tight break-keep">
+                    {getSquareDisplayName(square)}
+                  </span>
+                </div>
               </>
             )}
 

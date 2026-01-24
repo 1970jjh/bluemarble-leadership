@@ -35,13 +35,7 @@ import {
   INITIAL_RESOURCES,
   LAP_BONUS,
   DOUBLE_BONUS,
-  getCardsByMode,
-  CORE_VALUE_CARDS,
-  COMMUNICATION_CARDS,
-  NEW_EMPLOYEE_CARDS,
   EVENT_CARDS,
-  getCompetencyCardsByMode,
-  getCompetencyForSquare,
   getChanceCardType,
   CHANCE_CARD_SQUARES
 } from './constants';
@@ -1052,37 +1046,6 @@ const App: React.FC = () => {
 
   // --- Core Game Actions ---
 
-  // GameVersion을 카드 타입으로 변환하는 헬퍼 함수
-  const getCardTypeFromVersion = (version: GameVersion | string | undefined): 'CoreValue' | 'Communication' | 'NewEmployee' => {
-    switch (version) {
-      case GameVersion.CoreValue:
-      case '핵심가치':
-        return 'CoreValue';
-      case GameVersion.Communication:
-      case '소통&갈등관리':
-        return 'Communication';
-      case GameVersion.NewEmployee:
-      case '신입직원 직장생활':
-        return 'NewEmployee';
-      default:
-        return 'CoreValue'; // 기본값
-    }
-  };
-
-  // 모드별 역량 카드 배열 가져오기 헬퍼 함수
-  const getModeCards = (mode: 'CoreValue' | 'Communication' | 'NewEmployee') => {
-    switch (mode) {
-      case 'CoreValue':
-        return CORE_VALUE_CARDS;
-      case 'Communication':
-        return COMMUNICATION_CARDS;
-      case 'NewEmployee':
-        return NEW_EMPLOYEE_CARDS;
-      default:
-        return CORE_VALUE_CARDS;
-    }
-  };
-
   // 역량 ID를 한글 이름으로 변환하는 헬퍼 함수
   const getCompetencyName = (competencyId: string | undefined): string => {
     if (!competencyId) return '일반';
@@ -1154,41 +1117,26 @@ const App: React.FC = () => {
       return;
     }
 
-    // 세션 모드에 맞는 카드 배열 선택
-    const sessionCardType = getCardTypeFromVersion(currentSession?.version);
-    const modeCards = getModeCards(sessionCardType);
-
-    // 세션의 커스텀 카드가 있으면 사용, 없으면 기본 카드 사용
+    // 커스텀 모드: 세션의 커스텀 카드 사용, 없으면 이벤트 카드 사용
     const sessionCards = currentSession?.customCards || [];
-    const allCards = sessionCards.length > 0 ? sessionCards : [...modeCards, ...EVENT_CARDS];
-
-    // Helper to pick random card by type
-    const pickRandomCard = (type: string, fallbackCard?: GameCard) => {
-      const candidates = allCards.filter(c => c.type === type);
-      return candidates.length > 0
-        ? candidates[Math.floor(Math.random() * candidates.length)]
-        : fallbackCard || allCards[0];
-    };
+    const allCards = sessionCards.length > 0 ? sessionCards : EVENT_CARDS;
 
     let selectedCard: GameCard | null = null;
 
-    // 커스텀 모드: 모든 칸(특수 칸 포함)에서 boardIndex로 업로드된 카드 사용
-    const isCustomMode = currentSession?.version === GameVersion.Custom;
-
-    // 출발 칸은 모든 모드에서 동일하게 처리 (보너스만 주고 넘어감)
+    // 출발 칸 처리 (보너스만 주고 넘어감)
     if (square.type === SquareType.Start) {
       updateTeamResources(team.id, { capital: 50 });
       nextTurn();
       return;
     }
 
-    if (isCustomMode && sessionCards.length > 0) {
-      // 커스텀 모드: boardIndex로 카드 찾기 (모든 칸에서)
+    // 커스텀 모드: boardIndex로 카드 찾기 (모든 칸에서)
+    if (sessionCards.length > 0) {
       const customCard = sessionCards.find((c: any) => c.boardIndex === square.index);
       selectedCard = customCard || sessionCards[0];
       console.log(`[Card Selection] Custom Mode - Square: ${square.index}, Type: ${square.type}, Found: ${customCard?.title || 'fallback'}`);
 
-      // 커스텀 모드 특수 칸 효과 적용
+      // 특수 칸 효과 적용
       // 2배 찬스: 인덱스 2, 12, 31
       if ([2, 12, 31].includes(square.index)) {
         setCustomScoreMultiplier(2);
@@ -1216,13 +1164,6 @@ const App: React.FC = () => {
         updateTeamResources(team.id, growthBonus);
         addLog(`📈 [${team.name}] 성장펀드! 5개 영역에서 각각 +10 POINT 보너스를 받습니다.`);
       }
-    }
-    else if (square.type === SquareType.City) {
-      // 일반 모드: 역량(competency)에 맞는 카드 선택
-      const targetCompetency = getCompetencyForSquare(square.index, sessionCardType);
-      const exactCard = allCards.find(c => c.competency === targetCompetency);
-      selectedCard = exactCard || modeCards[0];
-      console.log(`[Card Selection] Square: ${square.index}, Mode: ${sessionCardType}, Target: ${targetCompetency}, Found: ${exactCard?.title || 'fallback'}`);
     }
     else if (square.type === SquareType.GoldenKey) {
       // 찬스카드 타입 확인 (1/3/5 → lottery, 2/4 → risk)
@@ -2070,13 +2011,9 @@ const App: React.FC = () => {
     const square = BOARD_SQUARES.find(s => s.index === index);
     if (!square) return;
 
-    // 세션 모드에 맞는 카드 배열 선택
-    const sessionCardType = getCardTypeFromVersion(currentSession?.version);
-    const modeCards = getModeCards(sessionCardType);
-
-    // 세션의 커스텀 카드가 있으면 사용, 없으면 기본 카드 사용
+    // 커스텀 모드: 세션의 커스텀 카드 사용
     const sessionCards = currentSession?.customCards || [];
-    const allCards = sessionCards.length > 0 ? sessionCards : [...modeCards, ...EVENT_CARDS];
+    const allCards = sessionCards.length > 0 ? sessionCards : EVENT_CARDS;
 
     let cardToPreview: GameCard | undefined;
 
@@ -2094,15 +2031,8 @@ const App: React.FC = () => {
     switch (square.type) {
       case SquareType.City:
         // 커스텀 모드: boardIndex로 카드 찾기
-        if (currentSession?.version === GameVersion.Custom && sessionCards.length > 0) {
+        if (sessionCards.length > 0) {
           cardToPreview = sessionCards.find((c: any) => c.boardIndex === index);
-        } else {
-          // 일반 모드: 역량(competency)에 맞는 카드 선택
-          const targetPreviewCompetency = getCompetencyForSquare(index, sessionCardType);
-          cardToPreview = allCards.find(c => c.competency === targetPreviewCompetency);
-          if (!cardToPreview) {
-            cardToPreview = modeCards.find(c => c.competency === targetPreviewCompetency);
-          }
         }
         break;
       case SquareType.GoldenKey:
@@ -2520,7 +2450,7 @@ const App: React.FC = () => {
         <GameRulesModal
           visible={showGameRules}
           onClose={() => setShowGameRules(false)}
-          gameMode={participantSession?.version || GameVersion.CoreValue}
+          gameMode={participantSession?.version || GameVersion.Custom}
         />
 
         {/* 다른 팀 턴 뷰어 모드: 현재 진행 중인 카드가 있고 내 턴이 아니면 읽기 전용 모달 표시 */}
@@ -2834,18 +2764,9 @@ const App: React.FC = () => {
       {/* 역량카드 미리보기 팝업 */}
       <CompetencyCardPreview
         visible={showCompetencyPreview}
-        card={activeCard || (pendingSquare ? (() => {
-          // 커스텀 모드: boardIndex로 카드 찾기
-          if (currentSession?.version === GameVersion.Custom && sessionCustomCards.length > 0) {
-            return sessionCustomCards.find((c: GameCard) => c.boardIndex === pendingSquare.index) || sessionCustomCards[0];
-          }
-          // 일반 모드: competency로 카드 찾기
-          const sessionCardType = getCardTypeFromVersion(currentSession?.version);
-          const targetCompetency = getCompetencyForSquare(pendingSquare.index, sessionCardType);
-          // 세션 커스텀 카드 우선, 없으면 기본 카드
-          const cardsToSearch = sessionCustomCards.length > 0 ? sessionCustomCards : getModeCards(sessionCardType);
-          return cardsToSearch.find((c: GameCard) => c.competency === targetCompetency) || null;
-        })() : null)}
+        card={activeCard || (pendingSquare && sessionCustomCards.length > 0 ?
+          sessionCustomCards.find((c: GameCard) => c.boardIndex === pendingSquare.index) || sessionCustomCards[0]
+          : null)}
         square={pendingSquare}
         onComplete={handleCompetencyPreviewComplete}
         duration={5000}
@@ -2906,7 +2827,7 @@ const App: React.FC = () => {
       <AdminDashboard
         isOpen={showAdminDashboard}
         onClose={() => setShowAdminDashboard(false)}
-        gameMode={currentSession?.version || GameVersion.CoreValue}
+        gameMode={currentSession?.version || GameVersion.Custom}
         customCards={sessionCustomCards}
         customBoardImage={currentSession?.customBoardImage}
         sessionId={currentSessionId || undefined}
@@ -2919,7 +2840,7 @@ const App: React.FC = () => {
       <GameRulesModal
         visible={showGameRules}
         onClose={() => setShowGameRules(false)}
-        gameMode={currentSession?.version || GameVersion.CoreValue}
+        gameMode={currentSession?.version || GameVersion.Custom}
       />
     </div>
   );
