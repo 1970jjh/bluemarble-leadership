@@ -3095,15 +3095,15 @@ ${evaluationGuidelines}
             {currentSession && (
               <div className="bg-white border-3 border-black p-3 shadow-hard w-full">
                 <div className="text-sm font-bold text-center mb-2 text-gray-700">참가자 접속</div>
-                <div className="flex items-center justify-center gap-3">
+                <div className="flex flex-col items-center justify-center gap-2">
                   <QRCodeSVG
                     value={getJoinUrl(currentSession.accessCode)}
-                    size={80}
+                    size={160}
                     level="M"
                     includeMargin={false}
                   />
                   <div className="text-center">
-                    <div className="text-2xl font-black text-blue-600">{currentSession.accessCode}</div>
+                    <div className="text-3xl font-black text-blue-600">{currentSession.accessCode}</div>
                     <div className="text-xs text-gray-500">접속코드</div>
                   </div>
                 </div>
