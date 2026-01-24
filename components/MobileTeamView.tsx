@@ -1,6 +1,6 @@
 import React from 'react';
 import { Team, GamePhase, GameCard, Choice } from '../types';
-import { MapPin, Dice5, Save, CheckCircle, Eye, MessageSquare, LogOut, BookOpen } from 'lucide-react';
+import { MapPin, Dice5, Save, CheckCircle, Eye, MessageSquare, LogOut, BookOpen, Trophy } from 'lucide-react';
 import { BOARD_SQUARES, getCharacterImage } from '../constants';
 
 interface MobileTeamViewProps {
@@ -29,6 +29,9 @@ interface MobileTeamViewProps {
   // 규칙서 보기
   teamNumber?: number;  // 팀 번호 (캐릭터 이미지용)
   onShowRules?: () => void;  // 규칙서 보기 핸들러
+
+  // 전체 팀 점수 표시용
+  allTeams?: Team[];
 }
 
 const MobileTeamView: React.FC<MobileTeamViewProps> = ({
@@ -50,7 +53,8 @@ const MobileTeamView: React.FC<MobileTeamViewProps> = ({
   onSpectatorVote,
   spectatorVotes = {},
   teamNumber = 1,
-  onShowRules
+  onShowRules,
+  allTeams = []
 }) => {
   // 로컬 상태: 동시 사용자 입력 충돌 방지를 위해 로컬에서 관리
   const [localChoice, setLocalChoice] = React.useState<Choice | null>(null);
@@ -363,10 +367,45 @@ const MobileTeamView: React.FC<MobileTeamViewProps> = ({
         </div>
       )}
 
-      {/* Team Score */}
-      <div className="bg-gradient-to-br from-blue-50 to-indigo-100 border-4 border-blue-500 p-6 shadow-hard text-center">
-        <div className="text-sm font-bold uppercase text-blue-600 mb-2">우리 팀 점수</div>
-        <div className="text-5xl font-black text-blue-800">{team.score ?? 100}점</div>
+      {/* All Team Scores */}
+      <div className="bg-gradient-to-br from-blue-50 to-indigo-100 border-4 border-blue-500 p-4 shadow-hard">
+        <div className="flex items-center justify-center gap-2 mb-3">
+          <Trophy size={18} className="text-blue-600" />
+          <span className="text-sm font-bold uppercase text-blue-600">팀 점수 현황</span>
+        </div>
+
+        {/* 전체 팀 점수 그리드 */}
+        <div className="grid grid-cols-2 gap-2">
+          {(allTeams.length > 0 ? allTeams : [team])
+            .sort((a, b) => (b.score ?? 100) - (a.score ?? 100))
+            .map((t, index) => (
+              <div
+                key={t.id}
+                className={`p-3 rounded-lg border-2 text-center ${
+                  t.id === team.id ? 'ring-2 ring-blue-500 ring-offset-1' : ''
+                } ${
+                  index === 0 ? 'bg-yellow-100 border-yellow-400' :
+                  index === 1 ? 'bg-gray-100 border-gray-300' :
+                  index === 2 ? 'bg-orange-100 border-orange-300' :
+                  'bg-white border-gray-200'
+                }`}
+              >
+                <div className="flex items-center justify-center gap-1 mb-1">
+                  {index === 0 && <span className="text-lg">🥇</span>}
+                  {index === 1 && <span className="text-lg">🥈</span>}
+                  {index === 2 && <span className="text-lg">🥉</span>}
+                  <span className={`text-sm font-bold ${t.id === team.id ? 'text-blue-800' : 'text-gray-700'}`}>
+                    {t.name}
+                    {t.id === team.id && <span className="text-blue-600 ml-1">(우리)</span>}
+                  </span>
+                </div>
+                <div className={`text-2xl font-black ${t.id === team.id ? 'text-blue-800' : 'text-gray-800'}`}>
+                  {t.score ?? 100}점
+                </div>
+              </div>
+            ))
+          }
+        </div>
       </div>
     </div>
   );
