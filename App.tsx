@@ -14,6 +14,7 @@ import LotteryBonusPopup from './components/LotteryBonusPopup';
 import RiskCardPopup from './components/RiskCardPopup';
 import AdminDashboard from './components/AdminDashboard';
 import GameRulesModal from './components/GameRulesModal';
+import SimultaneousResponseView from './components/SimultaneousResponseView';
 import { soundEffects } from './lib/soundEffects';
 import {
   Team,
@@ -26,7 +27,10 @@ import {
   SessionStatus,
   TeamColor,
   AIEvaluationResult,
-  TurnRecord
+  TurnRecord,
+  TeamResponse,
+  AIComparativeResult,
+  TeamRanking
 } from './types';
 import {
   BOARD_SQUARES,
@@ -122,10 +126,13 @@ const App: React.FC = () => {
   const [isTeamSaved, setIsTeamSaved] = useState(false);  // 팀이 입력을 저장했는지
   const [isSaving, setIsSaving] = useState(false);        // 저장 중 여부
 
-  // 관람자 투표 상태
-  const [spectatorVotes, setSpectatorVotes] = useState<{ [optionId: string]: string[] }>({});  // 옵션별 투표한 팀 이름 목록
-  const [mySpectatorVote, setMySpectatorVote] = useState<Choice | null>(null);  // 내 투표 (참가자 로컬 상태)
-  const [spectatorModalDismissed, setSpectatorModalDismissed] = useState(false);  // 관람자가 모달 닫았는지
+  // ============================================================
+  // 동시 응답 시스템 상태 (모든 팀이 동시에 응답)
+  // ============================================================
+  const [allTeamResponses, setAllTeamResponses] = useState<{ [teamId: string]: TeamResponse }>({});
+  const [isResponsesRevealed, setIsResponsesRevealed] = useState(false);  // 관리자가 공개 버튼 클릭했는지
+  const [aiComparativeResult, setAiComparativeResult] = useState<AIComparativeResult | null>(null);
+  const [isComparingTeams, setIsComparingTeams] = useState(false);  // AI 비교 분석 중
 
   // 관리자 대시보드 상태
   const [showAdminDashboard, setShowAdminDashboard] = useState(false);
@@ -351,9 +358,18 @@ const App: React.FC = () => {
           setIsGameStarted(state.isGameStarted);
         }
 
-        // 관람자 투표 동기화
-        if (state.spectatorVotes) {
-          setSpectatorVotes(state.spectatorVotes);
+        // 동시 응답 시스템 상태 동기화
+        if (state.teamResponses) {
+          setAllTeamResponses(state.teamResponses as unknown as { [teamId: string]: TeamResponse });
+        }
+        if (state.isRevealed !== undefined) {
+          setIsResponsesRevealed(state.isRevealed);
+        }
+        if (state.aiComparativeResult) {
+          setAiComparativeResult(state.aiComparativeResult as unknown as AIComparativeResult);
+        }
+        if (state.isAnalyzing !== undefined) {
+          setIsComparingTeams(state.isAnalyzing);
         }
 
         // gameLogs는 길이가 다를 때만 업데이트 (배열 참조 비교로 인한 무한 루프 방지)
@@ -373,7 +389,11 @@ const App: React.FC = () => {
           setSharedSelectedChoice(null);
           setSharedReasoning('');
           setIsTeamSaved(false);
-          setSpectatorModalDismissed(false);  // 관람자 모달 상태 초기화
+          // 동시 응답 시스템 초기화
+          setAllTeamResponses({});
+          setIsResponsesRevealed(false);
+          setAiComparativeResult(null);
+          setIsComparingTeams(false);
         }
 
         // 카드가 있으면 모달 표시
@@ -936,8 +956,11 @@ const App: React.FC = () => {
     setIsAiProcessing(false);
     setIsTeamSaved(false);
     setIsSaving(false);
-    setSpectatorVotes({});  // 관람자 투표 초기화
-    setMySpectatorVote(null);  // 내 투표 초기화
+    // 동시 응답 시스템 초기화
+    setAllTeamResponses({});
+    setIsResponsesRevealed(false);
+    setAiComparativeResult(null);
+    setIsComparingTeams(false);
 
     setGamePhase(GamePhase.Idle);
     setTurnTimeLeft(120);
@@ -983,8 +1006,11 @@ const App: React.FC = () => {
     setIsAiProcessing(false);
     setIsTeamSaved(false);
     setIsSaving(false);
-    setSpectatorVotes({});  // 관람자 투표 초기화
-    setMySpectatorVote(null);  // 내 투표 초기화
+    // 동시 응답 시스템 초기화
+    setAllTeamResponses({});
+    setIsResponsesRevealed(false);
+    setAiComparativeResult(null);
+    setIsComparingTeams(false);
     setGamePhase(GamePhase.Idle);
     setCurrentTurnIndex(0);
     setDiceValue([1, 1]);
@@ -1161,9 +1187,11 @@ const App: React.FC = () => {
       setSharedSelectedChoice(null);
       setSharedReasoning('');
       setAiEvaluationResult(null);
-      setSpectatorVotes({});  // 관람자 투표 초기화
-      setMySpectatorVote(null);  // 내 투표 초기화
-      setSpectatorModalDismissed(false);  // 관람자 모달 닫기 상태 초기화
+      // 동시 응답 시스템 초기화 - 새 카드 시작
+      setAllTeamResponses({});
+      setIsResponsesRevealed(false);
+      setAiComparativeResult(null);
+      setIsComparingTeams(false);
       setGamePhase(GamePhase.Decision);
       setShowCardModal(true);
 
@@ -1588,7 +1616,258 @@ const App: React.FC = () => {
     setIsSaving(false);
   };
 
-  // --- 관람자 투표 핸들러 ---
+  // ============================================================
+  // 동시 응답 시스템 함수들
+  // ============================================================
+
+  // 팀 응답 제출 (모든 팀이 각자 제출)
+  const handleTeamSubmitResponse = async (
+    teamId: string,
+    teamName: string,
+    selectedChoice: Choice | null,
+    reasoning: string
+  ) => {
+    if (!currentSessionId || !activeCard) return;
+
+    // 검증
+    const isOpenEnded = !activeCard.choices || activeCard.choices.length === 0;
+    if (isOpenEnded && !reasoning.trim()) {
+      alert('선택 이유를 작성해주세요.');
+      return;
+    }
+    if (!isOpenEnded && (!selectedChoice || !reasoning.trim())) {
+      alert('옵션을 선택하고 선택 이유를 작성해주세요.');
+      return;
+    }
+
+    const response: TeamResponse = {
+      teamId,
+      teamName,
+      selectedChoice,
+      reasoning,
+      submittedAt: Date.now(),
+      isSubmitted: true
+    };
+
+    // 로컬 상태 업데이트
+    setAllTeamResponses(prev => ({
+      ...prev,
+      [teamId]: response
+    }));
+
+    // Firebase에 저장
+    const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+    if (isFirebaseConfigured) {
+      try {
+        await firestoreService.updateTeamResponse(currentSessionId, teamId, {
+          teamId,
+          teamName,
+          selectedChoice,
+          reasoning,
+          submittedAt: Date.now(),
+          isSubmitted: true
+        });
+        addLog(`✅ ${teamName} 응답 제출 완료`);
+      } catch (err) {
+        console.error('팀 응답 저장 실패:', err);
+      }
+    }
+  };
+
+  // 관리자: 모든 팀 응답 공개
+  const handleRevealAllResponses = async () => {
+    if (!currentSessionId) return;
+
+    setIsResponsesRevealed(true);
+
+    const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+    if (isFirebaseConfigured) {
+      try {
+        await firestoreService.setResponsesRevealed(currentSessionId, true);
+        addLog(`🔓 관리자가 모든 팀의 응답을 공개했습니다.`);
+        soundEffects.playDiceResult();  // 공개 효과음
+      } catch (err) {
+        console.error('응답 공개 상태 저장 실패:', err);
+      }
+    }
+  };
+
+  // 관리자: 모든 팀 AI 비교 평가
+  const handleCompareAllTeams = async () => {
+    if (!currentSessionId || !activeCard || !currentSession) return;
+    if (Object.keys(allTeamResponses).length === 0) {
+      alert('제출된 응답이 없습니다.');
+      return;
+    }
+
+    setIsComparingTeams(true);
+
+    // Firebase에 분석 중 상태 저장
+    const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+    if (isFirebaseConfigured) {
+      await firestoreService.updateGameState(currentSessionId, {
+        isAnalyzing: true
+      });
+    }
+
+    try {
+      // 모든 팀 응답 정리
+      const teamResponsesList = Object.values(allTeamResponses);
+
+      // Gemini AI에 비교 평가 요청
+      const prompt = `
+당신은 리더십 교육 게임의 AI 평가자입니다.
+다음 상황에 대해 여러 팀의 응답을 비교 평가해주세요.
+
+## 카드 정보
+- 제목: ${activeCard.title}
+- 역량: ${activeCard.competency || '일반'}
+- 상황: ${activeCard.situation}
+${activeCard.choices ? `- 선택지:\n${activeCard.choices.map((c, i) => `  ${i + 1}. ${c.text}`).join('\n')}` : '- (개방형 질문)'}
+
+## 팀별 응답
+${teamResponsesList.map((resp, idx) => `
+### ${resp.teamName}
+- 선택: ${resp.selectedChoice?.text || '(개방형 응답)'}
+- 이유: ${resp.reasoning}
+`).join('\n')}
+
+## 평가 기준
+1. 상황 이해도: 문제 상황을 정확히 파악했는가?
+2. 논리성: 선택 이유가 논리적이고 설득력 있는가?
+3. 리더십 관점: 리더로서 적절한 판단인가?
+4. 창의성/통찰력: 독창적이거나 깊이 있는 관점인가?
+5. 실행 가능성: 현실적으로 실행 가능한 방안인가?
+
+## 응답 형식 (JSON)
+{
+  "rankings": [
+    {
+      "teamId": "팀ID",
+      "teamName": "팀이름",
+      "rank": 1,
+      "score": 100,
+      "feedback": "이 팀의 응답에 대한 구체적인 피드백 (2-3문장)"
+    }
+  ],
+  "guidance": "이 상황에서 가장 좋은 접근 방법에 대한 종합적인 가이드 (3-4문장). '이럴 땐, 이렇게...' 형식으로 시작"
+}
+
+## 점수 배점
+- 팀 수에 따라 점수 차등:
+  - 2팀: 1등 100점, 2등 60점
+  - 3팀: 1등 100점, 2등 70점, 3등 40점
+  - 4팀: 1등 100점, 2등 75점, 3등 50점, 4등 25점
+  - 5팀 이상: 1등 100점부터 순위별 적절히 배분
+
+중요: 모든 팀에 대해 rankings 배열에 포함해야 합니다.
+`;
+
+      const result = await genAI.models.generateContent({
+        model: 'gemini-2.0-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+        }
+      });
+
+      const responseText = result.text || '';
+      const parsed = JSON.parse(responseText);
+
+      const comparativeResult: AIComparativeResult = {
+        rankings: parsed.rankings.map((r: any) => ({
+          teamId: r.teamId,
+          teamName: r.teamName,
+          rank: r.rank,
+          score: r.score,
+          feedback: r.feedback,
+          selectedChoice: allTeamResponses[r.teamId]?.selectedChoice || null,
+          reasoning: allTeamResponses[r.teamId]?.reasoning || ''
+        })),
+        guidance: parsed.guidance,
+        analysisTimestamp: Date.now()
+      };
+
+      setAiComparativeResult(comparativeResult);
+
+      // Firebase에 결과 저장
+      if (isFirebaseConfigured) {
+        await firestoreService.saveAIComparativeResult(currentSessionId, {
+          rankings: comparativeResult.rankings,
+          guidance: comparativeResult.guidance,
+          analysisTimestamp: comparativeResult.analysisTimestamp
+        });
+      }
+
+      addLog(`🤖 AI 비교 평가 완료! 1등: ${comparativeResult.rankings[0]?.teamName}`);
+      soundEffects.playCelebration();
+
+    } catch (error) {
+      console.error('AI 비교 평가 실패:', error);
+      addLog(`❌ AI 비교 평가 중 오류 발생`);
+    } finally {
+      setIsComparingTeams(false);
+    }
+  };
+
+  // 관리자: 비교 평가 결과를 점수에 적용
+  const handleApplyComparativeResult = async () => {
+    if (!currentSessionId || !currentSession || !aiComparativeResult) return;
+
+    const rankings = aiComparativeResult.rankings;
+
+    // 각 팀에 점수 적용
+    const updatedTeams = currentSession.teams.map(team => {
+      const ranking = rankings.find(r => r.teamId === team.id);
+      if (ranking) {
+        const newResources = { ...team.resources };
+        newResources.capital += ranking.score;
+        return { ...team, resources: newResources };
+      }
+      return team;
+    });
+
+    await updateTeamsInSession(updatedTeams);
+
+    // 로그 기록
+    rankings.forEach(r => {
+      addLog(`🏆 ${r.rank}등 ${r.teamName}: +${r.score}점`);
+    });
+
+    // 상태 초기화 및 다음 턴
+    setShowCardModal(false);
+    setActiveCard(null);
+    setAllTeamResponses({});
+    setIsResponsesRevealed(false);
+    setAiComparativeResult(null);
+    setIsComparingTeams(false);
+    setGamePhase(GamePhase.Idle);
+    setTurnTimeLeft(120);
+
+    // 다음 턴으로
+    const nextTeamIndex = (currentTurnIndex + 1) % currentSession.teams.length;
+    setCurrentTurnIndex(nextTeamIndex);
+
+    // Firebase 업데이트
+    const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+    if (isFirebaseConfigured) {
+      await firestoreService.resetTeamResponses(currentSessionId);
+      await firestoreService.updateGameState(currentSessionId, {
+        phase: GamePhase.Idle,
+        currentTeamIndex: nextTeamIndex,
+        currentCard: null,
+        isRevealed: false,
+        aiComparativeResult: null,
+        isAnalyzing: false
+      });
+    }
+
+    addLog(`---`);
+  };
+
+  // ============================================================
+  // (레거시) 관람자 투표 핸들러 - 더 이상 사용하지 않음
+  // ============================================================
   const handleSpectatorVote = async (choice: Choice, voterTeamName: string) => {
     if (!currentSessionId || !voterTeamName) return;
 
@@ -1888,8 +2167,11 @@ const App: React.FC = () => {
     setIsAiProcessing(false);
     setIsTeamSaved(false);
     setIsSaving(false);
-    setSpectatorVotes({});  // 관람자 투표 초기화
-    setMySpectatorVote(null);  // 내 투표 초기화
+    // 동시 응답 시스템 초기화
+    setAllTeamResponses({});
+    setIsResponsesRevealed(false);
+    setAiComparativeResult(null);
+    setIsComparingTeams(false);
     setIsDoubleChance(false);  // 더블 찬스 초기화
     setIsRiskCardMode(false);  // 리스크 카드 모드 초기화
     setCustomScoreMultiplier(1);  // 커스텀 모드 점수 배수 초기화
@@ -2348,27 +2630,18 @@ const App: React.FC = () => {
           gameMode={participantSession?.version || GameVersion.Custom}
         />
 
-        {/* 다른 팀 턴 뷰어 모드: 현재 진행 중인 카드가 있고 내 턴이 아니면 읽기 전용 모달 표시 */}
-        {!isMyTurn && activeCard && gamePhase === GamePhase.Decision && !spectatorModalDismissed && (
-          <CardModal
+        {/* 동시 응답 모드: 카드가 표시되면 모든 팀이 응답 가능 */}
+        {activeCard && gamePhase === GamePhase.Decision && participantTeam && (
+          <SimultaneousResponseView
             card={activeCard}
-            visible={true}
-            timeLeft={turnTimeLeft}
-            selectedChoice={sharedSelectedChoice}
-            reasoning={sharedReasoning}
-            onSelectionChange={() => {}} // 읽기 전용
-            onReasoningChange={() => {}} // 읽기 전용
-            onSubmit={async () => {}} // 읽기 전용
-            result={aiEvaluationResult}
-            isProcessing={isAiProcessing}
-            onClose={() => setSpectatorModalDismissed(true)}
-            readOnly={true}
-            teamName={activeTeamForViewer?.name}
-            spectatorVotes={spectatorVotes}
-            spectatorVote={mySpectatorVote}
-            onSpectatorVote={(choice) => handleSpectatorVote(choice, participantTeam.name)}
-            isDoubleChance={isDoubleChance}
-            isRiskCardMode={isRiskCardMode}
+            team={participantTeam}
+            myResponse={allTeamResponses[participantTeam.id]}
+            isRevealed={isResponsesRevealed}
+            allResponses={allTeamResponses}
+            allTeams={participantSession?.teams || []}
+            aiResult={aiComparativeResult}
+            onSubmit={(choice, reasoning) => handleTeamSubmitResponse(participantTeam.id, participantTeam.name, choice, reasoning)}
+            onClose={() => {}}
           />
         )}
 
@@ -2568,9 +2841,17 @@ const App: React.FC = () => {
           isAdminView={true}
           isTeamSaved={isTeamSaved}
           onAISubmit={handleAdminAISubmit}
-          spectatorVotes={spectatorVotes}
           isDoubleChance={isDoubleChance}
           isRiskCardMode={isRiskCardMode}
+          // 동시 응답 시스템 props
+          allTeamResponses={allTeamResponses}
+          allTeams={currentSession?.teams.map(t => ({ id: t.id, name: t.name })) || []}
+          isResponsesRevealed={isResponsesRevealed}
+          aiComparativeResult={aiComparativeResult}
+          isComparingTeams={isComparingTeams}
+          onRevealResponses={handleRevealAllResponses}
+          onCompareTeams={handleCompareAllTeams}
+          onApplyResults={handleApplyComparativeResult}
         />
       )}
 

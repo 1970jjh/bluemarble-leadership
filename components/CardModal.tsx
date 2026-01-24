@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
-import { Choice, GameCard, AIEvaluationResult } from '../types';
-import { X, Send, Sparkles, MessageSquare } from 'lucide-react';
+import { Choice, GameCard, AIEvaluationResult, TeamResponse, AIComparativeResult } from '../types';
+import { X, Send, Sparkles, MessageSquare, Eye, Trophy, Users, CheckCircle2, Clock, Loader2 } from 'lucide-react';
 
 interface CardModalProps {
   card: GameCard;
@@ -39,6 +39,18 @@ interface CardModalProps {
   isDoubleChance?: boolean;
   // 리스크 카드 (모든 점수 마이너스)
   isRiskCardMode?: boolean;
+
+  // ============================================================
+  // 동시 응답 시스템 props
+  // ============================================================
+  allTeamResponses?: { [teamId: string]: TeamResponse };  // 모든 팀 응답
+  allTeams?: { id: string; name: string }[];  // 모든 팀 목록
+  isResponsesRevealed?: boolean;  // 응답 공개 여부
+  aiComparativeResult?: AIComparativeResult | null;  // AI 비교 분석 결과
+  isComparingTeams?: boolean;  // AI 비교 분석 중
+  onRevealResponses?: () => void;  // 관리자: 응답 공개
+  onCompareTeams?: () => void;  // 관리자: AI 비교 분석
+  onApplyResults?: () => void;  // 관리자: 결과 적용
 }
 
 const CardModal: React.FC<CardModalProps> = ({
@@ -63,7 +75,16 @@ const CardModal: React.FC<CardModalProps> = ({
   spectatorVote,
   onSpectatorVote,
   isDoubleChance = false,
-  isRiskCardMode = false
+  isRiskCardMode = false,
+  // 동시 응답 시스템
+  allTeamResponses = {},
+  allTeams = [],
+  isResponsesRevealed = false,
+  aiComparativeResult = null,
+  isComparingTeams = false,
+  onRevealResponses,
+  onCompareTeams,
+  onApplyResults
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   
@@ -185,123 +206,200 @@ const CardModal: React.FC<CardModalProps> = ({
                 </div>
               )}
 
-              {/* 관리자 뷰: 옵션과 실시간 팀 입력 표시 */}
+              {/* 관리자 뷰: 동시 응답 시스템 */}
               {isAdminView && (
                 <>
-                  {/* 상태 표시 (입력 중 / 완료) */}
-                  {isTeamSaved ? (
-                    <div className="bg-green-100 border-4 border-green-600 p-4 text-center mb-4">
-                      <span className="font-bold text-green-800">
-                        ✓ {teamName || '팀'}의 입력이 완료되었습니다!
+                  {/* 팀 응답 현황 */}
+                  <div className="bg-gray-50 border-4 border-gray-300 p-4 mb-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Users size={20} className="text-gray-600" />
+                      <span className="text-sm font-bold text-gray-700 uppercase">
+                        팀 응답 현황 ({Object.values(allTeamResponses).filter(r => r.isSubmitted).length} / {allTeams.length})
                       </span>
                     </div>
-                  ) : (
-                    <div className="bg-blue-100 border-4 border-blue-500 p-3 text-center mb-4 flex items-center justify-center gap-3">
-                      <div className="w-6 h-6 border-3 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                      <span className="font-bold text-blue-800">
-                        {teamName ? `${teamName}이(가) 입력 중...` : '팀 입력 대기 중...'}
-                      </span>
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                      {allTeams.map(team => {
+                        const response = allTeamResponses[team.id];
+                        const isSubmitted = response?.isSubmitted;
+                        return (
+                          <div
+                            key={team.id}
+                            className={`flex items-center gap-2 p-2 rounded-lg border-2 ${
+                              isSubmitted
+                                ? 'bg-green-100 border-green-500'
+                                : 'bg-yellow-50 border-yellow-400'
+                            }`}
+                          >
+                            {isSubmitted ? (
+                              <CheckCircle2 size={16} className="text-green-600" />
+                            ) : (
+                              <Clock size={16} className="text-yellow-600 animate-pulse" />
+                            )}
+                            <span className={`text-sm font-bold ${
+                              isSubmitted ? 'text-green-800' : 'text-yellow-800'
+                            }`}>
+                              {team.name}
+                            </span>
+                          </div>
+                        );
+                      })}
                     </div>
-                  )}
-
-                  {/* 옵션 표시 (실시간 팀 선택 + 다른 팀 투표) */}
-                  {!isOpenEnded && card.choices && (
-                    <div className="bg-gray-50 border-4 border-gray-300 p-4 mb-4">
-                      <div className="text-xs font-bold text-gray-700 uppercase mb-3">
-                        옵션 선택 현황
-                      </div>
-                      <div className="space-y-3">
-                        {card.choices.map((choice) => {
-                          const voterTeams = spectatorVotes[choice.id] || [];
-                          const isSelected = selectedChoice?.id === choice.id;
-
-                          return (
-                            <div
-                              key={choice.id}
-                              className={`p-3 rounded-lg transition-all ${
-                                isSelected
-                                  ? 'bg-blue-100 border-2 border-blue-600 shadow-md'
-                                  : 'bg-white border-2 border-gray-200'
-                              }`}
-                            >
-                              <div className="flex items-start justify-between gap-2">
-                                <div className="flex items-center gap-2 flex-1">
-                                  <span className={`px-3 py-1 text-sm font-bold shrink-0 ${
-                                    isSelected ? 'bg-blue-600 text-white' : 'bg-gray-300 text-gray-700'
-                                  }`}>
-                                    {choice.id}
-                                  </span>
-                                  <span className={`font-medium ${isSelected ? 'text-blue-900' : 'text-gray-700'}`}>
-                                    {choice.text}
-                                  </span>
-                                </div>
-                                {isSelected && (
-                                  <span className="bg-green-500 text-white text-[10px] px-2 py-1 font-bold uppercase rounded shrink-0">
-                                    {teamName} 선택
-                                  </span>
-                                )}
-                              </div>
-                              {/* 다른 팀 투표 표시 */}
-                              {voterTeams.length > 0 && (
-                                <div className="mt-2 flex flex-wrap gap-1">
-                                  {voterTeams.map((voterName, idx) => (
-                                    <span
-                                      key={idx}
-                                      className="bg-purple-500 text-white text-[11px] px-2 py-0.5 rounded-full font-bold"
-                                    >
-                                      👥 {voterName}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 주관식 답변 표시 */}
-                  {isOpenEnded && (
-                    <div className="bg-purple-50 border-4 border-purple-300 p-4 mb-4">
-                      <div className="text-xs font-bold text-purple-700 uppercase mb-2">주관식 답변</div>
-                      <p className="text-purple-900 font-medium">팀원이 자유롭게 답변을 작성합니다.</p>
-                    </div>
-                  )}
-
-                  {/* 응답 내용 (선택 이유) 표시 */}
-                  <div className="bg-white border-4 border-gray-300 p-4">
-                    <div className="text-xs font-bold text-gray-700 uppercase mb-2">
-                      {selectedChoice ? '선택 이유' : '응답 내용'}
-                    </div>
-                    {reasoning ? (
-                      <p className="font-medium text-lg whitespace-pre-wrap text-gray-800">{reasoning}</p>
-                    ) : (
-                      <p className="text-gray-400 italic">아직 입력되지 않았습니다...</p>
-                    )}
                   </div>
 
-                  {/* AI 분석 버튼 (관리자 전용) */}
-                  {onAISubmit && (
-                    <button
-                      onClick={onAISubmit}
-                      disabled={isProcessing}
-                      className={`w-full py-4 text-white text-xl font-black uppercase border-4 border-black flex items-center justify-center gap-3 transition-all shadow-hard
-                        ${isProcessing
-                          ? 'bg-purple-500 cursor-wait'
-                          : 'bg-purple-600 hover:bg-purple-700'}`}
-                    >
-                      {isProcessing ? (
-                        <span className="flex items-center gap-3 animate-pulse">
-                          <Sparkles className="animate-spin" />
-                          <span>AI 분석 실행 중...</span>
-                        </span>
-                      ) : (
-                        <>
-                          <Sparkles size={24} /> AI 분석 실행
-                        </>
+                  {/* 공개 전 상태 */}
+                  {!isResponsesRevealed && !aiComparativeResult && (
+                    <>
+                      {/* 옵션 표시 (선택 정보는 숨김) */}
+                      {!isOpenEnded && card.choices && (
+                        <div className="bg-gray-100 border-4 border-gray-300 p-4 mb-4">
+                          <div className="text-xs font-bold text-gray-600 uppercase mb-3">선택 옵션</div>
+                          <div className="space-y-2">
+                            {card.choices.map((choice) => (
+                              <div key={choice.id} className="p-3 bg-white rounded-lg border-2 border-gray-200">
+                                <span className="px-3 py-1 text-sm font-bold bg-gray-300 text-gray-700 mr-2">
+                                  {choice.id}
+                                </span>
+                                <span className="font-medium text-gray-700">{choice.text}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
                       )}
-                    </button>
+
+                      {/* 공개 버튼 */}
+                      {onRevealResponses && (
+                        <button
+                          onClick={onRevealResponses}
+                          disabled={Object.values(allTeamResponses).filter(r => r.isSubmitted).length === 0}
+                          className="w-full py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white text-xl font-black uppercase border-4 border-black flex items-center justify-center gap-3 transition-all shadow-hard mb-3"
+                        >
+                          <Eye size={24} /> 모든 팀 응답 공개
+                        </button>
+                      )}
+                    </>
+                  )}
+
+                  {/* 공개 후 상태 - 모든 팀 응답 표시 */}
+                  {isResponsesRevealed && !aiComparativeResult && (
+                    <>
+                      <div className="bg-blue-50 border-4 border-blue-400 p-4 mb-4">
+                        <div className="text-sm font-bold text-blue-700 uppercase mb-3 flex items-center gap-2">
+                          <Eye size={18} /> 모든 팀 응답 공개됨
+                        </div>
+                        <div className="space-y-4">
+                          {allTeams.map(team => {
+                            const response = allTeamResponses[team.id];
+                            if (!response?.isSubmitted) return null;
+                            return (
+                              <div key={team.id} className="bg-white p-4 rounded-lg border-2 border-blue-300">
+                                <div className="font-bold text-blue-800 mb-2">{team.name}</div>
+                                {response.selectedChoice && (
+                                  <div className="text-sm mb-1">
+                                    <span className="font-bold text-gray-600">선택:</span>{' '}
+                                    <span className="bg-blue-100 px-2 py-0.5 rounded">
+                                      {response.selectedChoice.id}. {response.selectedChoice.text}
+                                    </span>
+                                  </div>
+                                )}
+                                <div className="text-sm">
+                                  <span className="font-bold text-gray-600">이유:</span>{' '}
+                                  <span className="text-gray-800">{response.reasoning}</span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* AI 비교 분석 버튼 */}
+                      {onCompareTeams && (
+                        <button
+                          onClick={onCompareTeams}
+                          disabled={isComparingTeams}
+                          className={`w-full py-4 text-white text-xl font-black uppercase border-4 border-black flex items-center justify-center gap-3 transition-all shadow-hard mb-3 ${
+                            isComparingTeams ? 'bg-purple-500 cursor-wait' : 'bg-purple-600 hover:bg-purple-700'
+                          }`}
+                        >
+                          {isComparingTeams ? (
+                            <>
+                              <Loader2 size={24} className="animate-spin" /> AI 비교 분석 중...
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles size={24} /> AI 비교 분석 실행
+                            </>
+                          )}
+                        </button>
+                      )}
+                    </>
+                  )}
+
+                  {/* AI 비교 분석 결과 */}
+                  {aiComparativeResult && (
+                    <div className="bg-gradient-to-br from-yellow-50 to-orange-50 border-4 border-yellow-500 p-4 mb-4">
+                      <div className="flex items-center gap-2 mb-4">
+                        <Trophy size={24} className="text-yellow-600" />
+                        <span className="text-lg font-black text-yellow-800 uppercase">AI 비교 분석 결과</span>
+                      </div>
+
+                      {/* 랭킹 */}
+                      <div className="space-y-3 mb-4">
+                        {aiComparativeResult.rankings
+                          .sort((a, b) => a.rank - b.rank)
+                          .map((ranking) => (
+                            <div
+                              key={ranking.teamId}
+                              className={`p-4 rounded-lg border-3 ${
+                                ranking.rank === 1
+                                  ? 'bg-yellow-100 border-yellow-500'
+                                  : ranking.rank === 2
+                                  ? 'bg-gray-100 border-gray-400'
+                                  : ranking.rank === 3
+                                  ? 'bg-orange-100 border-orange-400'
+                                  : 'bg-white border-gray-300'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-3">
+                                  <span className={`text-2xl font-black ${
+                                    ranking.rank === 1 ? 'text-yellow-600' :
+                                    ranking.rank === 2 ? 'text-gray-500' :
+                                    ranking.rank === 3 ? 'text-orange-500' : 'text-gray-400'
+                                  }`}>
+                                    #{ranking.rank}
+                                  </span>
+                                  <span className="font-bold text-lg">{ranking.teamName}</span>
+                                </div>
+                                <span className={`text-xl font-black px-3 py-1 rounded ${
+                                  ranking.rank === 1 ? 'bg-yellow-500 text-white' :
+                                  ranking.rank === 2 ? 'bg-gray-400 text-white' :
+                                  ranking.rank === 3 ? 'bg-orange-400 text-white' :
+                                  'bg-gray-300 text-gray-700'
+                                }`}>
+                                  +{ranking.score}점
+                                </span>
+                              </div>
+                              <p className="text-sm text-gray-700">{ranking.feedback}</p>
+                            </div>
+                          ))}
+                      </div>
+
+                      {/* 가이드 */}
+                      <div className="bg-white p-4 rounded-lg border-2 border-yellow-400">
+                        <div className="text-xs font-bold text-yellow-700 uppercase mb-2">💡 Best Practice</div>
+                        <p className="text-gray-800 font-medium">{aiComparativeResult.guidance}</p>
+                      </div>
+
+                      {/* 결과 적용 버튼 */}
+                      {onApplyResults && (
+                        <button
+                          onClick={onApplyResults}
+                          className="w-full mt-4 py-4 bg-green-600 hover:bg-green-700 text-white text-xl font-black uppercase border-4 border-black flex items-center justify-center gap-3 transition-all shadow-hard"
+                        >
+                          <CheckCircle2 size={24} /> 점수 적용 & 다음 턴
+                        </button>
+                      )}
+                    </div>
                   )}
                 </>
               )}
