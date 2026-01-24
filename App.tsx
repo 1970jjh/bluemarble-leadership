@@ -3056,7 +3056,7 @@ ${evaluationGuidelines}
 
       {/* Content */}
       {adminViewMode === 'dashboard' ? (
-        <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-2 h-full min-h-0">
+        <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-1 h-full min-h-0">
           <div className="lg:col-span-2 order-2 lg:order-1 h-full min-h-0 overflow-y-auto">
              {currentTeam && (
                <ControlPanel
@@ -3080,7 +3080,7 @@ ${evaluationGuidelines}
                 />
              )}
           </div>
-          <div className="lg:col-span-8 order-1 lg:order-2 flex flex-col items-center justify-start pt-1">
+          <div className="lg:col-span-7 order-1 lg:order-2 flex flex-col items-center justify-start pt-1">
             <GameBoard
               teams={teams}
               onSquareClick={handleBoardSquareClick}
@@ -3090,21 +3090,21 @@ ${evaluationGuidelines}
               territories={territories}
             />
           </div>
-          <div className="lg:col-span-2 order-3 h-full min-h-0 overflow-y-auto flex flex-col items-start gap-3">
+          <div className="lg:col-span-3 order-3 h-full min-h-0 overflow-y-auto flex flex-col items-start gap-2 pl-1">
             {/* 참가자 접속 QR 코드 */}
             {currentSession && (
-              <div className="bg-white border-2 border-black p-2 shadow-hard w-full">
-                <div className="text-xs font-bold text-center mb-1 text-gray-700">참가자 접속</div>
-                <div className="flex items-center justify-center gap-2">
+              <div className="bg-white border-3 border-black p-3 shadow-hard w-full">
+                <div className="text-sm font-bold text-center mb-2 text-gray-700">참가자 접속</div>
+                <div className="flex items-center justify-center gap-3">
                   <QRCodeSVG
                     value={getJoinUrl(currentSession.accessCode)}
-                    size={60}
+                    size={80}
                     level="M"
                     includeMargin={false}
                   />
                   <div className="text-center">
-                    <div className="text-lg font-black text-blue-600">{currentSession.accessCode}</div>
-                    <div className="text-[10px] text-gray-500">접속코드</div>
+                    <div className="text-2xl font-black text-blue-600">{currentSession.accessCode}</div>
+                    <div className="text-xs text-gray-500">접속코드</div>
                   </div>
                 </div>
               </div>
