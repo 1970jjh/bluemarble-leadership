@@ -728,21 +728,6 @@ const CardModal: React.FC<CardModalProps> = ({
                    })}
                  </div>
 
-                 <div className="grid grid-cols-2 md:grid-cols-5 gap-2 border-t-2 border-gray-300 pt-4">
-                   {[{ label: 'Resource', key: 'capital' }, { label: 'Energy', key: 'energy' }, { label: 'Trust', key: 'trust' }, { label: 'Competency', key: 'competency' }, { label: 'Insight', key: 'insight' }].map((item, i) => {
-                      const key = item.key as keyof typeof result.scoreChanges;
-                      const label = item.label;
-                      const val = result.scoreChanges[key];
-                      return (
-                         <div key={label} className="text-center p-2 border-2 border-black bg-white">
-                            <div className="text-[10px] uppercase font-bold text-gray-500">{label}</div>
-                            <div className={`text-xl font-black ${getScoreColor(val)}`}>
-                              {val ? (val > 0 ? `+${val}` : val) : '-'}
-                            </div>
-                         </div>
-                      )
-                   })}
-                 </div>
                </div>
 
                {/* 미리보기 모드일 때 */}
