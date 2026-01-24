@@ -62,11 +62,11 @@ const Intro: React.FC<IntroProps> = ({
   return (
     <div className="min-h-screen bg-blue-900 flex flex-col items-center justify-center p-4">
       <div className="max-w-md w-full bg-white border-4 border-black shadow-[8px_8px_0_0_#000] p-8">
-        <h1 className="text-4xl md:text-5xl font-black text-center mb-2 italic break-keep leading-tight">
-          리더십<br/>보드 아카데미
+        <h1 className="text-4xl md:text-5xl font-black text-center mb-2 break-keep leading-tight">
+          Bluemable<br/>Gamification
         </h1>
         <p className="text-center text-gray-500 font-bold mb-8 text-sm">
-          by JJ CREATIVE 교육연구소
+          리더십 교육 보드게임
         </p>
 
         {mode === 'main' && (
