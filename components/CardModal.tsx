@@ -336,20 +336,20 @@ const CardModal: React.FC<CardModalProps> = ({
 
                   {/* AI 비교 분석 결과 */}
                   {aiComparativeResult && (
-                    <div className="bg-gradient-to-br from-yellow-50 to-orange-50 border-4 border-yellow-500 p-4 mb-4">
-                      <div className="flex items-center gap-2 mb-4">
-                        <Trophy size={24} className="text-yellow-600" />
-                        <span className="text-lg font-black text-yellow-800 uppercase">AI 비교 분석 결과</span>
+                    <div className="bg-gradient-to-br from-yellow-50 to-orange-50 border-4 border-yellow-500 p-6 mb-4">
+                      <div className="flex items-center gap-3 mb-6">
+                        <Trophy size={32} className="text-yellow-600" />
+                        <span className="text-2xl font-black text-yellow-800 uppercase">AI 비교 분석 결과</span>
                       </div>
 
-                      {/* 랭킹 */}
-                      <div className="space-y-3 mb-4">
+                      {/* 팀별 선택/이유/평가 */}
+                      <div className="space-y-5 mb-6">
                         {aiComparativeResult.rankings
                           .sort((a, b) => a.rank - b.rank)
                           .map((ranking) => (
                             <div
                               key={ranking.teamId}
-                              className={`p-4 rounded-lg border-3 ${
+                              className={`p-5 rounded-xl border-4 ${
                                 ranking.rank === 1
                                   ? 'bg-yellow-100 border-yellow-500'
                                   : ranking.rank === 2
@@ -359,18 +359,19 @@ const CardModal: React.FC<CardModalProps> = ({
                                   : 'bg-white border-gray-300'
                               }`}
                             >
-                              <div className="flex items-center justify-between mb-2">
-                                <div className="flex items-center gap-3">
-                                  <span className={`text-2xl font-black ${
+                              {/* 팀 이름 및 순위/점수 */}
+                              <div className="flex items-center justify-between mb-4">
+                                <div className="flex items-center gap-4">
+                                  <span className={`text-4xl font-black ${
                                     ranking.rank === 1 ? 'text-yellow-600' :
                                     ranking.rank === 2 ? 'text-gray-500' :
                                     ranking.rank === 3 ? 'text-orange-500' : 'text-gray-400'
                                   }`}>
                                     #{ranking.rank}
                                   </span>
-                                  <span className="font-bold text-lg">{ranking.teamName}</span>
+                                  <span className="font-black text-2xl">{ranking.teamName}</span>
                                 </div>
-                                <span className={`text-xl font-black px-3 py-1 rounded ${
+                                <span className={`text-2xl font-black px-4 py-2 rounded-lg ${
                                   ranking.rank === 1 ? 'bg-yellow-500 text-white' :
                                   ranking.rank === 2 ? 'bg-gray-400 text-white' :
                                   ranking.rank === 3 ? 'bg-orange-400 text-white' :
@@ -379,24 +380,47 @@ const CardModal: React.FC<CardModalProps> = ({
                                   +{ranking.score}점
                                 </span>
                               </div>
-                              <p className="text-sm text-gray-700">{ranking.feedback}</p>
+
+                              {/* 선택 옵션 */}
+                              {ranking.selectedChoice && (
+                                <div className="mb-3 p-3 bg-white/60 rounded-lg">
+                                  <span className="text-base font-bold text-gray-600">선택: </span>
+                                  <span className="text-lg font-bold text-blue-800 bg-blue-100 px-3 py-1 rounded">
+                                    {ranking.selectedChoice.id}. {ranking.selectedChoice.text}
+                                  </span>
+                                </div>
+                              )}
+
+                              {/* 선택 이유 */}
+                              {ranking.reasoning && (
+                                <div className="mb-4 p-3 bg-white/60 rounded-lg">
+                                  <span className="text-base font-bold text-gray-600">선택 이유: </span>
+                                  <p className="text-lg text-gray-800 mt-1">{ranking.reasoning}</p>
+                                </div>
+                              )}
+
+                              {/* AI 평가 */}
+                              <div className="p-4 bg-white rounded-lg border-2 border-gray-300">
+                                <span className="text-base font-bold text-purple-700">🤖 AI 평가: </span>
+                                <p className="text-lg text-gray-800 mt-1 leading-relaxed">{ranking.feedback}</p>
+                              </div>
                             </div>
                           ))}
                       </div>
 
-                      {/* 가이드 */}
-                      <div className="bg-white p-4 rounded-lg border-2 border-yellow-400">
-                        <div className="text-xs font-bold text-yellow-700 uppercase mb-2">💡 Best Practice</div>
-                        <p className="text-gray-800 font-medium">{aiComparativeResult.guidance}</p>
+                      {/* Best Practice */}
+                      <div className="bg-white p-5 rounded-xl border-4 border-yellow-400">
+                        <div className="text-lg font-black text-yellow-700 uppercase mb-3">💡 Best Practice</div>
+                        <p className="text-xl text-gray-800 font-medium leading-relaxed">{aiComparativeResult.guidance}</p>
                       </div>
 
                       {/* 결과 적용 버튼 */}
                       {onApplyResults && (
                         <button
                           onClick={onApplyResults}
-                          className="w-full mt-4 py-4 bg-green-600 hover:bg-green-700 text-white text-xl font-black uppercase border-4 border-black flex items-center justify-center gap-3 transition-all shadow-hard"
+                          className="w-full mt-5 py-5 bg-green-600 hover:bg-green-700 text-white text-2xl font-black uppercase border-4 border-black flex items-center justify-center gap-3 transition-all shadow-hard"
                         >
-                          <CheckCircle2 size={24} /> 점수 적용 & 다음 턴
+                          <CheckCircle2 size={28} /> 점수 적용 & 다음 턴
                         </button>
                       )}
                     </div>

@@ -80,64 +80,81 @@ const SimultaneousResponseView: React.FC<SimultaneousResponseViewProps> = ({
           {/* AI 결과 표시 */}
           {aiResult && (
             <div className="mb-6">
-              {/* 내 결과 */}
-              {myRanking && (
-                <div className={`p-4 rounded-lg border-4 mb-4 ${
-                  myRanking.rank === 1 ? 'bg-yellow-100 border-yellow-500' :
-                  myRanking.rank === 2 ? 'bg-gray-100 border-gray-400' :
-                  myRanking.rank === 3 ? 'bg-orange-100 border-orange-400' :
-                  'bg-white border-gray-300'
-                }`}>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-3">
-                      <Trophy size={24} className={
-                        myRanking.rank === 1 ? 'text-yellow-600' :
-                        myRanking.rank === 2 ? 'text-gray-500' :
-                        myRanking.rank === 3 ? 'text-orange-500' : 'text-gray-400'
-                      } />
-                      <span className="text-2xl font-black">#{myRanking.rank}</span>
-                      <span className="font-bold">{team.name}</span>
-                    </div>
-                    <span className={`text-xl font-black px-3 py-1 rounded ${
-                      myRanking.rank === 1 ? 'bg-yellow-500 text-white' :
-                      myRanking.rank === 2 ? 'bg-gray-400 text-white' :
-                      myRanking.rank === 3 ? 'bg-orange-400 text-white' :
-                      'bg-gray-300 text-gray-700'
-                    }`}>
-                      +{myRanking.score}점
-                    </span>
-                  </div>
-                  <p className="text-gray-700">{myRanking.feedback}</p>
-                </div>
-              )}
-
-              {/* 전체 랭킹 */}
-              <div className="bg-gray-50 p-4 rounded-lg border-2 border-gray-300">
-                <div className="text-sm font-bold text-gray-600 uppercase mb-3 flex items-center gap-2">
-                  <Users size={16} /> 전체 랭킹
-                </div>
-                <div className="space-y-2">
-                  {aiResult.rankings.sort((a, b) => a.rank - b.rank).map(r => (
-                    <div
-                      key={r.teamId}
-                      className={`flex items-center justify-between p-2 rounded ${
-                        r.teamId === team.id ? 'bg-blue-100 border border-blue-400' : 'bg-white'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-lg">#{r.rank}</span>
-                        <span className={r.teamId === team.id ? 'font-bold text-blue-800' : ''}>{r.teamName}</span>
-                      </div>
-                      <span className="font-bold text-green-600">+{r.score}점</span>
-                    </div>
-                  ))}
-                </div>
+              {/* 헤더 */}
+              <div className="flex items-center gap-3 mb-5">
+                <Trophy size={28} className="text-yellow-600" />
+                <span className="text-xl font-black text-yellow-800 uppercase">AI 비교 분석 결과</span>
               </div>
 
-              {/* 가이드 */}
-              <div className="mt-4 bg-yellow-50 p-4 rounded-lg border-2 border-yellow-400">
-                <div className="text-xs font-bold text-yellow-700 uppercase mb-2">Best Practice</div>
-                <p className="text-gray-800">{aiResult.guidance}</p>
+              {/* 팀별 선택/이유/평가 */}
+              <div className="space-y-4 mb-5">
+                {aiResult.rankings.sort((a, b) => a.rank - b.rank).map((ranking) => (
+                  <div
+                    key={ranking.teamId}
+                    className={`p-4 rounded-lg border-4 ${
+                      ranking.teamId === team.id ? 'ring-4 ring-blue-500 ring-offset-2' : ''
+                    } ${
+                      ranking.rank === 1 ? 'bg-yellow-50 border-yellow-500' :
+                      ranking.rank === 2 ? 'bg-gray-50 border-gray-400' :
+                      ranking.rank === 3 ? 'bg-orange-50 border-orange-400' :
+                      'bg-white border-gray-300'
+                    }`}
+                  >
+                    {/* 팀 이름 및 순위/점수 */}
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        <Trophy size={22} className={
+                          ranking.rank === 1 ? 'text-yellow-600' :
+                          ranking.rank === 2 ? 'text-gray-500' :
+                          ranking.rank === 3 ? 'text-orange-500' : 'text-gray-400'
+                        } />
+                        <span className="text-xl font-black">#{ranking.rank}</span>
+                        <span className={`text-lg font-bold ${ranking.teamId === team.id ? 'text-blue-800' : ''}`}>
+                          {ranking.teamName}
+                          {ranking.teamId === team.id && <span className="ml-2 text-blue-600">(우리 팀)</span>}
+                        </span>
+                      </div>
+                      <span className={`text-lg font-black px-3 py-1 rounded ${
+                        ranking.rank === 1 ? 'bg-yellow-500 text-white' :
+                        ranking.rank === 2 ? 'bg-gray-400 text-white' :
+                        ranking.rank === 3 ? 'bg-orange-400 text-white' :
+                        'bg-gray-300 text-gray-700'
+                      }`}>
+                        +{ranking.score}점
+                      </span>
+                    </div>
+
+                    {/* 선택 옵션 */}
+                    {ranking.selectedChoice && (
+                      <div className="mb-2 p-2 bg-white/60 rounded-lg">
+                        <span className="text-sm font-bold text-gray-600">선택: </span>
+                        <span className="text-base font-bold text-blue-800 bg-blue-100 px-2 py-1 rounded">
+                          {ranking.selectedChoice.id}. {ranking.selectedChoice.text}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* 선택 이유 */}
+                    {ranking.reasoning && (
+                      <div className="mb-2 p-2 bg-white/60 rounded-lg">
+                        <span className="text-sm font-bold text-gray-600">선택 이유: </span>
+                        <p className="text-base text-gray-800 mt-1">{ranking.reasoning}</p>
+                      </div>
+                    )}
+
+                    {/* AI 평가 */}
+                    <div className="p-3 bg-white rounded-lg border-2 border-gray-200">
+                      <span className="text-sm font-bold text-purple-700">🤖 AI 평가: </span>
+                      <p className="text-base text-gray-800 mt-1 leading-relaxed">{ranking.feedback}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Best Practice */}
+              <div className="bg-white p-4 rounded-xl border-4 border-yellow-400">
+                <div className="text-base font-black text-yellow-700 uppercase mb-2">💡 Best Practice</div>
+                <p className="text-lg text-gray-800 font-medium leading-relaxed">{aiResult.guidance}</p>
               </div>
             </div>
           )}
