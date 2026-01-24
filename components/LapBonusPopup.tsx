@@ -1,30 +1,37 @@
 import React, { useEffect, useState } from 'react';
-import { Trophy, Coins, Battery, Handshake, TrendingUp, Lightbulb, PartyPopper } from 'lucide-react';
+import { Trophy, Coins, PartyPopper, ArrowRight, Users } from 'lucide-react';
 
 interface LapBonusPopupProps {
   visible: boolean;
   teamName: string;
   lapCount: number;
-  bonuses: {
+  bonusPerTeam?: number;  // 다른 팀당 가져올 점수 (기본 20)
+  otherTeamsCount?: number;  // 다른 팀 수
+  onComplete: () => void;
+  duration?: number;
+  // Legacy props (호환성 유지)
+  bonuses?: {
     capital: number;
     energy: number;
     trust: number;
     competency: number;
     insight: number;
   };
-  onComplete: () => void;
-  duration?: number;
 }
 
 const LapBonusPopup: React.FC<LapBonusPopupProps> = ({
   visible,
   teamName,
   lapCount,
-  bonuses,
+  bonusPerTeam = 20,
+  otherTeamsCount = 3,
   onComplete,
   duration = 5000,
+  bonuses,  // Legacy - 사용되지 않지만 호환성 유지
 }) => {
   const [animateIn, setAnimateIn] = useState(false);
+
+  const totalBonus = bonusPerTeam * otherTeamsCount;
 
   useEffect(() => {
     if (visible) {
@@ -72,14 +79,6 @@ const LapBonusPopup: React.FC<LapBonusPopupProps> = ({
 
   if (!visible) return null;
 
-  const bonusItems = [
-    { icon: Coins, label: '자원(시간)', value: bonuses.capital, color: 'text-yellow-400' },
-    { icon: Battery, label: '에너지', value: bonuses.energy, color: 'text-orange-400' },
-    { icon: Handshake, label: '신뢰', value: bonuses.trust, color: 'text-blue-400' },
-    { icon: TrendingUp, label: '역량', value: bonuses.competency, color: 'text-green-400' },
-    { icon: Lightbulb, label: '통찰력', value: bonuses.insight, color: 'text-purple-400' },
-  ];
-
   return (
     <div className="fixed inset-0 bg-black/90 z-[100] flex items-center justify-center backdrop-blur-sm">
       <div className={`transform transition-all duration-500 ${animateIn ? 'scale-100 opacity-100' : 'scale-50 opacity-0'}`}>
@@ -89,7 +88,7 @@ const LapBonusPopup: React.FC<LapBonusPopupProps> = ({
         </div>
 
         <div className="relative bg-gradient-to-br from-yellow-500 via-orange-500 to-red-500 p-1 rounded-3xl shadow-2xl">
-          <div className="bg-gradient-to-br from-gray-900 to-gray-800 p-8 rounded-3xl">
+          <div className="bg-gradient-to-br from-gray-900 to-gray-800 p-8 rounded-3xl min-w-[350px]">
             {/* 파티 아이콘 */}
             <div className="flex justify-center gap-4 mb-4">
               <PartyPopper className="text-yellow-400 animate-bounce" size={40} />
@@ -100,7 +99,7 @@ const LapBonusPopup: React.FC<LapBonusPopupProps> = ({
             {/* 제목 */}
             <div className="text-center mb-6">
               <div className="text-yellow-400 text-sm font-bold uppercase tracking-widest mb-2">
-                🎉 LAP COMPLETE! 🎉
+                LAP COMPLETE!
               </div>
               <h2 className="text-3xl md:text-4xl font-black text-white mb-2">
                 한 바퀴 완주!
@@ -110,23 +109,39 @@ const LapBonusPopup: React.FC<LapBonusPopupProps> = ({
               </div>
             </div>
 
-            {/* 보너스 목록 */}
-            <div className="bg-black/30 rounded-2xl p-4 mb-6">
+            {/* 새로운 보너스 표시 - 다른 팀에서 점수 가져오기 */}
+            <div className="bg-black/30 rounded-2xl p-5 mb-6">
               <div className="text-center text-white/70 text-sm uppercase tracking-wider mb-4">
-                획득 보너스
+                보너스 획득
               </div>
-              <div className="grid grid-cols-5 gap-2">
-                {bonusItems.map((item, index) => (
-                  <div
-                    key={item.label}
-                    className="flex flex-col items-center p-2 bg-white/10 rounded-xl transform transition-all hover:scale-110"
-                    style={{ animationDelay: `${index * 0.1}s` }}
-                  >
-                    <item.icon className={`${item.color} mb-1`} size={24} />
-                    <span className="text-white font-black text-lg">+{item.value}</span>
-                    <span className="text-white/60 text-[10px] uppercase">{item.label}</span>
+
+              {/* 계산 표시 */}
+              <div className="flex items-center justify-center gap-3 mb-4">
+                <div className="flex items-center gap-2 bg-red-500/20 px-4 py-2 rounded-xl">
+                  <Users className="text-red-400" size={20} />
+                  <span className="text-white font-bold">다른 팀 {otherTeamsCount}개</span>
+                </div>
+                <span className="text-white/50 text-xl">×</span>
+                <div className="bg-yellow-500/20 px-4 py-2 rounded-xl">
+                  <span className="text-yellow-400 font-bold">{bonusPerTeam}점</span>
+                </div>
+              </div>
+
+              {/* 화살표와 결과 */}
+              <div className="flex flex-col items-center">
+                <ArrowRight className="text-green-400 rotate-90 mb-2" size={24} />
+                <div className="bg-gradient-to-r from-green-500 to-emerald-500 px-6 py-3 rounded-xl flex items-center gap-3">
+                  <Coins className="text-yellow-300" size={28} />
+                  <div className="text-white">
+                    <div className="text-3xl font-black">+{totalBonus}</div>
+                    <div className="text-xs opacity-80">포인트 획득!</div>
                   </div>
-                ))}
+                </div>
+              </div>
+
+              {/* 설명 */}
+              <div className="text-center text-white/60 text-sm mt-4">
+                다른 팀들은 각각 {bonusPerTeam}점씩 감소합니다
               </div>
             </div>
 
