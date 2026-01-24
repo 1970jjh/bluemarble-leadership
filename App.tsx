@@ -171,6 +171,18 @@ const App: React.FC = () => {
     gameLogsRef.current = gameLogs;
   }, [gameLogs]);
 
+  // isRolling을 ref로도 추적 (Firebase 동기화 시 stale closure 방지)
+  const isRollingRef = useRef(false);
+  useEffect(() => {
+    isRollingRef.current = isRolling;
+  }, [isRolling]);
+
+  // showDiceOverlay를 ref로도 추적
+  const showDiceOverlayRef = useRef(false);
+  useEffect(() => {
+    showDiceOverlayRef.current = showDiceOverlay;
+  }, [showDiceOverlay]);
+
   // Helper to get current session object
   const currentSession = sessions.find(s => s.id === currentSessionId);
   const teams = currentSession ? currentSession.teams : [];
@@ -358,11 +370,20 @@ const App: React.FC = () => {
         // setAiEvaluationResult(state.aiResult);
         setIsAiProcessing(state.isAiProcessing || false);
         setIsTeamSaved(state.isSubmitted || false);  // 팀 저장 완료 여부
-        setIsRolling(state.phase === GamePhase.Rolling);
+
+        // Rolling 상태 동기화 - 이미 롤링 중이면 무시 (무한 루프 방지)
+        // 새로고침 시 stale Rolling 상태는 무시 (lastUpdated가 5초 이상 지났으면 stale)
+        const isStaleRollingState = state.phase === GamePhase.Rolling &&
+          state.lastUpdated && (Date.now() - state.lastUpdated > 5000);
+
+        if (!isStaleRollingState) {
+          setIsRolling(state.phase === GamePhase.Rolling);
+        }
 
         // 주사위 롤링 상태 동기화 (모바일에서 굴렸을 때 관리자 대시보드에서도 표시)
-        // 단, 이미 오버레이가 표시 중이면 pendingDice 업데이트 안함 (버그 방지)
-        if (state.phase === GamePhase.Rolling && !localOperationInProgress.current && !showDiceOverlay) {
+        // 조건: stale 상태 아님 + 로컬 작업 없음 + 오버레이 미표시 + 현재 롤링 중 아님
+        if (state.phase === GamePhase.Rolling && !isStaleRollingState &&
+            !localOperationInProgress.current && !showDiceOverlayRef.current && !isRollingRef.current) {
           // 다른 클라이언트에서 주사위를 굴린 경우 - 주사위 오버레이 표시
           setPendingDice(state.diceValue || [1, 1]);
           setShowDiceOverlay(true);
