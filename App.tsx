@@ -3011,9 +3011,9 @@ ${teamResponsesList.map((resp) => `
   const monitoredTeam = teams.find(t => t.id === monitoringTeamId);
 
   return (
-    <div className="min-h-screen bg-gray-100 font-sans text-gray-900 p-2 md:p-6 overflow-hidden flex flex-col">
+    <div className="min-h-screen bg-gray-100 font-sans text-gray-900 p-2 md:p-4 overflow-hidden flex flex-col">
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-center mb-4 bg-white border-4 border-black p-2 shadow-sm">
+      <div className="flex flex-col md:flex-row justify-between items-center mb-2 bg-white border-4 border-black p-2 shadow-sm">
          <div className="flex flex-col md:flex-row md:items-baseline gap-2 md:gap-4 mb-2 md:mb-0">
            <button 
              onClick={() => { if(window.confirm("Exit?")) { setView('lobby'); setCurrentSessionId(null); } }}
@@ -3069,7 +3069,7 @@ ${teamResponsesList.map((resp) => `
 
       {/* Content */}
       {adminViewMode === 'dashboard' ? (
-        <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4 h-full min-h-0">
+        <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-2 h-full min-h-0">
           <div className="lg:col-span-2 order-2 lg:order-1 h-full min-h-0 overflow-y-auto">
              {currentTeam && (
                <ControlPanel
@@ -3093,7 +3093,7 @@ ${teamResponsesList.map((resp) => `
                 />
              )}
           </div>
-          <div className="lg:col-span-7 order-1 lg:order-2 flex flex-col items-center justify-start pt-2">
+          <div className="lg:col-span-8 order-1 lg:order-2 flex flex-col items-center justify-start pt-1">
             <GameBoard
               teams={teams}
               onSquareClick={handleBoardSquareClick}
@@ -3103,7 +3103,7 @@ ${teamResponsesList.map((resp) => `
               territories={territories}
             />
           </div>
-          <div className="lg:col-span-3 order-3 h-full min-h-0 overflow-y-auto flex justify-end">
+          <div className="lg:col-span-2 order-3 h-full min-h-0 overflow-y-auto flex justify-end">
             <div className="flex flex-col gap-2 w-48">
               {(() => {
                 // 팀별 점수 기준 순위 정렬

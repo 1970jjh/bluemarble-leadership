@@ -126,7 +126,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ teams, onSquareClick, gameMode, c
   const currentBgImage = customBoardImage || defaultBgImage;
 
   return (
-    <div className="flex flex-col items-center gap-4">
+    <div className="flex flex-col items-center gap-2 w-full max-w-[calc(100vh-180px)]">
       {/* 게임판 */}
       <div className="w-full aspect-square bg-[#e8e8e8] border-[12px] border-black p-4 shadow-hard rounded-xl relative overflow-hidden">
         <div className="w-full h-full grid grid-cols-9 grid-rows-9 gap-1.5">
@@ -247,10 +247,10 @@ const GameBoard: React.FC<GameBoardProps> = ({ teams, onSquareClick, gameMode, c
 
       {/* 게임판 아래 텍스트 */}
       <div className="w-full flex flex-col md:flex-row items-center justify-center gap-4 px-4">
-        <h1 className="text-3xl md:text-4xl font-black text-blue-900 tracking-tighter text-center leading-none italic">
+        <h1 className="text-2xl md:text-3xl font-black text-blue-900 tracking-tighter text-center leading-none italic">
           JJ <span className="text-black">ACADEMY</span>
         </h1>
-        <div className="bg-black text-white px-6 py-2 text-lg md:text-xl font-black border-4 border-black shadow-hard uppercase text-center">
+        <div className="bg-black text-white px-4 py-1.5 text-sm md:text-base font-black border-4 border-black shadow-hard uppercase text-center">
           {gameMode.toUpperCase()} SIMULATION
         </div>
       </div>
