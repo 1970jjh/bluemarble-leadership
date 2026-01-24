@@ -108,6 +108,7 @@ const App: React.FC = () => {
   const [activeCard, setActiveCard] = useState<GameCard | null>(null);
   const [showCardModal, setShowCardModal] = useState(false);
   const [previewCard, setPreviewCard] = useState<GameCard | null>(null);
+  const [currentCardSquareIndex, setCurrentCardSquareIndex] = useState<number | null>(null);  // 현재 카드가 표시된 칸 인덱스
 
   // --- Preview Card State (관리자 미리보기용 - 게임에 반영 안됨) ---
   const [previewSelectedChoice, setPreviewSelectedChoice] = useState<Choice | null>(null);
@@ -138,6 +139,15 @@ const App: React.FC = () => {
   const [isResponsesRevealed, setIsResponsesRevealed] = useState(false);  // 관리자가 공개 버튼 클릭했는지
   const [aiComparativeResult, setAiComparativeResult] = useState<AIComparativeResult | null>(null);
   const [isComparingTeams, setIsComparingTeams] = useState(false);  // AI 비교 분석 중
+
+  // 영토 소유권 시스템 (최고 점수 팀이 칸 소유)
+  const [territories, setTerritories] = useState<{ [squareIndex: string]: {
+    ownerTeamId: string;
+    ownerTeamName: string;
+    ownerTeamColor: string;
+    acquiredAt: number;
+  } }>({});
+  const TOLL_AMOUNT = 15;  // 통행료 금액
 
   // 관리자 대시보드 상태
   const [showAdminDashboard, setShowAdminDashboard] = useState(false);
@@ -1101,6 +1111,95 @@ const App: React.FC = () => {
     const square = BOARD_SQUARES.find(s => s.index === squareIndex);
     if (!square) return;
 
+    // ============================================================
+    // 영토 소유권 체크 - 다른 팀 소유 칸이면 통행료 지불 후 재굴림
+    // ============================================================
+    const territory = territories[squareIndex.toString()];
+    if (territory && territory.ownerTeamId !== team.id && square.type === SquareType.City) {
+      // 다른 팀이 소유한 칸에 도착 → 통행료 지불 + 재굴림
+      const ownerTeam = currentSession?.teams.find(t => t.id === territory.ownerTeamId);
+
+      if (ownerTeam && currentSession) {
+        // x2/x3 배율 적용된 통행료 계산
+        const multiplier = getSquareMultiplier(squareIndex);
+        const tollAmount = TOLL_AMOUNT * multiplier;
+
+        addLog(`🏠 ${team.name}이(가) ${territory.ownerTeamName} 소유 칸에 도착!`);
+        addLog(`💰 통행료 ${tollAmount}점을 ${territory.ownerTeamName}에게 지불!${multiplier > 1 ? ` (x${multiplier} 특수칸)` : ''}`);
+
+        // 통행료 지불 (현재 팀 → 소유자 팀)
+        const updatedTeams = currentSession.teams.map(t => {
+          if (t.id === team.id) {
+            // 통행료 지불
+            const newScore = Math.max(0, (t.score ?? INITIAL_SCORE) - tollAmount);
+            return { ...t, score: newScore };
+          } else if (t.id === territory.ownerTeamId) {
+            // 통행료 수령
+            const newScore = (t.score ?? INITIAL_SCORE) + tollAmount;
+            return { ...t, score: newScore };
+          }
+          return t;
+        });
+        updateTeamsInSession(updatedTeams);
+
+        // 재굴림 (추가 주사위)
+        addLog(`🎲 ${team.name}: 소유된 칸이므로 추가 주사위를 굴립니다!`);
+        const extraDie1 = Math.ceil(Math.random() * 6);
+        const extraDie2 = Math.ceil(Math.random() * 6);
+        const extraSteps = extraDie1 + extraDie2;
+        addLog(`🎲 추가 주사위: ${extraDie1} + ${extraDie2} = ${extraSteps}칸 이동`);
+
+        // 새 위치 계산
+        let newPos = squareIndex + extraSteps;
+        let passedStart = false;
+        if (newPos >= BOARD_SIZE) {
+          newPos = newPos % BOARD_SIZE;
+          passedStart = true;
+        }
+
+        // 팀 위치 업데이트 (점수는 이미 위에서 업데이트됨)
+        if (passedStart) {
+          const newLapCount = team.lapCount + 1;
+          const otherTeamsCount = currentSession.teams.length - 1;
+          const totalBonus = otherTeamsCount * LAP_BONUS_PER_TEAM;
+
+          setSessions(prevSessions => {
+            const session = prevSessions.find(s => s.id === currentSessionId);
+            if (!session) return prevSessions;
+
+            const bonusUpdatedTeams = session.teams.map(t => {
+              if (t.id === team.id) {
+                return { ...t, position: newPos, score: (t.score ?? INITIAL_SCORE) + totalBonus, lapCount: newLapCount };
+              } else {
+                return { ...t, score: Math.max(0, (t.score ?? INITIAL_SCORE) - LAP_BONUS_PER_TEAM) };
+              }
+            });
+
+            const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+            if (isFirebaseConfigured && currentSessionId) {
+              firestoreService.updateTeams(currentSessionId, bonusUpdatedTeams).catch(err =>
+                console.warn('Firebase 업데이트 실패:', err)
+              );
+            }
+
+            return prevSessions.map(s => s.id === currentSessionId ? { ...s, teams: bonusUpdatedTeams } : s);
+          });
+
+          addLog(`🎉 ${team.name} 한 바퀴 완주! +${totalBonus}점 획득!`);
+          soundEffects.playCelebration();
+        }
+
+        // 새 위치에서 다시 handleLandOnSquare 호출 (재귀)
+        setTimeout(() => {
+          handleLandOnSquare({ ...team, position: newPos }, newPos);
+        }, 1000);
+        return;
+      }
+    }
+
+    // ============================================================
+    // 기존 로직: 이미 푼 카드 체크
+    // ============================================================
     // 자기 팀이 이미 해당 위치에서 카드를 풀었는지 확인 (City 칸만 해당)
     // 현재 세션에서 팀 정보 가져오기
     const currentTeamFromSession = currentSession?.teams.find(t => t.id === team.id);
@@ -1191,6 +1290,7 @@ const App: React.FC = () => {
 
     if (selectedCard) {
       setActiveCard(selectedCard);
+      setCurrentCardSquareIndex(squareIndex);  // 현재 카드가 표시된 칸 인덱스 저장
       setSharedSelectedChoice(null);
       setSharedReasoning('');
       setAiEvaluationResult(null);
@@ -1899,8 +1999,15 @@ ${teamResponsesList.map((resp) => `
 
     const rankings = aiComparativeResult.rankings;
 
+    // x2/x3 배율 적용 (현재 카드 칸에 따라)
+    const multiplier = currentCardSquareIndex !== null ? getSquareMultiplier(currentCardSquareIndex) : 1;
+    const multiplierText = multiplier > 1 ? ` (x${multiplier} 특수칸!)` : '';
+
     // 점수 변경 정보 수집 (팝업용)
     const scoreChanges: { teamName: string; oldScore: number; addedScore: number; newScore: number; rank: number }[] = [];
+
+    // 1등 팀 찾기 (영토 소유권 부여용)
+    const firstPlaceRanking = rankings.find(r => r.rank === 1);
 
     // 각 팀에 점수 적용 (단일 점수 체계) - teamId 또는 teamName으로 매칭
     const updatedTeams = currentSession.teams.map(team => {
@@ -1914,12 +2021,13 @@ ${teamResponsesList.map((resp) => `
 
       if (ranking) {
         const currentScore = team.score ?? INITIAL_SCORE;
-        const newScore = currentScore + ranking.score;
+        const appliedScore = ranking.score * multiplier;  // 배율 적용
+        const newScore = currentScore + appliedScore;
 
         scoreChanges.push({
           teamName: team.name,
           oldScore: currentScore,
-          addedScore: ranking.score,
+          addedScore: appliedScore,
           newScore: newScore,
           rank: ranking.rank
         });
@@ -1931,9 +2039,29 @@ ${teamResponsesList.map((resp) => `
 
     await updateTeamsInSession(updatedTeams);
 
+    // 영토 소유권 설정 (1등 팀이 해당 칸 소유)
+    if (currentCardSquareIndex !== null && currentCardSquareIndex !== 0 && firstPlaceRanking) {
+      const winnerTeam = currentSession.teams.find(t =>
+        t.id === firstPlaceRanking.teamId || t.name === firstPlaceRanking.teamName
+      );
+      if (winnerTeam) {
+        setTerritories(prev => ({
+          ...prev,
+          [currentCardSquareIndex.toString()]: {
+            ownerTeamId: winnerTeam.id,
+            ownerTeamName: winnerTeam.name,
+            ownerTeamColor: winnerTeam.color,
+            acquiredAt: Date.now()
+          }
+        }));
+        addLog(`🏠 ${winnerTeam.name}이(가) ${currentCardSquareIndex}번 칸을 점령!`);
+      }
+    }
+
     // 로그 기록
     rankings.forEach(r => {
-      addLog(`🏆 ${r.rank}등 ${r.teamName}: +${r.score}점`);
+      const appliedScore = r.score * multiplier;
+      addLog(`🏆 ${r.rank}등 ${r.teamName}: +${appliedScore}점${multiplierText}`);
     });
 
     // 점수 변경 팝업 표시 (정렬: 순위별)
@@ -2864,6 +2992,7 @@ ${teamResponsesList.map((resp) => `
               gameMode={currentSession?.version || 'Leadership Simulation'}
               customBoardImage={currentSession?.customBoardImage}
               customCards={sessionCustomCards}
+              territories={territories}
             />
           </div>
           <div className="lg:col-span-3 order-3 h-full min-h-0 overflow-y-auto flex justify-end">

@@ -142,6 +142,32 @@ const GameRulesModal: React.FC<GameRulesModalProps> = ({
             </div>
           </section>
 
+          {/* 특수 칸 (x2/x3) */}
+          <section>
+            <h3 className="text-lg font-black text-gray-800 mb-3 flex items-center gap-2">
+              <Zap className="text-yellow-600" size={20} />
+              특수 칸 (x2 / x3 배율)
+            </h3>
+            <div className="bg-gradient-to-r from-yellow-50 to-red-50 p-4 rounded-lg border-2 border-yellow-400">
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <span className="bg-yellow-400 text-black px-3 py-1 font-black rounded">x2</span>
+                  <div>
+                    <div className="font-bold text-yellow-700">2배 칸 (8, 16, 24번)</div>
+                    <p className="text-sm text-gray-600">AI 점수와 통행료가 <strong className="text-yellow-700">2배</strong>로 적용됩니다!</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="bg-red-500 text-white px-3 py-1 font-black rounded">x3</span>
+                  <div>
+                    <div className="font-bold text-red-700">3배 칸 (12, 28번)</div>
+                    <p className="text-sm text-gray-600">AI 점수와 통행료가 <strong className="text-red-700">3배</strong>로 적용됩니다!</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
           {/* 영토 시스템 */}
           <section>
             <h3 className="text-lg font-black text-gray-800 mb-3 flex items-center gap-2">
@@ -160,14 +186,15 @@ const GameRulesModal: React.FC<GameRulesModalProps> = ({
                 <div>
                   <div className="font-bold text-indigo-800">💰 통행료 시스템</div>
                   <p className="text-sm text-gray-600 mt-1">
-                    다른 팀이 소유한 칸에 도착하면 <strong className="text-red-600">15포인트</strong>를 통행료로 지불합니다.
+                    다른 팀이 소유한 칸에 도착하면 <strong className="text-red-600">기본 15포인트</strong>를 통행료로 지불합니다.
                     <br />통행료는 영토 소유자에게 지급됩니다.
+                    <br /><span className="text-yellow-700">x2 칸은 30점, x3 칸은 45점!</span>
                   </p>
                 </div>
                 <div>
                   <div className="font-bold text-indigo-800">🎲 재굴림 기회</div>
                   <p className="text-sm text-gray-600 mt-1">
-                    다른 팀 영토에 도착한 팀은 통행료 지불 후 <strong>주사위를 다시 굴릴 수 있습니다.</strong>
+                    다른 팀 영토에 도착한 팀은 통행료 지불 후 <strong>주사위를 다시 굴려 이동합니다.</strong>
                   </p>
                 </div>
               </div>
@@ -201,12 +228,11 @@ const GameRulesModal: React.FC<GameRulesModalProps> = ({
                 보드를 한 바퀴 돌아 <strong>출발점을 지나거나 도착</strong>하면 보너스를 받습니다!
               </p>
               <div className="flex flex-wrap gap-2">
-                <span className="bg-yellow-200 text-yellow-800 px-2 py-1 rounded text-sm font-bold">자원 +20</span>
-                <span className="bg-orange-200 text-orange-800 px-2 py-1 rounded text-sm font-bold">에너지 +40</span>
-                <span className="bg-blue-200 text-blue-800 px-2 py-1 rounded text-sm font-bold">신뢰 +10</span>
-                <span className="bg-green-200 text-green-800 px-2 py-1 rounded text-sm font-bold">역량 +10</span>
-                <span className="bg-purple-200 text-purple-800 px-2 py-1 rounded text-sm font-bold">통찰력 +10</span>
+                <span className="bg-green-300 text-green-900 px-3 py-1 rounded text-sm font-bold">다른 팀에서 각 20점씩 획득!</span>
               </div>
+              <p className="text-xs text-gray-500 mt-2">
+                * 예: 4팀 게임에서 완주 시 → 다른 3팀에서 각 20점 = 총 60점 획득
+              </p>
             </div>
           </section>
 
@@ -245,8 +271,9 @@ const GameRulesModal: React.FC<GameRulesModalProps> = ({
                 게임 종료 시 <strong>총 점수</strong>가 가장 높은 팀이 우승합니다!
               </p>
               <div className="text-sm text-gray-600">
-                <p>📊 총 점수 = 자원(시간) + 에너지 + 신뢰 + 역량 + 통찰력</p>
-                <p className="mt-2">💡 팁: 매 라운드 높은 순위를 유지하고, 영토를 확보하여 통행료 수입을 올리세요!</p>
+                <p>📊 시작 점수: 100점 → AI 평가 점수 + 보너스 - 통행료</p>
+                <p className="mt-2">💡 <strong>팁</strong>: 매 라운드 높은 순위를 유지하고, 영토를 확보하여 통행료 수입을 올리세요!</p>
+                <p className="mt-1">💡 x2/x3 칸에서 1등을 하면 큰 점수를 얻을 수 있습니다!</p>
               </div>
             </div>
           </section>
