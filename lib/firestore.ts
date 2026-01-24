@@ -12,7 +12,9 @@ import {
   onSnapshot,
   Unsubscribe,
   serverTimestamp,
-  Timestamp
+  Timestamp,
+  runTransaction,
+  writeBatch
 } from 'firebase/firestore';
 import { db } from './firebase';
 import type { Session, Team, TurnRecord, GamePhase, SessionStatus } from '../types';
@@ -305,21 +307,41 @@ export async function updateSpectatorVote(
 // 동시 응답 시스템 함수
 // ========================
 
-// 팀 응답 저장/업데이트
+// 팀 응답 저장/업데이트 (트랜잭션 사용 - 동시 쓰기 안전)
 export async function updateTeamResponse(
   sessionId: string,
   teamId: string,
   response: TeamResponseData
 ): Promise<void> {
-  const state = await getGameState(sessionId);
-  const currentResponses = state?.teamResponses || {};
+  const stateRef = doc(db, GAME_STATE_COLLECTION, sessionId);
 
-  await updateGameState(sessionId, {
-    teamResponses: {
-      ...currentResponses,
-      [teamId]: response
-    }
-  });
+  try {
+    await runTransaction(db, async (transaction) => {
+      const snapshot = await transaction.get(stateRef);
+      const currentState = snapshot.exists() ? snapshot.data() as GameState : null;
+      const currentResponses = currentState?.teamResponses || {};
+
+      transaction.set(stateRef, {
+        ...currentState,
+        teamResponses: {
+          ...currentResponses,
+          [teamId]: response
+        },
+        lastUpdated: Date.now()
+      }, { merge: true });
+    });
+  } catch (error) {
+    console.error('팀 응답 저장 트랜잭션 실패, 재시도 중...', error);
+    // 실패 시 일반 업데이트로 폴백
+    const state = await getGameState(sessionId);
+    const currentResponses = state?.teamResponses || {};
+    await updateGameState(sessionId, {
+      teamResponses: {
+        ...currentResponses,
+        [teamId]: response
+      }
+    });
+  }
 }
 
 // 모든 팀 응답 초기화 (새 라운드 시작 시)
@@ -354,7 +376,7 @@ export async function saveAIComparativeResult(
 // 영토 시스템 함수
 // ========================
 
-// 영토 소유권 업데이트
+// 영토 소유권 업데이트 (트랜잭션 사용)
 export async function updateTerritoryOwnership(
   sessionId: string,
   squareIndex: number,
@@ -362,20 +384,70 @@ export async function updateTerritoryOwnership(
   ownerTeamName: string,
   ownerTeamColor: string
 ): Promise<void> {
-  const state = await getGameState(sessionId);
-  const currentTerritories = state?.territories || {};
+  const stateRef = doc(db, GAME_STATE_COLLECTION, sessionId);
 
-  await updateGameState(sessionId, {
-    territories: {
-      ...currentTerritories,
-      [squareIndex.toString()]: {
-        ownerTeamId,
-        ownerTeamName,
-        ownerTeamColor,
-        acquiredAt: Date.now()
+  try {
+    await runTransaction(db, async (transaction) => {
+      const snapshot = await transaction.get(stateRef);
+      const currentState = snapshot.exists() ? snapshot.data() as GameState : null;
+      const currentTerritories = currentState?.territories || {};
+
+      transaction.set(stateRef, {
+        ...currentState,
+        territories: {
+          ...currentTerritories,
+          [squareIndex.toString()]: {
+            ownerTeamId,
+            ownerTeamName,
+            ownerTeamColor,
+            acquiredAt: Date.now()
+          }
+        },
+        lastUpdated: Date.now()
+      }, { merge: true });
+    });
+  } catch (error) {
+    console.error('영토 업데이트 트랜잭션 실패:', error);
+    // 폴백
+    const state = await getGameState(sessionId);
+    const currentTerritories = state?.territories || {};
+    await updateGameState(sessionId, {
+      territories: {
+        ...currentTerritories,
+        [squareIndex.toString()]: {
+          ownerTeamId,
+          ownerTeamName,
+          ownerTeamColor,
+          acquiredAt: Date.now()
+        }
       }
+    });
+  }
+}
+
+// 여러 팀 점수 동시 업데이트 (한바퀴 보너스용 - 배치 처리)
+export async function updateMultipleTeamScores(
+  sessionId: string,
+  teamUpdates: { teamId: string; scoreChange: number }[]
+): Promise<void> {
+  const session = await getSession(sessionId);
+  if (!session) return;
+
+  const updatedTeams = session.teams.map(team => {
+    const update = teamUpdates.find(u => u.teamId === team.id);
+    if (update) {
+      return {
+        ...team,
+        resources: {
+          ...team.resources,
+          capital: Math.max(0, team.resources.capital + update.scoreChange)
+        }
+      };
     }
+    return team;
   });
+
+  await updateTeams(sessionId, updatedTeams);
 }
 
 // 영토 정보 조회

@@ -34,6 +34,17 @@ const CHARACTER_IMAGES = [
   'https://i.ibb.co/kgqKfW7Q/8.png',  // 8조
 ];
 
+// 특수 칸 정의 (export for use in other components)
+export const DOUBLE_SQUARES = [8, 16, 24];  // x2 칸 (노란색)
+export const TRIPLE_SQUARES = [12, 28];     // x3 칸 (빨간색)
+
+// 특수 칸 배율 가져오기 유틸리티 함수
+export const getSquareMultiplier = (index: number): number => {
+  if (TRIPLE_SQUARES.includes(index)) return 3;
+  if (DOUBLE_SQUARES.includes(index)) return 2;
+  return 1;
+};
+
 const GameBoard: React.FC<GameBoardProps> = ({ teams, onSquareClick, gameMode, customBoardImage, customCards, territories = {} }) => {
   // 팀 색상을 CSS 색상으로 변환
   const getTeamColorCSS = (color: string): string => {
@@ -55,6 +66,15 @@ const GameBoard: React.FC<GameBoardProps> = ({ teams, onSquareClick, gameMode, c
       'Rose': '#f43f5e'
     };
     return colorMap[color] || '#6b7280';
+  };
+
+  // 특수 칸 여부 확인
+  const isDoubleSquare = (index: number) => DOUBLE_SQUARES.includes(index);
+  const isTripleSquare = (index: number) => TRIPLE_SQUARES.includes(index);
+  const getMultiplier = (index: number) => {
+    if (isTripleSquare(index)) return 3;
+    if (isDoubleSquare(index)) return 2;
+    return 1;
   };
   // 팀 번호에 해당하는 캐릭터 이미지 가져오기 (9조 이상은 순환)
   const getCharacterImage = (teamNumber: number): string => {
@@ -166,7 +186,19 @@ const GameBoard: React.FC<GameBoardProps> = ({ teams, onSquareClick, gameMode, c
                     </div>
                   )}
                 </div>
-                <div className="flex-1 flex flex-col items-center justify-center p-1 text-center bg-[#fafafa]">
+                <div className={`flex-1 flex flex-col items-center justify-center p-1 text-center relative ${
+                  isTripleSquare(square.index) ? 'bg-red-200' :
+                  isDoubleSquare(square.index) ? 'bg-yellow-200' :
+                  'bg-[#fafafa]'
+                }`}>
+                  {/* x2, x3 배지 */}
+                  {(isDoubleSquare(square.index) || isTripleSquare(square.index)) && (
+                    <div className={`absolute top-0 right-0 px-1 py-0.5 text-[8px] md:text-[10px] font-black rounded-bl ${
+                      isTripleSquare(square.index) ? 'bg-red-600 text-white' : 'bg-yellow-500 text-black'
+                    }`}>
+                      x{getMultiplier(square.index)}
+                    </div>
+                  )}
                   <span className="text-xs md:text-sm font-black text-gray-900 leading-tight break-keep">
                     {getSquareDisplayName(square)}
                   </span>

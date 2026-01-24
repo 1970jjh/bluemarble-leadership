@@ -23,20 +23,25 @@ export const INITIAL_RESOURCES: ResourceState = {
   insight: 30,    // 통찰력 (시작: 30, 목표: 100)
 };
 
-// 한 바퀴 완주 보너스
+// 한 바퀴 완주 보너스 - 다른 팀에서 각각 20점씩 가져오기
+export const LAP_BONUS_PER_TEAM = 20;  // 다른 팀당 가져올 점수
+
+// 더블 보너스 (주사위 2개 같은 숫자) - 평점 30점
+export const DOUBLE_BONUS_POINTS = 30;
+
+// Legacy 호환용 (기존 코드 호환)
 export const LAP_BONUS: Partial<ResourceState> = {
-  energy: 40,
-  trust: 10,
-  competency: 10,
-  insight: 10,
+  energy: 0,
+  trust: 0,
+  competency: 0,
+  insight: 0,
 };
 
-// 더블 보너스 (주사위 2개 같은 숫자)
 export const DOUBLE_BONUS: Partial<ResourceState> = {
-  energy: 5,
-  trust: 5,
-  competency: 5,
-  insight: 5,
+  energy: 0,
+  trust: 0,
+  competency: 0,
+  insight: 0,
 };
 
 // ============================================================

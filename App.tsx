@@ -33,12 +33,13 @@ import {
   SAMPLE_CARDS,
   BOARD_SIZE,
   INITIAL_RESOURCES,
-  LAP_BONUS,
-  DOUBLE_BONUS,
+  LAP_BONUS_PER_TEAM,
+  DOUBLE_BONUS_POINTS,
   EVENT_CARDS,
   getChanceCardType,
   CHANCE_CARD_SQUARES
 } from './constants';
+import { getSquareMultiplier, DOUBLE_SQUARES, TRIPLE_SQUARES } from './components/GameBoard';
 import { Smartphone, Monitor, QrCode, X, Copy, Check, Settings, BookOpen } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { GoogleGenAI, Type } from "@google/genai";
@@ -1095,24 +1096,37 @@ const App: React.FC = () => {
 
       // 팀 위치 업데이트
       if (currentSession) {
-        const updatedTeams = currentSession.teams.map(t => {
-          if (t.id === team.id) {
-            let newResources = { ...t.resources };
-            let newLapCount = t.lapCount;
-            if (passedStart) {
-              newResources.capital += 20;
-              newResources.energy += LAP_BONUS.energy;
-              newResources.trust += LAP_BONUS.trust;
-              newResources.competency += LAP_BONUS.competency;
-              newResources.insight += LAP_BONUS.insight;
-              newLapCount += 1;
-              addLog(`🎉 ${t.name} 한 바퀴 완주! 보너스 획득`);
+        const newLapCount = team.lapCount + (passedStart ? 1 : 0);
+
+        if (passedStart) {
+          // 한바퀴 보너스: 다른 팀에서 각 20점씩 가져오기
+          const otherTeamsCount = currentSession.teams.length - 1;
+          const totalBonus = otherTeamsCount * LAP_BONUS_PER_TEAM;
+
+          const updatedTeams = currentSession.teams.map(t => {
+            if (t.id === team.id) {
+              let newResources = { ...t.resources };
+              newResources.capital += totalBonus;
+              return { ...t, position: newPos, resources: newResources, lapCount: newLapCount };
+            } else {
+              let newResources = { ...t.resources };
+              newResources.capital = Math.max(0, newResources.capital - LAP_BONUS_PER_TEAM);
+              return { ...t, resources: newResources };
             }
-            return { ...t, position: newPos, resources: newResources, lapCount: newLapCount };
-          }
-          return t;
-        });
-        updateTeamsInSession(updatedTeams);
+          });
+          updateTeamsInSession(updatedTeams);
+          addLog(`🎉 ${team.name} 한 바퀴 완주! 다른 팀에서 각 ${LAP_BONUS_PER_TEAM}점씩 총 +${totalBonus}점 획득!`);
+          soundEffects.playCelebration();
+        } else {
+          // 한바퀴 통과 없이 위치만 업데이트
+          const updatedTeams = currentSession.teams.map(t => {
+            if (t.id === team.id) {
+              return { ...t, position: newPos };
+            }
+            return t;
+          });
+          updateTeamsInSession(updatedTeams);
+        }
       }
 
       // 새 위치에서 다시 handleLandOnSquare 호출 (재귀)
@@ -1224,7 +1238,7 @@ const App: React.FC = () => {
 
     if (isDouble) {
       soundEffects.playDoubleBonus();
-      addLog(`🎲 더블 찬스! (${pendingDice[0]}+${pendingDice[1]}) AI 평가 점수 2배 적용!`);
+      addLog(`🎲 더블! (${pendingDice[0]}+${pendingDice[1]}) 보너스 ${DOUBLE_BONUS_POINTS}점 획득!`);
     } else {
       soundEffects.playDiceResult();
     }
@@ -1262,20 +1276,18 @@ const App: React.FC = () => {
     // 더블 체크 (주사위 2개가 같은 숫자)
     const isDouble = die1 === die2;
     if (isDouble && currentSession) {
-      // 더블 보너스 즉시 적용
+      // 더블 보너스 즉시 적용 - 30점 고정
       const updatedTeams = currentSession.teams.map(t => {
         if (t.id === currentTeam.id) {
           const newResources = { ...t.resources };
-          newResources.energy += DOUBLE_BONUS.energy;        // +5
-          newResources.trust += DOUBLE_BONUS.trust;          // +5
-          newResources.competency += DOUBLE_BONUS.competency; // +5
-          newResources.insight += DOUBLE_BONUS.insight;      // +5
+          newResources.capital += DOUBLE_BONUS_POINTS;  // +30점 고정
           return { ...t, resources: newResources };
         }
         return t;
       });
       updateTeamsInSession(updatedTeams);
-      addLog(`🎲 더블! ${currentTeam.name} 보너스 획득: 에너지+${DOUBLE_BONUS.energy}, 신뢰+${DOUBLE_BONUS.trust}, 스킬+${DOUBLE_BONUS.competency}, 인사이트+${DOUBLE_BONUS.insight}`);
+      addLog(`🎲 더블! ${currentTeam.name} 보너스 +${DOUBLE_BONUS_POINTS}점 획득!`);
+      soundEffects.playCelebration();  // 축하 효과음
     }
 
     // Firebase에 주사위 결과와 Moving 상태 저장 (실패해도 로컬 게임은 계속 진행)
@@ -1345,24 +1357,27 @@ const App: React.FC = () => {
         // 스타트 지점을 통과했고 아직 이동할 칸이 남아있음 → 보너스 팝업 표시
         const newLapCount = teamToMove.lapCount + 1;
 
-        // 보너스 즉시 적용
+        // 한바퀴 보너스: 다른 팀에서 각 20점씩 가져오기
         if (currentSession) {
+          const otherTeamsCount = currentSession.teams.length - 1;
+          const totalBonus = otherTeamsCount * LAP_BONUS_PER_TEAM;  // 다른 팀 수 × 20점
+
           const updatedTeams = currentSession.teams.map(t => {
             if (t.id === teamToMove.id) {
+              // 완주한 팀: 다른 팀들에서 가져온 점수 획득
               let newResources = { ...t.resources };
-              newResources.capital += 20; // 기본 급여
-              newResources.energy += LAP_BONUS.energy;        // +40
-              newResources.trust += LAP_BONUS.trust;          // +10
-              newResources.competency += LAP_BONUS.competency; // +10
-              newResources.insight += LAP_BONUS.insight;      // +10
-
-              addLog(`🎉 ${t.name} 한 바퀴 완주! 보너스 획득: 자원(시간)+20, 에너지+${LAP_BONUS.energy}, 신뢰+${LAP_BONUS.trust}, 스킬+${LAP_BONUS.competency}, 인사이트+${LAP_BONUS.insight}`);
-
+              newResources.capital += totalBonus;
               return { ...t, resources: newResources, lapCount: newLapCount };
+            } else {
+              // 다른 팀: 20점씩 감소
+              let newResources = { ...t.resources };
+              newResources.capital = Math.max(0, newResources.capital - LAP_BONUS_PER_TEAM);
+              return { ...t, resources: newResources };
             }
-            return t;
           });
           updateTeamsInSession(updatedTeams);
+          addLog(`🎉 ${teamToMove.name} 한 바퀴 완주! 다른 팀에서 각 ${LAP_BONUS_PER_TEAM}점씩 총 +${totalBonus}점 획득!`);
+          soundEffects.playCelebration();  // 축하 효과음
         }
 
         // 팝업 표시
@@ -1383,22 +1398,23 @@ const App: React.FC = () => {
           const newLapCount = teamToMove.lapCount + 1;
 
           if (currentSession) {
+            const otherTeamsCount = currentSession.teams.length - 1;
+            const totalBonus = otherTeamsCount * LAP_BONUS_PER_TEAM;
+
             const updatedTeams = currentSession.teams.map(t => {
               if (t.id === teamToMove.id) {
                 let newResources = { ...t.resources };
-                newResources.capital += 20;
-                newResources.energy += LAP_BONUS.energy;
-                newResources.trust += LAP_BONUS.trust;
-                newResources.competency += LAP_BONUS.competency;
-                newResources.insight += LAP_BONUS.insight;
-
-                addLog(`🎉 ${t.name} 한 바퀴 완주! 보너스 획득: 자원(시간)+20, 에너지+${LAP_BONUS.energy}, 신뢰+${LAP_BONUS.trust}, 스킬+${LAP_BONUS.competency}, 인사이트+${LAP_BONUS.insight}`);
-
+                newResources.capital += totalBonus;
                 return { ...t, position: finalPos, resources: newResources, lapCount: newLapCount };
+              } else {
+                let newResources = { ...t.resources };
+                newResources.capital = Math.max(0, newResources.capital - LAP_BONUS_PER_TEAM);
+                return { ...t, resources: newResources };
               }
-              return t;
             });
             updateTeamsInSession(updatedTeams);
+            addLog(`🎉 ${teamToMove.name} 한 바퀴 완주! 다른 팀에서 각 ${LAP_BONUS_PER_TEAM}점씩 총 +${totalBonus}점 획득!`);
+            soundEffects.playCelebration();
           }
 
           // 팝업 표시 후 handleLandOnSquare 호출
@@ -1785,19 +1801,17 @@ const App: React.FC = () => {
       return score > 0 ? -score : score;
     };
 
-    // 더블 찬스 + 커스텀 배수 적용 (양수든 음수든)
-    // 더블 찬스(주사위 더블)는 기존 로직 유지, 커스텀 배수(2배/3배 찬스)는 별도 적용
-    const doubleMultiplier = isDoubleChance ? 2 : 1;
+    // 커스텀 배수 적용 (x2, x3 특수 칸 효과)
+    // 더블 주사위는 별도 30점 보너스로 이미 적용됨 (점수 배율에는 영향 없음)
     const customMultiplier = customScoreMultiplier > 1 ? customScoreMultiplier : 1;
-    const totalMultiplier = doubleMultiplier * customMultiplier;
 
     let scoreChanges = {
-      capital: baseScoreChanges.capital !== undefined ? baseScoreChanges.capital * totalMultiplier : undefined,
-      energy: baseScoreChanges.energy !== undefined ? baseScoreChanges.energy * totalMultiplier : undefined,
-      reputation: baseScoreChanges.reputation !== undefined ? baseScoreChanges.reputation * totalMultiplier : undefined,
-      trust: baseScoreChanges.trust !== undefined ? baseScoreChanges.trust * totalMultiplier : undefined,
-      competency: baseScoreChanges.competency !== undefined ? baseScoreChanges.competency * totalMultiplier : undefined,
-      insight: baseScoreChanges.insight !== undefined ? baseScoreChanges.insight * totalMultiplier : undefined,
+      capital: baseScoreChanges.capital !== undefined ? baseScoreChanges.capital * customMultiplier : undefined,
+      energy: baseScoreChanges.energy !== undefined ? baseScoreChanges.energy * customMultiplier : undefined,
+      reputation: baseScoreChanges.reputation !== undefined ? baseScoreChanges.reputation * customMultiplier : undefined,
+      trust: baseScoreChanges.trust !== undefined ? baseScoreChanges.trust * customMultiplier : undefined,
+      competency: baseScoreChanges.competency !== undefined ? baseScoreChanges.competency * customMultiplier : undefined,
+      insight: baseScoreChanges.insight !== undefined ? baseScoreChanges.insight * customMultiplier : undefined,
     };
 
     // 리스크 카드: 모든 점수를 음수로 강제 변환
@@ -1813,9 +1827,6 @@ const App: React.FC = () => {
       addLog(`💀 리스크 카드 적용! 모든 점수가 마이너스로 변환됨`);
     }
 
-    if (isDoubleChance) {
-      addLog(`🎲 더블 찬스 적용! 모든 점수 x2 (기존 점수의 2배)`);
-    }
     if (customScoreMultiplier > 1) {
       addLog(`🎯 ${customScoreMultiplier}배 찬스 적용! 모든 점수 x${customScoreMultiplier}`);
     }
@@ -2461,7 +2472,7 @@ const App: React.FC = () => {
                 />
              )}
           </div>
-          <div className="lg:col-span-7 order-1 lg:order-2 flex flex-col items-center justify-center">
+          <div className="lg:col-span-7 order-1 lg:order-2 flex flex-col items-center justify-start pt-2">
             <GameBoard
               teams={teams}
               onSquareClick={handleBoardSquareClick}
@@ -2664,13 +2675,8 @@ const App: React.FC = () => {
         visible={showLapBonus}
         teamName={lapBonusInfo?.teamName || ''}
         lapCount={lapBonusInfo?.lapCount || 1}
-        bonuses={{
-          capital: 20,
-          energy: LAP_BONUS.energy,
-          trust: LAP_BONUS.trust,
-          competency: LAP_BONUS.competency,
-          insight: LAP_BONUS.insight,
-        }}
+        bonusPerTeam={LAP_BONUS_PER_TEAM}
+        otherTeamsCount={currentSession ? currentSession.teams.length - 1 : 3}
         onComplete={handleLapBonusComplete}
         duration={5000}
       />
