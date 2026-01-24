@@ -1721,6 +1721,11 @@ const App: React.FC = () => {
       // 모든 팀 응답 정리
       const teamResponsesList = Object.values(allTeamResponses);
 
+      // 디버깅: 팀 응답 확인
+      console.log('=== AI 비교 분석 시작 ===');
+      console.log('allTeamResponses:', allTeamResponses);
+      console.log('teamResponsesList:', teamResponsesList);
+
       // Gemini AI에 비교 평가 요청
       const prompt = `
 당신은 리더십 교육 게임의 AI 평가자입니다.
@@ -1783,11 +1788,15 @@ ${teamResponsesList.map((resp) => `
       const responseText = result.text || '';
       const parsed = JSON.parse(responseText);
 
+      // 디버깅: AI 응답 확인
+      console.log('AI 응답:', parsed);
+
       // teamId 매핑 수정: 팀 이름으로 매칭 시도 (AI가 ID를 정확히 복사하지 않을 경우 대비)
       const comparativeResult: AIComparativeResult = {
         rankings: parsed.rankings.map((r: any) => {
           // 먼저 teamId로 찾기
           let teamResponse = allTeamResponses[r.teamId];
+          console.log(`팀 "${r.teamName}" (ID: ${r.teamId}) - teamId로 찾기:`, teamResponse ? '성공' : '실패');
 
           // 못 찾으면 팀 이름으로 찾기
           if (!teamResponse) {
@@ -1797,8 +1806,17 @@ ${teamResponsesList.map((resp) => `
             if (foundEntry) {
               teamResponse = foundEntry[1];
               r.teamId = foundEntry[0]; // 실제 teamId로 교체
+              console.log(`팀 "${r.teamName}" - teamName으로 찾기: 성공 (새 ID: ${r.teamId})`);
+            } else {
+              console.log(`팀 "${r.teamName}" - teamName으로도 찾기 실패`);
             }
           }
+
+          // 최종 결과 확인
+          console.log(`팀 "${r.teamName}" 최종 데이터:`, {
+            selectedChoice: teamResponse?.selectedChoice,
+            reasoning: teamResponse?.reasoning
+          });
 
           return {
             teamId: r.teamId,
@@ -1836,18 +1854,42 @@ ${teamResponsesList.map((resp) => `
     }
   };
 
+  // 점수 결과 팝업 상태
+  const [showScorePopup, setShowScorePopup] = useState(false);
+  const [scorePopupData, setScorePopupData] = useState<{ teamName: string; oldScore: number; addedScore: number; newScore: number; rank: number }[]>([]);
+
   // 관리자: 비교 평가 결과를 점수에 적용
   const handleApplyComparativeResult = async () => {
     if (!currentSessionId || !currentSession || !aiComparativeResult) return;
 
     const rankings = aiComparativeResult.rankings;
 
-    // 각 팀에 점수 적용 (단일 점수 체계)
+    // 점수 변경 정보 수집 (팝업용)
+    const scoreChanges: { teamName: string; oldScore: number; addedScore: number; newScore: number; rank: number }[] = [];
+
+    // 각 팀에 점수 적용 (단일 점수 체계) - teamId 또는 teamName으로 매칭
     const updatedTeams = currentSession.teams.map(team => {
-      const ranking = rankings.find(r => r.teamId === team.id);
+      // 먼저 teamId로 찾기
+      let ranking = rankings.find(r => r.teamId === team.id);
+
+      // 못 찾으면 teamName으로 찾기 (fallback)
+      if (!ranking) {
+        ranking = rankings.find(r => r.teamName === team.name);
+      }
+
       if (ranking) {
         const currentScore = team.score ?? INITIAL_SCORE;
-        return { ...team, score: currentScore + ranking.score };
+        const newScore = currentScore + ranking.score;
+
+        scoreChanges.push({
+          teamName: team.name,
+          oldScore: currentScore,
+          addedScore: ranking.score,
+          newScore: newScore,
+          rank: ranking.rank
+        });
+
+        return { ...team, score: newScore };
       }
       return team;
     });
@@ -1858,6 +1900,18 @@ ${teamResponsesList.map((resp) => `
     rankings.forEach(r => {
       addLog(`🏆 ${r.rank}등 ${r.teamName}: +${r.score}점`);
     });
+
+    // 점수 변경 팝업 표시 (정렬: 순위별)
+    setScorePopupData(scoreChanges.sort((a, b) => a.rank - b.rank));
+    setShowScorePopup(true);
+  };
+
+  // 점수 팝업 닫고 다음 턴으로 전환
+  const handleCloseScorePopupAndNextTurn = async () => {
+    if (!currentSessionId || !currentSession) return;
+
+    setShowScorePopup(false);
+    setScorePopupData([]);
 
     // 상태 초기화 및 다음 턴
     setShowCardModal(false);
@@ -3011,6 +3065,57 @@ ${teamResponsesList.map((resp) => `
         }}
         duration={15000}
       />
+
+      {/* 점수 적용 결과 팝업 */}
+      {showScorePopup && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white max-w-2xl w-full border-4 border-black shadow-[16px_16px_0px_0px_rgba(255,255,255,0.2)] animate-in fade-in zoom-in duration-200 p-8">
+            <div className="text-center mb-6">
+              <div className="text-5xl mb-4">🏆</div>
+              <h2 className="text-3xl font-black uppercase text-blue-900">점수 적용 완료!</h2>
+              <p className="text-gray-600 font-bold mt-2">각 팀의 점수가 업데이트되었습니다</p>
+            </div>
+
+            <div className="space-y-3 mb-8">
+              {scorePopupData.map((item, index) => (
+                <div
+                  key={item.teamName}
+                  className={`flex items-center justify-between p-4 rounded-xl border-4 ${
+                    index === 0 ? 'bg-yellow-100 border-yellow-500' :
+                    index === 1 ? 'bg-gray-100 border-gray-400' :
+                    index === 2 ? 'bg-orange-100 border-orange-400' :
+                    'bg-white border-gray-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-4">
+                    <span className={`text-4xl font-black ${
+                      index === 0 ? 'text-yellow-600' :
+                      index === 1 ? 'text-gray-500' :
+                      index === 2 ? 'text-orange-500' : 'text-gray-400'
+                    }`}>
+                      {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `#${item.rank}`}
+                    </span>
+                    <span className="font-black text-2xl">{item.teamName}</span>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-3xl font-black text-blue-800">{item.newScore}점</div>
+                    <div className="text-base font-bold text-green-600">
+                      ({item.oldScore} + {item.addedScore})
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <button
+              onClick={handleCloseScorePopupAndNextTurn}
+              className="w-full py-4 bg-blue-900 text-white text-xl font-black uppercase border-4 border-black hover:bg-blue-800 shadow-hard transition-all"
+            >
+              다음 턴으로 →
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 관리자 대시보드 */}
       <AdminDashboard
