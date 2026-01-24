@@ -2,11 +2,13 @@ import React, { useState, useRef } from 'react';
 import { Team } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { GoogleGenAI } from "@google/genai";
-import { Download, Image as ImageIcon, Sparkles, Loader, FileText, Upload, Printer, Trophy } from 'lucide-react';
+import { Download, Image as ImageIcon, Sparkles, Loader, FileText, Upload, Printer, Trophy, ChevronDown, ChevronUp, RefreshCw, Settings } from 'lucide-react';
+import { DEFAULT_REPORT_GENERATION_GUIDELINES } from '../constants';
 
 interface ReportViewProps {
   teams: Team[];
   onClose: () => void;
+  reportGenerationGuidelines?: string;
 }
 
 // 팀별 AI 피드백 타입
@@ -46,7 +48,7 @@ interface PerspectiveAnalysis {
   action_plan: string;
 }
 
-const ReportView: React.FC<ReportViewProps> = ({ teams, onClose }) => {
+const ReportView: React.FC<ReportViewProps> = ({ teams, onClose, reportGenerationGuidelines: initialGuidelines }) => {
   const [photos, setPhotos] = useState<File[]>([]);
   const [posterUrl, setPosterUrl] = useState<string | null>(null);
   const [isGeneratingPoster, setIsGeneratingPoster] = useState(false);
@@ -55,6 +57,10 @@ const ReportView: React.FC<ReportViewProps> = ({ teams, onClose }) => {
   const [teamFeedbacks, setTeamFeedbacks] = useState<TeamAIFeedback[]>([]);
   const [overallAnalysis, setOverallAnalysis] = useState<OverallAnalysis | null>(null);
   const [reportMode, setReportMode] = useState<'summary' | 'team' | 'overall' | null>(null);
+
+  // 리포트 생성 지침 (수정 가능)
+  const [reportGuidelines, setReportGuidelines] = useState(initialGuidelines || DEFAULT_REPORT_GENERATION_GUIDELINES);
+  const [showReportGuidelines, setShowReportGuidelines] = useState(false);
 
   const teamReportRef = useRef<HTMLDivElement>(null);
   const overallReportRef = useRef<HTMLDivElement>(null);
@@ -166,6 +172,9 @@ const ReportView: React.FC<ReportViewProps> = ({ teams, onClose }) => {
           게임 기록:
           ${historyContext || '기록 없음'}
 
+          ## 리포트 작성 지침
+          ${reportGuidelines}
+
           다음 JSON 형식으로 작성해주세요:
           {
             "overall": "전반적 평가 (2-3문장)",
@@ -232,6 +241,9 @@ const ReportView: React.FC<ReportViewProps> = ({ teams, onClose }) => {
 
         게임 결과:
         ${context}
+
+        ## 리포트 작성 지침
+        ${reportGuidelines}
 
         다음 JSON 형식으로 작성해주세요:
         {
@@ -404,6 +416,56 @@ const ReportView: React.FC<ReportViewProps> = ({ teams, onClose }) => {
             {/* AI 리포트 생성 버튼 */}
             <div className="border-4 border-black p-6 bg-white shadow-hard">
               <h2 className="text-2xl font-black uppercase mb-6 border-b-4 border-black pb-2">AI 리포트 생성</h2>
+
+              {/* 리포트 생성 지침 설정 */}
+              <div className="mb-6 bg-gradient-to-r from-amber-50 to-orange-50 p-4 rounded-lg border-2 border-amber-300">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-bold text-amber-700 flex items-center gap-2">
+                    <Settings size={16} />
+                    리포트 생성 지침 (수정 가능)
+                  </label>
+                  <button
+                    onClick={() => setShowReportGuidelines(!showReportGuidelines)}
+                    className="flex items-center gap-1 text-sm text-amber-600 hover:text-amber-800"
+                  >
+                    {showReportGuidelines ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                    {showReportGuidelines ? '접기' : '펼치기'}
+                  </button>
+                </div>
+
+                {showReportGuidelines && (
+                  <div className="space-y-2">
+                    <textarea
+                      value={reportGuidelines}
+                      onChange={(e) => setReportGuidelines(e.target.value)}
+                      rows={8}
+                      className="w-full px-4 py-3 border-2 border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 font-mono text-sm"
+                      placeholder="리포트 생성 지침을 입력하세요..."
+                    />
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-amber-600">
+                        수정된 지침은 팀별/종합 리포트 생성 시 적용됩니다.
+                      </p>
+                      <button
+                        onClick={() => setReportGuidelines(DEFAULT_REPORT_GENERATION_GUIDELINES)}
+                        className="text-xs text-amber-600 hover:text-amber-800 underline flex items-center gap-1"
+                      >
+                        <RefreshCw size={12} />
+                        기본값으로 초기화
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {!showReportGuidelines && (
+                  <p className="text-xs text-amber-600">
+                    {reportGuidelines === DEFAULT_REPORT_GENERATION_GUIDELINES
+                      ? '현재 기본 리포트 생성 지침이 적용됩니다.'
+                      : '✏️ 수정된 리포트 생성 지침이 적용됩니다.'}
+                  </p>
+                )}
+              </div>
+
               <div className="flex flex-col md:flex-row gap-4">
                 <button onClick={generateTeamFeedbacks} disabled={isGeneratingTeam}
                   className="flex-1 py-4 bg-blue-100 border-4 border-black font-bold uppercase hover:bg-blue-200 transition-colors flex items-center justify-center gap-2 disabled:opacity-50">
