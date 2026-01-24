@@ -1374,16 +1374,33 @@ const App: React.FC = () => {
       // 이동 음향 효과
       soundEffects.playMove();
 
-      // 팀 위치 업데이트 (중간 위치)
-      if (currentSession) {
-        const updatedTeams = currentSession.teams.map(t => {
+      // 팀 위치 업데이트 (중간 위치) - 최신 세션 상태 가져오기 (closure 문제 해결)
+      setSessions(prevSessions => {
+        const session = prevSessions.find(s => s.id === currentSessionId);
+        if (!session) return prevSessions;
+
+        const updatedTeams = session.teams.map(t => {
           if (t.id === teamToMove.id) {
             return { ...t, position: intermediatePos };
           }
           return t;
         });
-        updateTeamsInSession(updatedTeams);
-      }
+
+        // Firebase 업데이트 (비동기로 처리)
+        const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+        if (isFirebaseConfigured && currentSessionId) {
+          firestoreService.updateTeams(currentSessionId, updatedTeams).catch(err =>
+            console.warn('Firebase 위치 업데이트 실패:', err)
+          );
+        }
+
+        return prevSessions.map(s => {
+          if (s.id === currentSessionId) {
+            return { ...s, teams: updatedTeams };
+          }
+          return s;
+        });
+      });
 
       // 스타트 지점 통과 체크 (이전 위치가 31이고 현재 위치가 0인 경우)
       const justPassedStart = previousPos === BOARD_SIZE - 1 && intermediatePos === 0;
@@ -1542,15 +1559,33 @@ const App: React.FC = () => {
 
       soundEffects.playMove();
 
-      if (currentSession) {
-        const updatedTeams = currentSession.teams.map(t => {
+      // 최신 세션 상태 가져오기 (closure 문제 해결)
+      setSessions(prevSessions => {
+        const session = prevSessions.find(s => s.id === currentSessionId);
+        if (!session) return prevSessions;
+
+        const updatedTeams = session.teams.map(t => {
           if (t.id === teamToMove.id) {
             return { ...t, position: intermediatePos };
           }
           return t;
         });
-        updateTeamsInSession(updatedTeams);
-      }
+
+        // Firebase 업데이트 (비동기로 처리)
+        const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+        if (isFirebaseConfigured && currentSessionId) {
+          firestoreService.updateTeams(currentSessionId, updatedTeams).catch(err =>
+            console.warn('Firebase 위치 업데이트 실패:', err)
+          );
+        }
+
+        return prevSessions.map(s => {
+          if (s.id === currentSessionId) {
+            return { ...s, teams: updatedTeams };
+          }
+          return s;
+        });
+      });
 
       if (currentStep >= remainingSteps) {
         finishMove({ ...teamToMove, position: finalPos }, finalPos);
@@ -2831,8 +2866,8 @@ ${teamResponsesList.map((resp) => `
               customCards={sessionCustomCards}
             />
           </div>
-          <div className="lg:col-span-3 order-3 h-full min-h-0 overflow-y-auto">
-            <div className="grid gap-2">
+          <div className="lg:col-span-3 order-3 h-full min-h-0 overflow-y-auto flex justify-end">
+            <div className="grid gap-2 w-48">
               {(() => {
                 // 팀별 점수 기준 순위 정렬
                 const sortedByScore = [...teams].sort((a, b) => (b.score ?? INITIAL_SCORE) - (a.score ?? INITIAL_SCORE));
