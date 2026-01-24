@@ -126,6 +126,10 @@ const App: React.FC = () => {
   const [isTeamSaved, setIsTeamSaved] = useState(false);  // 팀이 입력을 저장했는지
   const [isSaving, setIsSaving] = useState(false);        // 저장 중 여부
 
+  // 레거시 관람자 투표 상태 (동시 응답 시스템으로 대체됨 - 호환성 유지용)
+  const [spectatorVotes, setSpectatorVotes] = useState<{ [optionId: string]: string[] }>({});
+  const [mySpectatorVote, setMySpectatorVote] = useState<Choice | null>(null);
+
   // ============================================================
   // 동시 응답 시스템 상태 (모든 팀이 동시에 응답)
   // ============================================================
@@ -2616,9 +2620,6 @@ ${teamResponsesList.map((resp, idx) => `
           isSaving={isSaving}
           isGameStarted={isGameStarted}
           isAiProcessing={isAiProcessing}
-          spectatorVote={mySpectatorVote}
-          onSpectatorVote={(choice) => handleSpectatorVote(choice, participantTeam.name)}
-          spectatorVotes={spectatorVotes}
           teamNumber={(participantSession?.teams.findIndex(t => t.id === participantTeamId) ?? 0) + 1}
           onShowRules={() => setShowGameRules(true)}
         />
@@ -2812,7 +2813,6 @@ ${teamResponsesList.map((resp, idx) => `
                  isSaving={isSaving}
                  isGameStarted={isGameStarted}
                  isAiProcessing={isAiProcessing}
-                 spectatorVotes={spectatorVotes}
                  teamNumber={(teams.findIndex(t => t.id === monitoredTeam.id) ?? 0) + 1}
                  onShowRules={() => setShowGameRules(true)}
                />
