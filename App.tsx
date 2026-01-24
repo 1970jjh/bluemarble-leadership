@@ -103,6 +103,8 @@ const App: React.FC = () => {
   // 커스텀 모드 특수 효과 상태
   const [customScoreMultiplier, setCustomScoreMultiplier] = useState(1);  // 커스텀 모드 점수 배수 (2배 찬스, 3배 찬스)
   const [isSharingMode, setIsSharingMode] = useState(false);  // 나눔카드 모드 (모든 팀에 동일 점수 적용)
+  const [showMultiplierAlert, setShowMultiplierAlert] = useState(false);  // x2/x3 알림 팝업
+  const [pendingCardAfterAlert, setPendingCardAfterAlert] = useState<GameCard | null>(null);  // 알림 후 표시할 카드
 
   // --- Active Card & Decision State (Shared between Admin & Mobile) ---
   const [activeCard, setActiveCard] = useState<GameCard | null>(null);
@@ -1326,18 +1328,31 @@ const App: React.FC = () => {
     }
 
     if (selectedCard) {
-      setActiveCard(selectedCard);
+      // x2/x3 배율 확인
+      const multiplier = getSquareMultiplier(squareIndex);
+      setCustomScoreMultiplier(multiplier);
       setCurrentCardSquareIndex(squareIndex);  // 현재 카드가 표시된 칸 인덱스 저장
+
+      // 동시 응답 시스템 초기화 - 새 카드 시작
       setSharedSelectedChoice(null);
       setSharedReasoning('');
       setAiEvaluationResult(null);
-      // 동시 응답 시스템 초기화 - 새 카드 시작
       setAllTeamResponses({});
       setIsResponsesRevealed(false);
       setAiComparativeResult(null);
       setIsComparingTeams(false);
-      setGamePhase(GamePhase.Decision);
-      setShowCardModal(true);
+
+      // x2/x3 칸이면 알림 먼저 표시
+      if (multiplier > 1) {
+        setPendingCardAfterAlert(selectedCard);
+        setShowMultiplierAlert(true);
+        addLog(`🎯 ${multiplier}배 찬스 칸에 도착!`);
+      } else {
+        // 일반 칸이면 바로 카드 표시
+        setActiveCard(selectedCard);
+        setGamePhase(GamePhase.Decision);
+        setShowCardModal(true);
+      }
 
       // 즉시 Firebase에 게임 상태 저장 (팀원들이 카드를 볼 수 있도록)
       const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
@@ -1685,6 +1700,40 @@ const App: React.FC = () => {
     }
   };
 
+  // x2/x3 배율 알림 완료 핸들러
+  const handleMultiplierAlertComplete = () => {
+    setShowMultiplierAlert(false);
+
+    // 보류 중인 카드가 있으면 표시
+    if (pendingCardAfterAlert) {
+      setActiveCard(pendingCardAfterAlert);
+      setPendingCardAfterAlert(null);
+      setGamePhase(GamePhase.Decision);
+      setShowCardModal(true);
+
+      // Firebase에 게임 상태 저장
+      const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+      if (isFirebaseConfigured && currentSessionId) {
+        firestoreService.updateGameState(currentSessionId, {
+          sessionId: currentSessionId,
+          phase: GamePhase.Decision,
+          currentTeamIndex: currentTurnIndex,
+          currentTurn: 0,
+          diceValue: diceValue,
+          currentCard: pendingCardAfterAlert,
+          selectedChoice: null,
+          reasoning: '',
+          aiResult: null,
+          isSubmitted: false,
+          isAiProcessing: false,
+          spectatorVotes: {},
+          gameLogs: gameLogsRef.current,
+          lastUpdated: Date.now()
+        }).catch(err => console.error('Firebase 상태 저장 실패:', err));
+      }
+    }
+  };
+
   // 남은 스텝 계속 이동
   const continueMove = (teamToMove: Team, remainingSteps: number, finalPos: number) => {
     let currentStep = 0;
@@ -1923,23 +1972,23 @@ ${teamResponsesList.map((resp) => `
 - 너무 짧은 답변 (3단어 미만, 10글자 미만) → **큰 감점**
 - 질문과 무관한 답변 → **최하위**
 
-### ⭐ 2순위: 선택의 적절성 (가장 중요한 평가 요소!)
-- 주어진 상황에서 가장 적절한 선택지를 골랐는가?
-- 상황의 맥락과 조건을 고려한 최선의 판단인가?
-- **좋은 선택 + 짧은 이유 > 나쁜 선택 + 긴 이유**
-- 선택 자체가 적절하면 이유가 다소 부족해도 높은 점수를 받을 수 있음
+### ⭐ 2순위: 선택 이유의 질 (가장 중요한 평가 요소!)
+1. **논리성**: 선택 이유가 논리적이고 설득력 있는가? (최중요)
+2. **구체성**: 답변이 구체적이고 명확한가?
+3. **합리성**: 상황을 고려한 합리적인 근거를 제시했는가?
+4. **깊이**: 단순한 답변이 아닌, 깊이 있는 사고가 담겨 있는가?
 
-### 📝 3순위: 선택 이유의 질
-1. 논리성: 선택 이유가 논리적이고 설득력 있는가?
-2. 상황 이해도: 문제 상황을 정확히 파악했는가?
-3. 구체성: 답변이 구체적이고 명확한가?
-4. 리더십 관점: 리더로서 적절한 판단인가?
+### 📋 3순위: 선택의 적절성
+- 주어진 상황에서 적절한 선택지를 골랐는가?
+- 상황의 맥락과 조건을 고려한 판단인가?
+- (단, 이유가 충실하다면 선택이 다소 부적절해도 감점 폭이 적음)
 
 ### 점수 결정 원칙
-- 적절한 선택 + 좋은 이유 = 최고점
-- 적절한 선택 + 짧은/단순한 이유 = 높은 점수 (여전히 좋음)
-- 부적절한 선택 + 좋은 이유 = 중간 점수
-- 부적절한 선택 + 성의 없는 이유 = 최하점
+- 좋은 이유 + 적절한 선택 = 최고점 (100점)
+- 좋은 이유 + 부적절한 선택 = 높은 점수 (70~85점) - 이유가 논리적이면 인정
+- 짧은 이유 + 적절한 선택 = 중간 점수 (50~70점) - 선택은 맞았지만 설명 부족
+- 짧은 이유 + 부적절한 선택 = 낮은 점수 (30~50점)
+- 성의 없는 이유 = 최하점 (0~20점)
 
 ## 응답 형식 (JSON)
 {
@@ -3134,6 +3183,7 @@ ${teamResponsesList.map((resp) => `
           onAISubmit={handleAdminAISubmit}
           isDoubleChance={isDoubleChance}
           isRiskCardMode={isRiskCardMode}
+          scoreMultiplier={customScoreMultiplier}
           // 동시 응답 시스템 props
           allTeamResponses={allTeamResponses}
           allTeams={currentSession?.teams.map(t => ({ id: t.id, name: t.name, score: t.score ?? INITIAL_SCORE })) || []}
@@ -3252,6 +3302,29 @@ ${teamResponsesList.map((resp) => `
         onComplete={handleLapBonusComplete}
         duration={5000}
       />
+
+      {/* x2/x3 배율 알림 팝업 */}
+      {showMultiplierAlert && (
+        <div className="fixed inset-0 bg-black/80 z-[110] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in zoom-in duration-300">
+          <div className="bg-gradient-to-br from-yellow-400 via-orange-400 to-red-500 p-8 rounded-3xl border-8 border-black shadow-2xl text-center max-w-md">
+            <div className="text-8xl mb-4 animate-bounce">
+              {customScoreMultiplier === 2 ? '✨' : '🔥'}
+            </div>
+            <h2 className="text-5xl font-black text-white mb-4 drop-shadow-lg">
+              x{customScoreMultiplier} 찬스!
+            </h2>
+            <p className="text-xl font-bold text-white/90 mb-6">
+              이번 문제의 점수가 <span className="text-yellow-200 text-2xl">{customScoreMultiplier}배</span>로 적용됩니다!
+            </p>
+            <button
+              onClick={handleMultiplierAlertComplete}
+              className="px-8 py-4 bg-white text-orange-600 font-black text-xl rounded-xl border-4 border-black hover:bg-yellow-100 transition-all shadow-hard"
+            >
+              확인
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 복권 보너스 팝업 (1/3/5번째 찬스카드) */}
       <LotteryBonusPopup

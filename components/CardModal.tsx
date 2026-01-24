@@ -39,6 +39,8 @@ interface CardModalProps {
   isDoubleChance?: boolean;
   // 리스크 카드 (모든 점수 마이너스)
   isRiskCardMode?: boolean;
+  // x2/x3 점수 배율
+  scoreMultiplier?: number;
 
   // ============================================================
   // 동시 응답 시스템 props
@@ -76,6 +78,7 @@ const CardModal: React.FC<CardModalProps> = ({
   onSpectatorVote,
   isDoubleChance = false,
   isRiskCardMode = false,
+  scoreMultiplier = 1,
   // 동시 응답 시스템
   allTeamResponses = {},
   allTeams = [],
@@ -166,7 +169,16 @@ const CardModal: React.FC<CardModalProps> = ({
                 </div>
               )}
             </div>
-            <h2 className="text-3xl md:text-4xl font-black uppercase tracking-tight">{card.title}</h2>
+            <h2 className="text-3xl md:text-4xl font-black uppercase tracking-tight flex items-center gap-3">
+              {card.title}
+              {scoreMultiplier > 1 && (
+                <span className={`text-xl px-3 py-1 rounded-lg font-black animate-pulse ${
+                  scoreMultiplier === 2 ? 'bg-yellow-400 text-yellow-900' : 'bg-red-500 text-white'
+                }`}>
+                  x{scoreMultiplier}
+                </span>
+              )}
+            </h2>
           </div>
           {!result && timeLeft > 0 && (
             <div className="bg-white text-black border-4 border-black px-4 py-2 shadow-hard-sm">
