@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { GameCard, Choice, Team, TeamResponse, AIComparativeResult } from '../types';
-import { Send, CheckCircle2, Clock, Trophy, Users, Eye, Loader2 } from 'lucide-react';
+import { Send, CheckCircle2, Clock, Trophy, Users, Eye, Loader2, X, LogOut } from 'lucide-react';
 
 interface SimultaneousResponseViewProps {
   card: GameCard;
@@ -12,6 +12,7 @@ interface SimultaneousResponseViewProps {
   aiResult: AIComparativeResult | null;
   onSubmit: (choice: Choice | null, reasoning: string) => void;
   onClose: () => void;
+  onLogout?: () => void;  // 로그아웃 핸들러 추가
 }
 
 const SimultaneousResponseView: React.FC<SimultaneousResponseViewProps> = ({
@@ -23,7 +24,8 @@ const SimultaneousResponseView: React.FC<SimultaneousResponseViewProps> = ({
   allTeams,
   aiResult,
   onSubmit,
-  onClose
+  onClose,
+  onLogout
 }) => {
   const [selectedChoice, setSelectedChoice] = useState<Choice | null>(myResponse?.selectedChoice || null);
   const [reasoning, setReasoning] = useState(myResponse?.reasoning || '');
@@ -61,7 +63,28 @@ const SimultaneousResponseView: React.FC<SimultaneousResponseViewProps> = ({
       <div className="bg-white w-full max-w-2xl border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,0.2)] animate-in fade-in zoom-in duration-200 relative flex flex-col max-h-[90vh]">
 
         {/* Header */}
-        <div className={`p-4 ${getTypeColor(card.type)} border-b-4 border-black`}>
+        <div className={`p-4 ${getTypeColor(card.type)} border-b-4 border-black relative`}>
+          {/* 우측 상단 버튼들 */}
+          <div className="absolute top-2 right-2 flex gap-2">
+            {onLogout && (
+              <button
+                onClick={onLogout}
+                className="p-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+                title="로그아웃"
+              >
+                <LogOut size={18} />
+              </button>
+            )}
+            {aiResult && (
+              <button
+                onClick={onClose}
+                className="p-2 bg-black/30 hover:bg-black/50 text-white rounded-lg transition-colors"
+                title="닫기"
+              >
+                <X size={18} />
+              </button>
+            )}
+          </div>
           <div className="inline-block bg-black text-white px-2 py-1 text-xs font-bold uppercase mb-2">
             {card.type}
           </div>
