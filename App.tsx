@@ -3090,8 +3090,27 @@ ${evaluationGuidelines}
               territories={territories}
             />
           </div>
-          <div className="lg:col-span-2 order-3 h-full min-h-0 overflow-y-auto flex justify-end">
-            <div className="flex flex-col gap-2 w-48">
+          <div className="lg:col-span-2 order-3 h-full min-h-0 overflow-y-auto flex flex-col items-start gap-3">
+            {/* 참가자 접속 QR 코드 */}
+            {currentSession && (
+              <div className="bg-white border-2 border-black p-2 shadow-hard w-full">
+                <div className="text-xs font-bold text-center mb-1 text-gray-700">참가자 접속</div>
+                <div className="flex items-center justify-center gap-2">
+                  <QRCodeSVG
+                    value={getJoinUrl(currentSession.accessCode)}
+                    size={60}
+                    level="M"
+                    includeMargin={false}
+                  />
+                  <div className="text-center">
+                    <div className="text-lg font-black text-blue-600">{currentSession.accessCode}</div>
+                    <div className="text-[10px] text-gray-500">접속코드</div>
+                  </div>
+                </div>
+              </div>
+            )}
+            {/* 팀별 점수판 */}
+            <div className="flex flex-col gap-2 w-full">
               {(() => {
                 // 팀별 점수 기준 순위 정렬
                 const sortedByScore = [...teams].sort((a, b) => (b.score ?? INITIAL_SCORE) - (a.score ?? INITIAL_SCORE));
