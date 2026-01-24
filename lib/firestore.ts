@@ -149,6 +149,34 @@ export async function addTurnRecord(sessionId: string, teamId: string, record: T
 // 게임 상태(GameState) 관련 함수
 // ========================
 
+// 팀별 응답 (동시 응답 시스템용)
+export interface TeamResponseData {
+  teamId: string;
+  teamName: string;
+  selectedChoice: { id: string; text: string } | null;
+  reasoning: string;
+  submittedAt: number;
+  isSubmitted: boolean;
+}
+
+// 팀 랭킹 (AI 비교 분석 결과)
+export interface TeamRankingData {
+  teamId: string;
+  teamName: string;
+  rank: number;
+  score: number;
+  feedback: string;
+  selectedChoice: { id: string; text: string } | null;
+  reasoning: string;
+}
+
+// AI 비교 분석 결과
+export interface AIComparativeResultData {
+  rankings: TeamRankingData[];
+  guidance: string;  // "이럴 땐, 이렇게..." 가이드
+  analysisTimestamp: number;
+}
+
 export interface GameState {
   sessionId: string;
   phase: string; // GamePhase
@@ -178,6 +206,25 @@ export interface GameState {
   // 로그
   gameLogs: string[];
   lastUpdated: number;
+
+  // ============================================================
+  // 동시 응답 시스템 관련 필드
+  // ============================================================
+  currentSquareIndex?: number;  // 현재 카드가 표시된 칸 인덱스
+  teamResponses?: { [teamId: string]: TeamResponseData };  // 모든 팀의 응답
+  isRevealed?: boolean;  // 관리자가 '공개' 버튼 클릭했는지
+  aiComparativeResult?: AIComparativeResultData | null;  // AI 비교 분석 결과
+  isAnalyzing?: boolean;  // AI 분석 중
+
+  // ============================================================
+  // 영토 시스템 관련 필드
+  // ============================================================
+  territories?: { [squareIndex: string]: {
+    ownerTeamId: string;
+    ownerTeamName: string;
+    ownerTeamColor: string;
+    acquiredAt: number;
+  } };
 }
 
 // 게임 상태 저장/업데이트
@@ -252,6 +299,93 @@ export async function updateSpectatorVote(
   await updateGameState(sessionId, {
     spectatorVotes: currentVotes
   });
+}
+
+// ========================
+// 동시 응답 시스템 함수
+// ========================
+
+// 팀 응답 저장/업데이트
+export async function updateTeamResponse(
+  sessionId: string,
+  teamId: string,
+  response: TeamResponseData
+): Promise<void> {
+  const state = await getGameState(sessionId);
+  const currentResponses = state?.teamResponses || {};
+
+  await updateGameState(sessionId, {
+    teamResponses: {
+      ...currentResponses,
+      [teamId]: response
+    }
+  });
+}
+
+// 모든 팀 응답 초기화 (새 라운드 시작 시)
+export async function resetTeamResponses(sessionId: string): Promise<void> {
+  await updateGameState(sessionId, {
+    teamResponses: {},
+    isRevealed: false,
+    aiComparativeResult: null,
+    isAnalyzing: false
+  });
+}
+
+// 응답 공개 상태 업데이트
+export async function setResponsesRevealed(sessionId: string, revealed: boolean): Promise<void> {
+  await updateGameState(sessionId, {
+    isRevealed: revealed
+  });
+}
+
+// AI 비교 분석 결과 저장
+export async function saveAIComparativeResult(
+  sessionId: string,
+  result: AIComparativeResultData
+): Promise<void> {
+  await updateGameState(sessionId, {
+    aiComparativeResult: result,
+    isAnalyzing: false
+  });
+}
+
+// ========================
+// 영토 시스템 함수
+// ========================
+
+// 영토 소유권 업데이트
+export async function updateTerritoryOwnership(
+  sessionId: string,
+  squareIndex: number,
+  ownerTeamId: string,
+  ownerTeamName: string,
+  ownerTeamColor: string
+): Promise<void> {
+  const state = await getGameState(sessionId);
+  const currentTerritories = state?.territories || {};
+
+  await updateGameState(sessionId, {
+    territories: {
+      ...currentTerritories,
+      [squareIndex.toString()]: {
+        ownerTeamId,
+        ownerTeamName,
+        ownerTeamColor,
+        acquiredAt: Date.now()
+      }
+    }
+  });
+}
+
+// 영토 정보 조회
+export async function getTerritoryOwner(
+  sessionId: string,
+  squareIndex: number
+): Promise<{ ownerTeamId: string; ownerTeamName: string; ownerTeamColor: string } | null> {
+  const state = await getGameState(sessionId);
+  const territory = state?.territories?.[squareIndex.toString()];
+  return territory || null;
 }
 
 // ========================

@@ -5,6 +5,7 @@ import { Play, SkipForward, BarChart2, RefreshCcw, ArrowRight, Terminal, Pause, 
 
 interface ControlPanelProps {
   currentTeam: Team;
+  teams: Team[];  // 전체 팀 목록 (시작 팀 선택용)
   phase: GamePhase;
   diceValue: [number, number];
   rolling: boolean;
@@ -19,10 +20,14 @@ interface ControlPanelProps {
   onStartGame: () => void;
   onPauseGame: () => void;
   onResumeGame: () => void;
+  // 시작 팀 선택
+  startingTeamIndex: number;
+  onStartingTeamChange: (index: number) => void;
 }
 
 const ControlPanel: React.FC<ControlPanelProps> = ({
   currentTeam,
+  teams,
   phase,
   diceValue,
   rolling,
@@ -35,7 +40,9 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
   isGameStarted,
   onStartGame,
   onPauseGame,
-  onResumeGame
+  onResumeGame,
+  startingTeamIndex,
+  onStartingTeamChange
 }) => {
   const [manualInput, setManualInput] = useState<string>('');
   const logEndRef = useRef<HTMLDivElement>(null);
@@ -105,13 +112,33 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
 
         {/* START / PAUSE 버튼 */}
         {!isGameStarted ? (
-          <button
-            onClick={onStartGame}
-            className="w-full py-4 border-4 border-black font-black text-2xl shadow-hard transition-all transform active:translate-x-1 active:translate-y-1 flex items-center justify-center gap-3 bg-green-500 text-white hover:bg-green-400"
-          >
-            <PlayCircle size={28} />
-            START GAME
-          </button>
+          <>
+            {/* 시작 팀 선택 */}
+            <div className="bg-white p-3 border-4 border-black text-black">
+              <label className="block text-xs font-bold uppercase mb-2 text-center">🎯 시작 팀 선택</label>
+              <select
+                value={startingTeamIndex}
+                onChange={(e) => onStartingTeamChange(parseInt(e.target.value))}
+                className="w-full border-2 border-black p-2 font-bold text-lg focus:outline-none focus:bg-yellow-100 cursor-pointer"
+              >
+                {teams.map((team, index) => (
+                  <option key={team.id} value={index}>
+                    {index + 1}조 - {team.name}
+                  </option>
+                ))}
+              </select>
+              <p className="text-[10px] text-gray-500 mt-1 text-center">
+                선택한 팀부터 시계방향으로 진행됩니다
+              </p>
+            </div>
+            <button
+              onClick={onStartGame}
+              className="w-full py-4 border-4 border-black font-black text-2xl shadow-hard transition-all transform active:translate-x-1 active:translate-y-1 flex items-center justify-center gap-3 bg-green-500 text-white hover:bg-green-400"
+            >
+              <PlayCircle size={28} />
+              START GAME
+            </button>
+          </>
         ) : phase === GamePhase.Paused ? (
           <button
             onClick={onResumeGame}

@@ -31,12 +31,7 @@ export enum GameVersion {
 
 export enum SquareType {
   Start = 'Start',
-  City = 'City', // Represents a competency area
-  GoldenKey = 'GoldenKey', // 우연한 기회
-  Island = 'Island', // Burnout zone (번아웃)
-  Space = 'Space', // Challenge (도전 과제)
-  WorldTour = 'WorldTour', // 특별 이벤트
-  Fund = 'Fund', // 성장 기회
+  City = 'City', // Represents a card square (역량 카드)
 }
 
 export interface ResourceState {
@@ -179,4 +174,61 @@ export interface CompetencyInfo {
   nameKo: string;
   nameEn: string;
   description: string;
+}
+
+// ============================================================
+// 동시 응답 및 영토 시스템 관련 타입
+// ============================================================
+
+// 팀별 응답 (동시 응답 시스템용)
+export interface TeamResponse {
+  teamId: string;
+  teamName: string;
+  selectedChoice: Choice | null;
+  reasoning: string;
+  submittedAt: number;
+  isSubmitted: boolean;
+}
+
+// AI 비교 분석 결과 (모든 팀 랭킹)
+export interface AIComparativeResult {
+  rankings: TeamRanking[];
+  guidance: string;  // "이럴 땐, 이렇게..." 가이드
+  analysisTimestamp: number;
+}
+
+// 개별 팀 랭킹
+export interface TeamRanking {
+  teamId: string;
+  teamName: string;
+  rank: number;
+  score: number;  // 배점 (100, 90, 80, ... 등)
+  feedback: string;
+  selectedChoice: Choice | null;
+  reasoning: string;
+}
+
+// 영토 소유권 정보
+export interface TerritoryOwnership {
+  squareIndex: number;
+  ownerTeamId: string | null;
+  ownerTeamName: string | null;
+  ownerTeamColor: TeamColor | null;
+  acquiredAt: number | null;
+}
+
+// 세션 확장 - 영토 정보 포함
+export interface SessionWithTerritories extends Session {
+  territories?: TerritoryOwnership[];
+  startingTeamIndex?: number;  // 시작 팀 인덱스 (관리자 선택)
+}
+
+// 게임 상태 확장 - 동시 응답 시스템
+export interface SimultaneousGameState {
+  currentSquareIndex: number;
+  currentCard: GameCard | null;
+  teamResponses: { [teamId: string]: TeamResponse };
+  isRevealed: boolean;  // 관리자가 '공개' 버튼 클릭했는지
+  aiAnalysisResult: AIComparativeResult | null;
+  isAnalyzing: boolean;  // AI 분석 중
 }
