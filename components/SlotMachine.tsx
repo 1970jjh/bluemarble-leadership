@@ -13,9 +13,21 @@ const SlotMachine: React.FC<SlotMachineProps> = ({ value1, value2, rolling, onRo
   const [slot2Stopped, setSlot2Stopped] = useState(false);
   const animationRef = useRef<number>();
   const audioContextRef = useRef<AudioContext | null>(null);
+  const prevRollingRef = useRef<boolean>(false);
+  const targetValuesRef = useRef<[number, number]>([1, 1]);
 
+  // 타겟 값 업데이트 (rolling 시작 시점에만 캡처)
+  useEffect(() => {
+    if (rolling && !prevRollingRef.current) {
+      targetValuesRef.current = [value1, value2];
+    }
+    prevRollingRef.current = rolling;
+  }, [rolling, value1, value2]);
+
+  // 애니메이션 로직 (rolling 상태 변경 시에만 실행)
   useEffect(() => {
     if (rolling) {
+      // 슬롯 상태 초기화
       setSlot1Stopped(false);
       setSlot2Stopped(false);
 
@@ -58,6 +70,8 @@ const SlotMachine: React.FC<SlotMachineProps> = ({ value1, value2, rolling, onRo
 
       let frame = 0;
       let speed = 50; // ms per frame
+      let localSlot1Stopped = false;
+      let localSlot2Stopped = false;
       const slot1StopFrame = 30 + Math.floor(Math.random() * 10);
       const slot2StopFrame = slot1StopFrame + 15 + Math.floor(Math.random() * 10);
 
@@ -70,16 +84,18 @@ const SlotMachine: React.FC<SlotMachineProps> = ({ value1, value2, rolling, onRo
         }
 
         // 슬롯 1 멈춤
-        if (frame >= slot1StopFrame && !slot1Stopped) {
+        if (frame >= slot1StopFrame && !localSlot1Stopped) {
+          localSlot1Stopped = true;
           setSlot1Stopped(true);
-          setDisplayValues(prev => [value1, prev[1]]);
+          setDisplayValues(prev => [targetValuesRef.current[0], prev[1]]);
           playStopSound();
         }
 
         // 슬롯 2 멈춤
-        if (frame >= slot2StopFrame && !slot2Stopped) {
+        if (frame >= slot2StopFrame && !localSlot2Stopped) {
+          localSlot2Stopped = true;
           setSlot2Stopped(true);
-          setDisplayValues([value1, value2]);
+          setDisplayValues([targetValuesRef.current[0], targetValuesRef.current[1]]);
           playStopSound();
 
           // 완료 콜백
@@ -90,9 +106,9 @@ const SlotMachine: React.FC<SlotMachineProps> = ({ value1, value2, rolling, onRo
         }
 
         // 돌아가는 중
-        setDisplayValues(prev => {
-          const newVal1 = slot1Stopped || frame >= slot1StopFrame ? value1 : Math.floor(Math.random() * 6) + 1;
-          const newVal2 = slot2Stopped || frame >= slot2StopFrame ? value2 : Math.floor(Math.random() * 6) + 1;
+        setDisplayValues(() => {
+          const newVal1 = localSlot1Stopped ? targetValuesRef.current[0] : Math.floor(Math.random() * 6) + 1;
+          const newVal2 = localSlot2Stopped ? targetValuesRef.current[1] : Math.floor(Math.random() * 6) + 1;
           return [newVal1, newVal2];
         });
 
@@ -111,11 +127,12 @@ const SlotMachine: React.FC<SlotMachineProps> = ({ value1, value2, rolling, onRo
         }
       };
     } else {
+      // rolling이 false일 때는 최종 값으로 설정
       setDisplayValues([value1, value2]);
       setSlot1Stopped(true);
       setSlot2Stopped(true);
     }
-  }, [rolling, value1, value2]);
+  }, [rolling]); // rolling만 의존성으로 - value1, value2 변경 시 재실행 방지
 
   const SlotReel: React.FC<{ value: number; stopped: boolean; index: number }> = ({ value, stopped, index }) => {
     return (
