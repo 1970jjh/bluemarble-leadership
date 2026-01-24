@@ -144,6 +144,8 @@ export interface Session {
   teams: Team[]; // Snapshot of teams in this session
   customCards?: GameCard[];  // 관리자가 수정한 커스텀 카드 (optional)
   customBoardImage?: string;  // 커스텀 모드용 게임판 배경 이미지 URL (optional)
+  aiEvaluationGuidelines?: string;  // AI 평가 지침 (수정 가능)
+  reportGenerationGuidelines?: string;  // 리포트 생성 지침 (수정 가능)
 }
 
 // ============================================================

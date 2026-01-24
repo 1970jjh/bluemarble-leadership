@@ -10,6 +10,7 @@ import {
   EVENT_CARDS,
   COMPETENCY_INFO,
   BOARD_SQUARES,
+  DEFAULT_AI_EVALUATION_GUIDELINES,
 } from '../constants';
 import {
   Settings,
@@ -38,9 +39,10 @@ interface AdminDashboardProps {
   onClose: () => void;
   gameMode: GameVersion;
   customCards: GameCard[];
-  onSaveCards: (cards: GameCard[], customBoardImage?: string) => void;
+  onSaveCards: (cards: GameCard[], customBoardImage?: string, aiEvaluationGuidelines?: string) => void;
   customBoardImage?: string;  // 커스텀 모드용 배경 이미지 URL
   sessionId?: string;  // 세션 ID (이미지 업로드 경로용)
+  aiEvaluationGuidelines?: string;  // AI 평가 지침
 }
 
 // 확장된 카드 타입 (역량명 포함)
@@ -57,7 +59,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   customCards,
   onSaveCards,
   customBoardImage: initialBoardImage,
-  sessionId
+  sessionId,
+  aiEvaluationGuidelines: initialAiGuidelines
 }) => {
   // 커스텀 모드용 기본 카드 가져오기 (보드 순서대로 정렬)
   const getDefaultCards = (): ExtendedGameCard[] => {
@@ -110,6 +113,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   // 커스텀 모드용 배경 이미지
   const [boardImage, setBoardImage] = useState(initialBoardImage || '');
+
+  // AI 평가 지침 (수정 가능)
+  const [aiGuidelines, setAiGuidelines] = useState(initialAiGuidelines || DEFAULT_AI_EVALUATION_GUIDELINES);
+  const [showAiGuidelines, setShowAiGuidelines] = useState(false);
 
   // 이미지 파일 업로드 관련
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -173,7 +180,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const handleSaveAll = async () => {
     setSaveStatus('saving');
     try {
-      await onSaveCards(cards as GameCard[], boardImage || undefined);
+      // AI 지침이 기본값과 같으면 undefined로 저장 (공간 절약)
+      const guidelinesToSave = aiGuidelines === DEFAULT_AI_EVALUATION_GUIDELINES ? undefined : aiGuidelines;
+      await onSaveCards(cards as GameCard[], boardImage || undefined, guidelinesToSave);
       setSaveStatus('saved');
       setHasChanges(false);
       setTimeout(() => setSaveStatus('idle'), 2000);
@@ -593,6 +602,61 @@ JSON만 응답하세요.`;
               </div>
             )}
           </div>
+        </div>
+
+        {/* AI 분석 및 평가 지침 설정 */}
+        <div className="p-4 border-b bg-gradient-to-r from-amber-50 to-orange-50">
+          <div className="flex items-center justify-between mb-2">
+            <label className="block text-sm font-bold text-amber-700 flex items-center gap-2">
+              <Sparkles className="w-4 h-4" />
+              AI 분석 및 평가 지침 (수정 가능)
+            </label>
+            <button
+              onClick={() => setShowAiGuidelines(!showAiGuidelines)}
+              className="flex items-center gap-1 text-sm text-amber-600 hover:text-amber-800"
+            >
+              {showAiGuidelines ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              {showAiGuidelines ? '접기' : '펼치기'}
+            </button>
+          </div>
+
+          {showAiGuidelines && (
+            <div className="space-y-2">
+              <textarea
+                value={aiGuidelines}
+                onChange={(e) => {
+                  setAiGuidelines(e.target.value);
+                  setHasChanges(true);
+                }}
+                rows={12}
+                className="w-full px-4 py-3 border-2 border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 font-mono text-sm"
+                placeholder="AI 평가 지침을 입력하세요..."
+              />
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-amber-600">
+                  수정된 지침은 AI 분석 및 평가 시 적용됩니다. 저장 버튼을 눌러야 반영됩니다.
+                </p>
+                <button
+                  onClick={() => {
+                    setAiGuidelines(DEFAULT_AI_EVALUATION_GUIDELINES);
+                    setHasChanges(true);
+                  }}
+                  className="text-xs text-amber-600 hover:text-amber-800 underline flex items-center gap-1"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  기본값으로 초기화
+                </button>
+              </div>
+            </div>
+          )}
+
+          {!showAiGuidelines && (
+            <p className="text-xs text-amber-600">
+              {aiGuidelines === DEFAULT_AI_EVALUATION_GUIDELINES
+                ? '현재 기본 평가 지침이 적용됩니다.'
+                : '✏️ 수정된 평가 지침이 적용됩니다.'}
+            </p>
+          )}
         </div>
 
         {/* 툴바 */}

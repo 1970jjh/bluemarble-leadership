@@ -42,7 +42,8 @@ import {
   DOUBLE_BONUS_POINTS,
   EVENT_CARDS,
   getChanceCardType,
-  CHANCE_CARD_SQUARES
+  CHANCE_CARD_SQUARES,
+  DEFAULT_AI_EVALUATION_GUIDELINES
 } from './constants';
 import { getSquareMultiplier, DOUBLE_SQUARES, TRIPLE_SQUARES } from './components/GameBoard';
 import { Smartphone, Monitor, QrCode, X, Copy, Check, Settings, BookOpen } from 'lucide-react';
@@ -897,8 +898,8 @@ const App: React.FC = () => {
     }));
   };
 
-  // 세션에 커스텀 카드 및 배경 이미지 저장 (세션별 맞춤형 카드)
-  const updateCustomCardsInSession = async (cards: GameCard[], customBoardImage?: string) => {
+  // 세션에 커스텀 카드 및 배경 이미지, AI 지침 저장 (세션별 맞춤형 카드)
+  const updateCustomCardsInSession = async (cards: GameCard[], customBoardImage?: string, aiEvaluationGuidelines?: string) => {
     if (!currentSessionId) return;
 
     // Firebase는 undefined 값을 지원하지 않으므로 제거
@@ -923,9 +924,12 @@ const App: React.FC = () => {
 
     const cleanedCards = cards.map(card => cleanCard(card));
 
-    const updateData: { customCards: GameCard[]; customBoardImage?: string } = { customCards: cleanedCards };
+    const updateData: { customCards: GameCard[]; customBoardImage?: string; aiEvaluationGuidelines?: string } = { customCards: cleanedCards };
     if (customBoardImage !== undefined && customBoardImage !== '') {
       updateData.customBoardImage = customBoardImage;
+    }
+    if (aiEvaluationGuidelines !== undefined && aiEvaluationGuidelines !== '') {
+      updateData.aiEvaluationGuidelines = aiEvaluationGuidelines;
     }
 
     console.log('[Card Save] 카드 저장 시작:', { sessionId: currentSessionId, cardCount: cleanedCards.length });
@@ -1634,12 +1638,12 @@ const App: React.FC = () => {
         return;
       }
 
-      // 다음 스텝 예약
-      setTimeout(moveOneStep, 400);
+      // 다음 스텝 예약 (1.5초에 한 칸)
+      setTimeout(moveOneStep, 1500);
     };
 
     // 첫 스텝 시작
-    setTimeout(moveOneStep, 400);
+    setTimeout(moveOneStep, 1500);
   };
 
   // 이동 완료 후 처리
@@ -1653,28 +1657,30 @@ const App: React.FC = () => {
     ];
 
     if (landingSquare && previewSquareTypes.includes(landingSquare.type)) {
-      // 카드 미리보기 표시
-      setPendingSquare(landingSquare);
-      setShowCompetencyPreview(true);
-
-      // 3초 후 자동으로 진행 (모바일에서 주사위 굴린 경우 대비)
+      // 도착 후 1초 대기 후 카드 미리보기 표시
       setTimeout(() => {
-        // 아직 미리보기가 표시 중이면 자동으로 진행
-        setShowCompetencyPreview(prev => {
-          if (prev) {
-            const updatedTeam = { ...teamToMove, position: finalPos };
-            handleLandOnSquare(updatedTeam, finalPos);
-            return false;
-          }
-          return prev;
-        });
-      }, 3000);
+        setPendingSquare(landingSquare);
+        setShowCompetencyPreview(true);
+
+        // 3초 후 자동으로 진행 (모바일에서 주사위 굴린 경우 대비)
+        setTimeout(() => {
+          // 아직 미리보기가 표시 중이면 자동으로 진행
+          setShowCompetencyPreview(prev => {
+            if (prev) {
+              const updatedTeam = { ...teamToMove, position: finalPos };
+              handleLandOnSquare(updatedTeam, finalPos);
+              return false;
+            }
+            return prev;
+          });
+        }, 3000);
+      }, 1000);
     } else {
-      // 출발 칸 등은 바로 handleLandOnSquare 호출
+      // 출발 칸 등은 1초 대기 후 handleLandOnSquare 호출
       setTimeout(() => {
         const updatedTeam = { ...teamToMove, position: finalPos };
         handleLandOnSquare(updatedTeam, finalPos);
-      }, 500);
+      }, 1000);
     }
   };
 
@@ -1779,10 +1785,11 @@ const App: React.FC = () => {
         return;
       }
 
-      setTimeout(moveOneStep, 400);
+      // 다음 스텝 예약 (1.5초에 한 칸)
+      setTimeout(moveOneStep, 1500);
     };
 
-    setTimeout(moveOneStep, 400);
+    setTimeout(moveOneStep, 1500);
   };
 
   // 역량카드 미리보기 완료 핸들러
@@ -1948,6 +1955,9 @@ const App: React.FC = () => {
       console.log('allTeamResponses:', allTeamResponses);
       console.log('teamResponsesList:', teamResponsesList);
 
+      // 세션별 커스텀 AI 평가 지침 사용 (없으면 기본값)
+      const evaluationGuidelines = currentSession?.aiEvaluationGuidelines || DEFAULT_AI_EVALUATION_GUIDELINES;
+
       // Gemini AI에 비교 평가 요청
       const prompt = `
 당신은 리더십 교육 게임의 AI 평가자입니다.
@@ -1966,30 +1976,7 @@ ${teamResponsesList.map((resp) => `
 - 이유: ${resp.reasoning}
 `).join('\n')}
 
-## 평가 기준 (중요도 순)
-
-### 🚨 1순위: 성의 있는 답변인가? (필수 조건)
-- 의미 없는 글자 나열 (예: "ㅁㄴㄹㅇ", "asdf", "ㅋㅋㅋ", "..." 등) → **무조건 최하위, 0~20점**
-- 너무 짧은 답변 (3단어 미만, 10글자 미만) → **큰 감점**
-- 질문과 무관한 답변 → **최하위**
-
-### ⭐ 2순위: 선택 이유의 질 (가장 중요한 평가 요소!)
-1. **논리성**: 선택 이유가 논리적이고 설득력 있는가? (최중요)
-2. **구체성**: 답변이 구체적이고 명확한가?
-3. **합리성**: 상황을 고려한 합리적인 근거를 제시했는가?
-4. **깊이**: 단순한 답변이 아닌, 깊이 있는 사고가 담겨 있는가?
-
-### 📋 3순위: 선택의 적절성
-- 주어진 상황에서 적절한 선택지를 골랐는가?
-- 상황의 맥락과 조건을 고려한 판단인가?
-- (단, 이유가 충실하다면 선택이 다소 부적절해도 감점 폭이 적음)
-
-### 점수 결정 원칙
-- 좋은 이유 + 적절한 선택 = 최고점 (100점)
-- 좋은 이유 + 부적절한 선택 = 높은 점수 (70~85점) - 이유가 논리적이면 인정
-- 짧은 이유 + 적절한 선택 = 중간 점수 (50~70점) - 선택은 맞았지만 설명 부족
-- 짧은 이유 + 부적절한 선택 = 낮은 점수 (30~50점)
-- 성의 없는 이유 = 최하점 (0~20점)
+${evaluationGuidelines}
 
 ## 응답 형식 (JSON)
 {
@@ -3215,7 +3202,11 @@ ${teamResponsesList.map((resp) => `
       )}
 
       {showReport && (
-        <ReportView teams={teams} onClose={() => setShowReport(false)} />
+        <ReportView
+          teams={teams}
+          onClose={() => setShowReport(false)}
+          reportGenerationGuidelines={currentSession?.reportGenerationGuidelines}
+        />
       )}
 
       {/* Invite Modal - 참가자 초대 QR/링크 */}
@@ -3421,8 +3412,9 @@ ${teamResponsesList.map((resp) => `
         customCards={sessionCustomCards}
         customBoardImage={currentSession?.customBoardImage}
         sessionId={currentSessionId || undefined}
-        onSaveCards={(cards, customBoardImage) => {
-          updateCustomCardsInSession(cards, customBoardImage);
+        aiEvaluationGuidelines={currentSession?.aiEvaluationGuidelines}
+        onSaveCards={(cards, customBoardImage, aiEvaluationGuidelines) => {
+          updateCustomCardsInSession(cards, customBoardImage, aiEvaluationGuidelines);
         }}
       />
 
