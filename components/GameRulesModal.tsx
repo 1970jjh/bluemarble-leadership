@@ -205,11 +205,11 @@ const GameRulesModal: React.FC<GameRulesModalProps> = ({
           <section>
             <h3 className="text-lg font-black text-gray-800 mb-3 flex items-center gap-2">
               <Dice5 className="text-yellow-600" size={20} />
-              더블 보너스 (주사위 더블)
+              주사위 더블 보너스
             </h3>
             <div className="bg-yellow-100 p-4 rounded-lg border-2 border-yellow-400">
               <p className="text-gray-700">
-                주사위 두 개가 <strong className="text-yellow-700">같은 숫자</strong>가 나오면 <span className="bg-yellow-400 text-black px-2 py-0.5 rounded font-bold">DOUBLE!</span>
+                주사위 두 개가 <strong className="text-yellow-700">같은 숫자</strong>가 나오면
               </p>
               <p className="text-sm text-gray-600 mt-2">
                 🎲 즉시 <strong className="text-yellow-700">보너스 30점</strong>을 획득합니다!
@@ -243,18 +243,45 @@ const GameRulesModal: React.FC<GameRulesModalProps> = ({
               AI 비교 분석 기준
             </h3>
             <div className="bg-purple-50 p-4 rounded-lg border-2 border-purple-300">
-              <p className="text-gray-700 mb-3">AI는 모든 팀의 응답을 비교하여 다음 기준으로 순위를 매깁니다:</p>
-              <ul className="text-sm text-gray-600 space-y-2">
-                <li>✅ <strong>구체성</strong>: 상세하고 명확한 이유 설명</li>
-                <li>✅ <strong>논리성</strong>: 상황에 맞는 합리적 판단</li>
-                <li>✅ <strong>창의성</strong>: 다양한 관점과 해결책 제시</li>
-                <li>✅ <strong>현실성</strong>: 실제 업무 환경을 고려한 답변</li>
-                <li>❌ <strong>성의 없는 답변</strong>: 짧고 모호한 답변은 하위 순위!</li>
-              </ul>
-              <div className="mt-3 bg-white p-3 rounded border-2 border-purple-200">
-                <div className="text-sm font-bold text-purple-700">💡 이럴 땐, 이렇게...</div>
+              <p className="text-gray-700 mb-3">AI는 모든 팀의 응답을 비교하여 다음 <strong>우선순위</strong>로 순위를 매깁니다:</p>
+
+              {/* 1순위: 성의 체크 */}
+              <div className="bg-red-100 p-3 rounded-lg border-2 border-red-300 mb-3">
+                <div className="font-bold text-red-800 mb-2">🚫 1순위: 성의 없는 답변 체크</div>
+                <ul className="text-sm text-gray-700 space-y-1 ml-4">
+                  <li>• 무의미한 글자 나열 (예: "ㅁㄴㄹㅇ", "ㄹㄹㄹ")</li>
+                  <li>• 너무 짧은 답변 (1-2단어)</li>
+                  <li>• 상황과 전혀 무관한 내용</li>
+                </ul>
+                <p className="text-xs text-red-700 mt-2 font-bold">→ 해당 시 자동 최하위 처리!</p>
+              </div>
+
+              {/* 2순위: 선택 이유의 질 */}
+              <div className="bg-yellow-100 p-3 rounded-lg border-2 border-yellow-400 mb-3">
+                <div className="font-bold text-yellow-800 mb-2">⭐ 2순위: 선택 이유의 질 (가장 중요!)</div>
+                <ul className="text-sm text-gray-700 space-y-1 ml-4">
+                  <li>• <strong>논리성</strong>: 선택 이유가 논리적이고 설득력 있는가?</li>
+                  <li>• <strong>구체성</strong>: 답변이 구체적이고 명확한가?</li>
+                  <li>• <strong>합리성</strong>: 상황을 고려한 합리적 근거 제시</li>
+                  <li>• <strong>깊이</strong>: 단순한 답변이 아닌 깊이 있는 사고</li>
+                </ul>
+              </div>
+
+              {/* 3순위: 선택의 적절성 */}
+              <div className="bg-blue-100 p-3 rounded-lg border-2 border-blue-300 mb-3">
+                <div className="font-bold text-blue-800 mb-2">📋 3순위: 선택의 적절성</div>
+                <ul className="text-sm text-gray-700 space-y-1 ml-4">
+                  <li>• 주어진 상황에서 적절한 선택인가?</li>
+                  <li>• 현실적으로 실행 가능한 방안인가?</li>
+                </ul>
+                <p className="text-xs text-blue-700 mt-2">* 같은 선택이라도 이유가 더 논리적인 팀이 높은 점수!</p>
+              </div>
+
+              <div className="bg-white p-3 rounded border-2 border-purple-200">
+                <div className="text-sm font-bold text-purple-700">💡 고득점 팁</div>
                 <p className="text-xs text-gray-600 mt-1">
-                  AI 분석 결과에는 상황에 대한 모범적인 접근 방법 가이드도 제공됩니다.
+                  선택보다 <strong>"왜 그렇게 선택했는지"</strong>가 더 중요합니다!<br />
+                  논리적이고 구체적인 이유를 상세히 작성하세요.
                 </p>
               </div>
             </div>

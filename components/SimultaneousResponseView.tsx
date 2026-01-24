@@ -29,10 +29,12 @@ const SimultaneousResponseView: React.FC<SimultaneousResponseViewProps> = ({
 }) => {
   const [selectedChoice, setSelectedChoice] = useState<Choice | null>(myResponse?.selectedChoice || null);
   const [reasoning, setReasoning] = useState(myResponse?.reasoning || '');
+  const [isSubmitting, setIsSubmitting] = useState(false);  // 제출 중 상태
+  const [localSubmitted, setLocalSubmitted] = useState(false);  // 로컬 제출 완료 상태
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const isOpenEnded = !card.choices || card.choices.length === 0;
-  const isSubmitted = myResponse?.isSubmitted || false;
+  const isSubmitted = myResponse?.isSubmitted || localSubmitted;  // Firebase 또는 로컬 상태
 
   useEffect(() => {
     if (!isSubmitted && !aiResult) {
@@ -41,9 +43,18 @@ const SimultaneousResponseView: React.FC<SimultaneousResponseViewProps> = ({
   }, [isSubmitted, aiResult]);
 
   const handleSubmit = () => {
+    if (isSubmitting || isSubmitted) return;  // 중복 제출 방지
     if (isOpenEnded && !reasoning.trim()) return;
     if (!isOpenEnded && (!selectedChoice || !reasoning.trim())) return;
+
+    setIsSubmitting(true);
     onSubmit(selectedChoice, reasoning);
+
+    // 즉시 로컬 상태 업데이트 (Firebase 응답 기다리지 않음)
+    setTimeout(() => {
+      setLocalSubmitted(true);
+      setIsSubmitting(false);
+    }, 100);
   };
 
   const getTypeColor = (type: string) => {
@@ -312,10 +323,14 @@ const SimultaneousResponseView: React.FC<SimultaneousResponseViewProps> = ({
               {/* 제출 버튼 */}
               <button
                 onClick={handleSubmit}
-                disabled={isOpenEnded ? !reasoning.trim() : !selectedChoice || !reasoning.trim()}
+                disabled={isSubmitting || (isOpenEnded ? !reasoning.trim() : !selectedChoice || !reasoning.trim())}
                 className="w-full py-4 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white text-xl font-black uppercase border-4 border-black flex items-center justify-center gap-3 transition-all shadow-hard"
               >
-                <Send size={24} /> 응답 제출
+                {isSubmitting ? (
+                  <><Loader2 size={24} className="animate-spin" /> 제출 중...</>
+                ) : (
+                  <><Send size={24} /> 응답 제출</>
+                )}
               </button>
             </>
           )}
