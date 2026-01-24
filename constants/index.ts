@@ -12,8 +12,13 @@ import { BOARD_SQUARES, CUSTOM_BOARD_NAMES } from './board';
 import { EVENT_CARDS } from './eventCards';
 
 // ============================================================
-// 초기 리소스 및 보너스 설정
+// 초기 점수 및 리소스 설정
 // ============================================================
+
+// 단일 점수 체계 - 시작 점수 100점
+export const INITIAL_SCORE = 100;
+
+// Legacy 호환용 - 기존 리소스 상태
 export const INITIAL_RESOURCES: ResourceState = {
   capital: 50,    // 자본 (시작: 50)
   energy: 50,     // 에너지 (시작: 50)

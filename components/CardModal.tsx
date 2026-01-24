@@ -44,7 +44,7 @@ interface CardModalProps {
   // 동시 응답 시스템 props
   // ============================================================
   allTeamResponses?: { [teamId: string]: TeamResponse };  // 모든 팀 응답
-  allTeams?: { id: string; name: string }[];  // 모든 팀 목록
+  allTeams?: { id: string; name: string; score?: number }[];  // 모든 팀 목록 (점수 포함)
   isResponsesRevealed?: boolean;  // 응답 공개 여부
   aiComparativeResult?: AIComparativeResult | null;  // AI 비교 분석 결과
   isComparingTeams?: boolean;  // AI 비교 분석 중
@@ -413,6 +413,45 @@ const CardModal: React.FC<CardModalProps> = ({
                         <div className="text-lg font-black text-yellow-700 uppercase mb-3">💡 Best Practice</div>
                         <p className="text-xl text-gray-800 font-medium leading-relaxed">{aiComparativeResult.guidance}</p>
                       </div>
+
+                      {/* 팀별 점수 현황 */}
+                      {allTeams && allTeams.length > 0 && (
+                        <div className="mt-6 bg-gradient-to-br from-blue-50 to-indigo-50 p-5 rounded-xl border-4 border-blue-400">
+                          <div className="flex items-center gap-3 mb-4">
+                            <Users size={28} className="text-blue-600" />
+                            <span className="text-xl font-black text-blue-800 uppercase">점수 적용 후 현황</span>
+                          </div>
+                          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                            {allTeams
+                              .map(team => {
+                                const ranking = aiComparativeResult.rankings.find(r => r.teamId === team.id);
+                                const currentScore = team.score ?? 100;
+                                const addedScore = ranking?.score ?? 0;
+                                const newScore = currentScore + addedScore;
+                                return { ...team, currentScore, addedScore, newScore };
+                              })
+                              .sort((a, b) => b.newScore - a.newScore)
+                              .map((team, index) => (
+                                <div
+                                  key={team.id}
+                                  className={`p-4 rounded-xl border-3 text-center ${
+                                    index === 0 ? 'bg-yellow-100 border-yellow-500' :
+                                    index === 1 ? 'bg-gray-100 border-gray-400' :
+                                    index === 2 ? 'bg-orange-100 border-orange-400' :
+                                    'bg-white border-gray-300'
+                                  }`}
+                                >
+                                  <div className="text-lg font-bold text-gray-700 mb-1">{team.name}</div>
+                                  <div className="text-3xl font-black text-blue-800">{team.newScore}점</div>
+                                  <div className="text-base font-medium text-green-600 mt-1">
+                                    ({team.currentScore} + {team.addedScore})
+                                  </div>
+                                </div>
+                              ))
+                            }
+                          </div>
+                        </div>
+                      )}
 
                       {/* 결과 적용 버튼 */}
                       {onApplyResults && (

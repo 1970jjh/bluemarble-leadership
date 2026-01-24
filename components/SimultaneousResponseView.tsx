@@ -156,6 +156,50 @@ const SimultaneousResponseView: React.FC<SimultaneousResponseViewProps> = ({
                 <div className="text-base font-black text-yellow-700 uppercase mb-2">💡 Best Practice</div>
                 <p className="text-lg text-gray-800 font-medium leading-relaxed">{aiResult.guidance}</p>
               </div>
+
+              {/* 팀별 점수 현황 */}
+              {allTeams && allTeams.length > 0 && (
+                <div className="mt-5 bg-gradient-to-br from-blue-50 to-indigo-50 p-4 rounded-xl border-4 border-blue-400">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Users size={22} className="text-blue-600" />
+                    <span className="text-lg font-black text-blue-800 uppercase">점수 적용 후 현황</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {allTeams
+                      .map(t => {
+                        const ranking = aiResult.rankings.find(r => r.teamId === t.id);
+                        const currentScore = t.score ?? 100;
+                        const addedScore = ranking?.score ?? 0;
+                        const newScore = currentScore + addedScore;
+                        return { ...t, currentScore, addedScore, newScore };
+                      })
+                      .sort((a, b) => b.newScore - a.newScore)
+                      .map((t, index) => (
+                        <div
+                          key={t.id}
+                          className={`p-3 rounded-lg border-2 text-center ${
+                            t.id === team.id ? 'ring-2 ring-blue-500 ring-offset-1' : ''
+                          } ${
+                            index === 0 ? 'bg-yellow-100 border-yellow-400' :
+                            index === 1 ? 'bg-gray-100 border-gray-300' :
+                            index === 2 ? 'bg-orange-100 border-orange-300' :
+                            'bg-white border-gray-200'
+                          }`}
+                        >
+                          <div className="text-sm font-bold text-gray-600">
+                            {t.name}
+                            {t.id === team.id && <span className="text-blue-600 ml-1">(우리)</span>}
+                          </div>
+                          <div className="text-2xl font-black text-blue-800">{t.newScore}점</div>
+                          <div className="text-xs font-medium text-green-600">
+                            ({t.currentScore} + {t.addedScore})
+                          </div>
+                        </div>
+                      ))
+                    }
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
