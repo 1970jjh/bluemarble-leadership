@@ -1730,11 +1730,11 @@ const App: React.FC = () => {
 - 제목: ${activeCard.title}
 - 역량: ${activeCard.competency || '일반'}
 - 상황: ${activeCard.situation}
-${activeCard.choices ? `- 선택지:\n${activeCard.choices.map((c, i) => `  ${i + 1}. ${c.text}`).join('\n')}` : '- (개방형 질문)'}
+${activeCard.choices ? `- 선택지:\n${activeCard.choices.map((c, i) => `  ${c.id}. ${c.text}`).join('\n')}` : '- (개방형 질문)'}
 
 ## 팀별 응답
-${teamResponsesList.map((resp, idx) => `
-### ${resp.teamName}
+${teamResponsesList.map((resp) => `
+### ${resp.teamName} (ID: ${resp.teamId})
 - 선택: ${resp.selectedChoice?.text || '(개방형 응답)'}
 - 이유: ${resp.reasoning}
 `).join('\n')}
@@ -1750,7 +1750,7 @@ ${teamResponsesList.map((resp, idx) => `
 {
   "rankings": [
     {
-      "teamId": "팀ID",
+      "teamId": "위에서 제공된 ID를 정확히 복사",
       "teamName": "팀이름",
       "rank": 1,
       "score": 100,
@@ -1767,7 +1767,9 @@ ${teamResponsesList.map((resp, idx) => `
   - 4팀: 1등 100점, 2등 75점, 3등 50점, 4등 25점
   - 5팀 이상: 1등 100점부터 순위별 적절히 배분
 
-중요: 모든 팀에 대해 rankings 배열에 포함해야 합니다.
+중요:
+- 모든 팀에 대해 rankings 배열에 포함해야 합니다.
+- teamId는 위에서 제공된 ID를 정확히 그대로 사용하세요.
 `;
 
       const result = await genAI.models.generateContent({
@@ -1781,16 +1783,33 @@ ${teamResponsesList.map((resp, idx) => `
       const responseText = result.text || '';
       const parsed = JSON.parse(responseText);
 
+      // teamId 매핑 수정: 팀 이름으로 매칭 시도 (AI가 ID를 정확히 복사하지 않을 경우 대비)
       const comparativeResult: AIComparativeResult = {
-        rankings: parsed.rankings.map((r: any) => ({
-          teamId: r.teamId,
-          teamName: r.teamName,
-          rank: r.rank,
-          score: r.score,
-          feedback: r.feedback,
-          selectedChoice: allTeamResponses[r.teamId]?.selectedChoice || null,
-          reasoning: allTeamResponses[r.teamId]?.reasoning || ''
-        })),
+        rankings: parsed.rankings.map((r: any) => {
+          // 먼저 teamId로 찾기
+          let teamResponse = allTeamResponses[r.teamId];
+
+          // 못 찾으면 팀 이름으로 찾기
+          if (!teamResponse) {
+            const foundEntry = Object.entries(allTeamResponses).find(
+              ([_, resp]) => resp.teamName === r.teamName
+            );
+            if (foundEntry) {
+              teamResponse = foundEntry[1];
+              r.teamId = foundEntry[0]; // 실제 teamId로 교체
+            }
+          }
+
+          return {
+            teamId: r.teamId,
+            teamName: r.teamName,
+            rank: r.rank,
+            score: r.score,
+            feedback: r.feedback,
+            selectedChoice: teamResponse?.selectedChoice || null,
+            reasoning: teamResponse?.reasoning || ''
+          };
+        }),
         guidance: parsed.guidance,
         analysisTimestamp: Date.now()
       };
@@ -2624,6 +2643,7 @@ ${teamResponsesList.map((resp, idx) => `
           isAiProcessing={isAiProcessing}
           teamNumber={(participantSession?.teams.findIndex(t => t.id === participantTeamId) ?? 0) + 1}
           onShowRules={() => setShowGameRules(true)}
+          allTeams={participantSession?.teams || []}
         />
 
         {/* 게임 규칙서 모달 (참가자 화면용) */}
@@ -2809,6 +2829,7 @@ ${teamResponsesList.map((resp, idx) => `
                  isAiProcessing={isAiProcessing}
                  teamNumber={(teams.findIndex(t => t.id === monitoredTeam.id) ?? 0) + 1}
                  onShowRules={() => setShowGameRules(true)}
+                 allTeams={teams}
                />
              </div>
            )}
