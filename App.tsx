@@ -1635,11 +1635,11 @@ const App: React.FC = () => {
       }
 
       // 다음 스텝 예약
-      setTimeout(moveOneStep, 400);
+      setTimeout(moveOneStep, 1000);
     };
 
     // 첫 스텝 시작
-    setTimeout(moveOneStep, 400);
+    setTimeout(moveOneStep, 1000);
   };
 
   // 이동 완료 후 처리
@@ -1779,10 +1779,10 @@ const App: React.FC = () => {
         return;
       }
 
-      setTimeout(moveOneStep, 400);
+      setTimeout(moveOneStep, 1000);
     };
 
-    setTimeout(moveOneStep, 400);
+    setTimeout(moveOneStep, 1000);
   };
 
   // 역량카드 미리보기 완료 핸들러
