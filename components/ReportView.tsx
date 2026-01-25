@@ -537,6 +537,20 @@ const ReportView: React.FC<ReportViewProps> = ({ teams, onClose, reportGeneratio
                                 </ol>
                               </div>
                             )}
+
+                            {feedback.feedback.discussion_topics?.length > 0 && (
+                              <div className="bg-purple-50 p-3 rounded border-l-4 border-purple-500">
+                                <h5 className="font-bold text-purple-800 mb-2">💬 토의 주제</h5>
+                                <ol className="space-y-2">
+                                  {feedback.feedback.discussion_topics.map((item: string, i: number) => (
+                                    <li key={i} className="text-gray-700 bg-white p-2 rounded border flex items-start gap-2">
+                                      <span className="bg-purple-500 text-white w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold">{i + 1}</span>
+                                      <span>{item}</span>
+                                    </li>
+                                  ))}
+                                </ol>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -592,6 +606,33 @@ const ReportView: React.FC<ReportViewProps> = ({ teams, onClose, reportGeneratio
                       );
                     })}
                   </div>
+
+                  {/* 공통 실수 사례 */}
+                  {overallAnalysis.common_mistakes?.length > 0 && (
+                    <div className="bg-red-50 p-4 rounded-lg border-2 border-red-300">
+                      <h2 className="text-xl font-bold mb-3 text-red-800">⚠️ 공통 개선 필요 사항</h2>
+                      <ul className="space-y-2">
+                        {overallAnalysis.common_mistakes.map((item, idx) => (
+                          <li key={idx} className="text-gray-700 bg-white p-3 rounded-lg border border-red-200">• {item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* 토론 주제 */}
+                  {overallAnalysis.discussion_topics?.length > 0 && (
+                    <div className="bg-indigo-50 p-4 rounded-lg border-2 border-indigo-300">
+                      <h2 className="text-xl font-bold mb-3 text-indigo-800">💬 팀 토의 주제</h2>
+                      <ol className="space-y-3">
+                        {overallAnalysis.discussion_topics.map((item, idx) => (
+                          <li key={idx} className="topic-item text-gray-700 bg-white p-3 rounded-lg border border-indigo-200 flex items-start gap-3">
+                            <span className="bg-indigo-500 text-white w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 font-bold text-sm">{idx + 1}</span>
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
+                  )}
 
                   <div className="conclusion-box bg-yellow-100 p-4 rounded-lg border-2 border-yellow-500">
                     <h2 className="text-xl font-bold mb-3 text-yellow-800">마무리</h2>
