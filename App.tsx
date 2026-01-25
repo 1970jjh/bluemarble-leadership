@@ -177,6 +177,10 @@ const App: React.FC = () => {
   const lastReceivedTimestamp = useRef(0);
   const saveDebounceTimer = useRef<any>(null);
 
+  // 마지막으로 수락한 타임스탬프 추적 (오래된 데이터 거부용)
+  const lastAcceptedGameStateTimestamp = useRef(0);
+  const lastAcceptedSessionTimestamp = useRef(0);
+
   // gameLogs를 ref로 관리하여 저장 시 최신 값 사용 (의존성 루프 방지)
   const gameLogsRef = useRef<string[]>([]);
   // gameLogs 변경 시 ref도 업데이트
@@ -356,26 +360,40 @@ const App: React.FC = () => {
 
     const unsubscribe = firestoreService.subscribeToSession(currentSessionId, (session) => {
       if (session) {
-        // 로컬 작업 진행 중이면 세션 업데이트 스킵 (이동 중 위치 덮어쓰기 방지)
+        const sessionTimestamp = session.lastUpdated || 0;
+
+        // === 1단계: 로컬 작업 진행 중 보호 ===
         if (localOperationInProgress.current) {
           console.log('[Session Subscribe] 로컬 작업 진행 중 - 세션 업데이트 스킵');
           return;
         }
 
-        // 세션의 lastUpdated가 로컬 작업 타임스탬프보다 이전이면 무시 (오래된 데이터)
-        if (session.lastUpdated && session.lastUpdated < localOperationTimestamp.current) {
-          console.log('[Session Subscribe] 오래된 세션 데이터 무시:', {
-            sessionLastUpdated: session.lastUpdated,
-            localTimestamp: localOperationTimestamp.current
+        // === 2단계: 타임스탬프 기반 오래된 데이터 거부 ===
+        if (sessionTimestamp <= lastAcceptedSessionTimestamp.current) {
+          console.log('[Session Subscribe] 오래된/중복 세션 데이터 무시:', {
+            received: sessionTimestamp,
+            lastAccepted: lastAcceptedSessionTimestamp.current
           });
           return;
         }
 
+        // === 3단계: 로컬 작업 직후 보호 (5초) ===
+        const timeSinceLocalOp = Date.now() - localOperationTimestamp.current;
+        if (timeSinceLocalOp < 5000 && sessionTimestamp < localOperationTimestamp.current) {
+          console.log('[Session Subscribe] 로컬 작업 이전 세션 데이터 무시:', {
+            sessionTimestamp,
+            localOpTimestamp: localOperationTimestamp.current
+          });
+          return;
+        }
+
+        // 타임스탬프 업데이트
+        lastAcceptedSessionTimestamp.current = sessionTimestamp;
+
         console.log('[Session Subscribe] 세션 데이터 수신:', {
           sessionId: session.id,
           lastUpdated: session.lastUpdated,
-          hasCustomCards: !!session.customCards,
-          customCardsCount: session.customCards?.length || 0
+          teamsPositions: session.teams?.map(t => ({ name: t.name, pos: t.position }))
         });
         setSessions(prev => prev.map(s => s.id === currentSessionId ? session : s));
       }
@@ -395,9 +413,11 @@ const App: React.FC = () => {
 
     const unsubscribe = firestoreService.subscribeToGameState(currentSessionId, (state) => {
       if (state) {
-        // 로컬 작업 진행 중이면 Firebase 상태 무시 (로컬 상태가 우선)
+        const stateTimestamp = state.lastUpdated || 0;
+
+        // === 1단계: 로컬 작업 진행 중 보호 ===
         if (localOperationInProgress.current) {
-          console.log('[Firebase] 로컬 작업 진행 중 - 업데이트 스킵');
+          console.log('[Firebase GameState] 로컬 작업 진행 중 - 업데이트 스킵');
 
           // Decision 상태에서 다른 팀원의 입력만 업데이트
           if (state.currentCard && state.phase === GamePhase.Decision) {
@@ -406,27 +426,34 @@ const App: React.FC = () => {
             setSharedSelectedChoice(state.selectedChoice);
             setSharedReasoning(state.reasoning || '');
             setShowCardModal(true);
-            // 짧은 지연 후 플래그 해제
             setTimeout(() => { isReceivingFromFirebase.current = false; }, 100);
           }
           return;
         }
 
-        // 로컬 작업이 끝난 후 일정 시간 동안도 보호 (Firebase 지연 응답 방지)
-        const timeSinceLocalOp = Date.now() - localOperationTimestamp.current;
-        if (timeSinceLocalOp < 3000) {
-          // 3초 내에는 로컬 작업 이전의 데이터 무시
-          if (state.lastUpdated && state.lastUpdated < localOperationTimestamp.current) {
-            console.log('[Firebase] 오래된 Firebase 데이터 무시 (로컬 작업 이전 데이터)');
-            return;
-          }
-        }
-
-        // 이미 같은 timestamp의 데이터를 받았으면 스킵 (중복 처리 방지)
-        if (state.lastUpdated && state.lastUpdated === lastReceivedTimestamp.current) {
+        // === 2단계: 타임스탬프 기반 오래된 데이터 거부 ===
+        // lastUpdated가 없거나 마지막 수락 타임스탬프보다 이전/같으면 무시
+        if (stateTimestamp <= lastAcceptedGameStateTimestamp.current) {
+          console.log('[Firebase GameState] 오래된/중복 데이터 무시:', {
+            received: stateTimestamp,
+            lastAccepted: lastAcceptedGameStateTimestamp.current
+          });
           return;
         }
-        lastReceivedTimestamp.current = state.lastUpdated || 0;
+
+        // === 3단계: 로컬 작업 직후 보호 (5초) ===
+        const timeSinceLocalOp = Date.now() - localOperationTimestamp.current;
+        if (timeSinceLocalOp < 5000 && stateTimestamp < localOperationTimestamp.current) {
+          console.log('[Firebase GameState] 로컬 작업 이전 데이터 무시:', {
+            stateTimestamp,
+            localOpTimestamp: localOperationTimestamp.current
+          });
+          return;
+        }
+
+        // 타임스탬프 업데이트
+        lastAcceptedGameStateTimestamp.current = stateTimestamp;
+        lastReceivedTimestamp.current = stateTimestamp;
 
         // Firebase 수신 플래그 설정 (무한 루프 방지)
         isReceivingFromFirebase.current = true;
@@ -956,6 +983,8 @@ const App: React.FC = () => {
 
     // 로컬 작업 타임스탬프 갱신 (Firebase 구독 보호용)
     localOperationTimestamp.current = updateTimestamp;
+    // 현재 타임스탬프보다 오래된 세션 데이터 거부
+    lastAcceptedSessionTimestamp.current = updateTimestamp;
 
     // Firebase에 저장 (설정되어 있으면) - lastUpdated 포함
     const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
@@ -1087,8 +1116,12 @@ const App: React.FC = () => {
     if (!currentSession) return;
 
     // 로컬 작업 시작 - Firebase가 이 상태를 덮어쓰지 않도록 보호
+    const timestamp = Date.now();
     localOperationInProgress.current = true;
-    localOperationTimestamp.current = Date.now();
+    localOperationTimestamp.current = timestamp;
+    // 현재 타임스탬프보다 오래된 데이터 모두 거부
+    lastAcceptedGameStateTimestamp.current = timestamp;
+    lastAcceptedSessionTimestamp.current = timestamp;
 
     // Reset Shared State
     setShowCardModal(false);
@@ -1484,8 +1517,12 @@ const App: React.FC = () => {
     if (isRolling || gamePhase === GamePhase.Rolling) return;
 
     // 로컬 작업 시작 - Firebase가 이 상태를 덮어쓰지 않도록 보호
+    const timestamp = Date.now();
     localOperationInProgress.current = true;
-    localOperationTimestamp.current = Date.now();
+    localOperationTimestamp.current = timestamp;
+    // 현재 타임스탬프보다 오래된 Firebase 데이터 모두 거부
+    lastAcceptedGameStateTimestamp.current = timestamp;
+    lastAcceptedSessionTimestamp.current = timestamp;
 
     // 주사위 결과 미리 계산
     const die1 = Math.ceil(Math.random() * 6);
@@ -2265,8 +2302,12 @@ ${evaluationGuidelines}
 
     // 로컬 작업 시작 - Firebase가 이 상태를 덮어쓰지 않도록 보호
     // (점수 팝업이 닫힐 때까지 유지 - handleCloseScorePopupAndNextTurn에서 해제)
+    const timestamp = Date.now();
     localOperationInProgress.current = true;
-    localOperationTimestamp.current = Date.now();
+    localOperationTimestamp.current = timestamp;
+    // 현재 타임스탬프보다 오래된 데이터 모두 거부
+    lastAcceptedGameStateTimestamp.current = timestamp;
+    lastAcceptedSessionTimestamp.current = timestamp;
 
     const rankings = aiComparativeResult.rankings;
 
@@ -2383,8 +2424,12 @@ ${evaluationGuidelines}
     if (!currentSessionId || !currentSession) return;
 
     // 로컬 작업 시작 - Firebase가 이 상태를 덮어쓰지 않도록 보호
+    const timestamp = Date.now();
     localOperationInProgress.current = true;
-    localOperationTimestamp.current = Date.now();
+    localOperationTimestamp.current = timestamp;
+    // 현재 타임스탬프보다 오래된 데이터 모두 거부
+    lastAcceptedGameStateTimestamp.current = timestamp;
+    lastAcceptedSessionTimestamp.current = timestamp;
 
     setShowScorePopup(false);
     setScorePopupData([]);
@@ -2610,8 +2655,12 @@ ${evaluationGuidelines}
 
   const handleApplyResult = async () => {
     // 로컬 작업 시작 - Firebase가 이 상태를 덮어쓰지 않도록 보호
+    const timestamp = Date.now();
     localOperationInProgress.current = true;
-    localOperationTimestamp.current = Date.now();
+    localOperationTimestamp.current = timestamp;
+    // 현재 타임스탬프보다 오래된 데이터 모두 거부
+    lastAcceptedGameStateTimestamp.current = timestamp;
+    lastAcceptedSessionTimestamp.current = timestamp;
 
     if (!currentSession || !aiEvaluationResult || !currentTeam || !activeCard) {
       // 조건 미충족 시에도 다음 턴으로 넘어감
