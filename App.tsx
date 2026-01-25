@@ -2209,6 +2209,11 @@ ${evaluationGuidelines}
   const handleApplyComparativeResult = async () => {
     if (!currentSessionId || !currentSession || !aiComparativeResult) return;
 
+    // 로컬 작업 시작 - Firebase가 이 상태를 덮어쓰지 않도록 보호
+    // (점수 팝업이 닫힐 때까지 유지 - handleCloseScorePopupAndNextTurn에서 해제)
+    localOperationInProgress.current = true;
+    localOperationTimestamp.current = Date.now();
+
     const rankings = aiComparativeResult.rankings;
 
     // x2/x3 배율 적용 (현재 카드 칸에 따라)
