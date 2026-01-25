@@ -1503,6 +1503,63 @@ const App: React.FC = () => {
     performMove(die1, die2);
   };
 
+  // 참가자(팀) 주사위 굴리기 (모바일에서 자기 턴일 때)
+  const handleTeamRollDice = (teamId: string) => {
+    if (isRolling || gamePhase !== GamePhase.Idle) return;
+
+    // 해당 팀 인덱스 찾기
+    const teamIndex = teams.findIndex(t => t.id === teamId);
+    if (teamIndex === -1) return;
+
+    // 현재 턴인 팀만 주사위 굴릴 수 있음
+    if (teamIndex !== currentTurnIndex) {
+      console.log('[TeamRollDice] 현재 턴이 아닙니다:', teams[teamIndex]?.name);
+      return;
+    }
+
+    const selectedTeam = teams[teamIndex];
+    rollingTeamRef.current = selectedTeam;
+    console.log('[TeamRollDice] 팀 주사위 굴리기:', selectedTeam.name);
+
+    // 로컬 작업 시작 - Firebase가 이 상태를 덮어쓰지 않도록 보호
+    const timestamp = Date.now();
+    localOperationInProgress.current = true;
+    localOperationTimestamp.current = timestamp;
+    lastAcceptedGameStateTimestamp.current = timestamp;
+    lastAcceptedSessionTimestamp.current = timestamp;
+
+    // 랜덤 주사위 굴리기
+    const die1 = Math.ceil(Math.random() * 6);
+    const die2 = Math.ceil(Math.random() * 6);
+
+    // 주사위 오버레이 표시 (애니메이션)
+    setPendingDice([die1, die2]);
+    setIsRolling(true);
+    setShowDiceOverlay(true);
+    setIsLocalRoll(true);
+    setGamePhase(GamePhase.Rolling);
+
+    // Firebase에 Rolling 상태 저장
+    const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+    if (isFirebaseConfigured && currentSessionId) {
+      firestoreService.updateGameState(currentSessionId, {
+        sessionId: currentSessionId,
+        phase: GamePhase.Rolling,
+        currentTeamIndex: teamIndex,
+        currentTurn: 0,
+        diceValue: [die1, die2],
+        currentCard: null,
+        selectedChoice: null,
+        reasoning: '',
+        aiResult: null,
+        isSubmitted: false,
+        isAiProcessing: false,
+        gameLogs: gameLogsRef.current,
+        lastUpdated: Date.now()
+      }).catch(err => console.warn('[Firebase] Rolling 상태 저장 실패:', err.message));
+    }
+  };
+
   // 관리자 주사위 입력 (오프라인 주사위)
   const handleManualRoll = (total: number, teamIndex: number) => {
     if (isRolling || gamePhase !== GamePhase.Idle) return;
@@ -3282,6 +3339,7 @@ ${evaluationGuidelines}
           isSaving={isSaving}
           isGameStarted={isGameStarted}
           isAiProcessing={isAiProcessing}
+          onRollDice={() => handleTeamRollDice(participantTeamId)}
           teamNumber={(participantSession?.teams.findIndex(t => t.id === participantTeamId) ?? 0) + 1}
           onShowRules={() => setShowGameRules(true)}
           allTeams={participantSession?.teams || []}
@@ -3485,6 +3543,7 @@ ${evaluationGuidelines}
                  isSaving={isSaving}
                  isGameStarted={isGameStarted}
                  isAiProcessing={isAiProcessing}
+                 onRollDice={() => handleTeamRollDice(monitoredTeam.id)}
                  teamNumber={(teams.findIndex(t => t.id === monitoredTeam.id) ?? 0) + 1}
                  onShowRules={() => setShowGameRules(true)}
                  allTeams={teams}
