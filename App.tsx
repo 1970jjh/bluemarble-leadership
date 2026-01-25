@@ -1479,50 +1479,6 @@ const App: React.FC = () => {
     }
   };
 
-  const handleRollDice = () => {
-    if (isRolling || gamePhase === GamePhase.Rolling) return;
-
-    // 🎯 현재 팀 캡처 - 롤 중에 Firebase stale 데이터로 currentTurnIndex가 변경되어도 안전
-    rollingTeamRef.current = currentTeam;
-    console.log('[RollDice] 팀 캡처:', currentTeam?.name, '(index:', currentTurnIndex, ')');
-
-    // 로컬 작업 시작 - Firebase가 이 상태를 덮어쓰지 않도록 보호
-    const timestamp = Date.now();
-    localOperationInProgress.current = true;
-    localOperationTimestamp.current = timestamp;
-    // 현재 타임스탬프보다 오래된 Firebase 데이터 모두 거부
-    lastAcceptedGameStateTimestamp.current = timestamp;
-    lastAcceptedSessionTimestamp.current = timestamp;
-
-    // 주사위 결과 미리 계산
-    const die1 = Math.ceil(Math.random() * 6);
-    const die2 = Math.ceil(Math.random() * 6);
-    setPendingDice([die1, die2]);
-
-    setIsRolling(true);
-    setGamePhase(GamePhase.Rolling);
-    setShowDiceOverlay(true);  // 3D 주사위 오버레이 표시
-
-    // Firebase에 Rolling 상태 저장 시도 (실패해도 로컬 게임은 계속 진행)
-    const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
-    if (isFirebaseConfigured && currentSessionId) {
-      firestoreService.updateGameState(currentSessionId, {
-        sessionId: currentSessionId,
-        phase: GamePhase.Rolling,
-        currentTeamIndex: currentTurnIndex,
-        currentTurn: 0,
-        diceValue: [die1, die2],
-        currentCard: null,
-        selectedChoice: null,
-        reasoning: '',
-        aiResult: null,
-        isSubmitted: false,
-        isAiProcessing: false,
-        gameLogs: gameLogsRef.current,
-        lastUpdated: Date.now()
-      }).catch(err => console.warn('[Firebase] Rolling 상태 저장 실패 (게임은 계속 진행):', err.message));
-    }
-  };
 
   // 3D 주사위 롤 완료 핸들러
   const handleDiceRollComplete = () => {
@@ -1567,9 +1523,32 @@ const App: React.FC = () => {
     performMove(die1, die2);
   };
 
-  const handleManualRoll = (total: number) => {
+  // 관리자 주사위 입력 (오프라인 주사위)
+  const handleManualRoll = (total: number, teamIndex: number) => {
+    if (isRolling || gamePhase !== GamePhase.Idle) return;
+
+    // 선택된 팀 캡처
+    const selectedTeam = teams[teamIndex];
+    if (!selectedTeam) return;
+
+    rollingTeamRef.current = selectedTeam;
+    console.log('[ManualRoll] 선택된 팀:', selectedTeam.name, '(index:', teamIndex, '), 이동 칸:', total);
+
+    // 로컬 작업 시작 - Firebase가 이 상태를 덮어쓰지 않도록 보호
+    const timestamp = Date.now();
+    localOperationInProgress.current = true;
+    localOperationTimestamp.current = timestamp;
+    lastAcceptedGameStateTimestamp.current = timestamp;
+    lastAcceptedSessionTimestamp.current = timestamp;
+
+    // 현재 턴 인덱스를 선택된 팀으로 설정
+    setCurrentTurnIndex(teamIndex);
+
+    // 주사위 값 계산 (2~12를 두 개의 주사위로 분배)
     const die1 = Math.floor(total / 2);
     const die2 = total - die1;
+
+    addLog(`🎲 관리자 입력: ${selectedTeam.name} - ${total}칸 이동 (${die1}+${die2})`);
     performMove(die1, die2);
   };
 
@@ -3321,7 +3300,6 @@ ${evaluationGuidelines}
           activeTeamName={participantSession?.teams[currentTurnIndex]?.name || ''}
           isMyTurn={isMyTurn}
           gamePhase={gamePhase}
-          onRollDice={handleRollDice}
           onLogout={handleParticipantLogout}
           activeCard={activeCard}
           activeInput={{
@@ -3450,7 +3428,6 @@ ${evaluationGuidelines}
                   phase={gamePhase}
                   diceValue={diceValue}
                   rolling={isRolling}
-                  onRoll={handleRollDice}
                   onManualRoll={handleManualRoll}
                   onSkip={() => { addLog(`${currentTeam.name} skipped turn.`); nextTurn(); }}
                   onOpenReport={() => setShowReport(true)}
@@ -3527,7 +3504,6 @@ ${evaluationGuidelines}
                  activeTeamName={currentTeam?.name || ''}
                  isMyTurn={currentTeam?.id === monitoredTeam.id}
                  gamePhase={gamePhase}
-                 onRollDice={handleRollDice}
                  activeCard={activeCard}
                  activeInput={{
                    choice: sharedSelectedChoice,
