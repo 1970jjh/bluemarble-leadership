@@ -161,7 +161,7 @@ const App: React.FC = () => {
     ownerTeamColor: string;
     acquiredAt: number;
   } }>({});
-  const TOLL_AMOUNT = 15;  // 통행료 금액
+  const TOLL_AMOUNT = 30;  // 통행료 금액
 
   // 관리자 대시보드 상태
   const [showAdminDashboard, setShowAdminDashboard] = useState(false);
@@ -203,6 +203,9 @@ const App: React.FC = () => {
   useEffect(() => {
     showDiceOverlayRef.current = showDiceOverlay;
   }, [showDiceOverlay]);
+
+  // 🎯 롤링 중인 팀 캡처 (Firebase stale 데이터로 인한 잘못된 팀 이동 방지)
+  const rollingTeamRef = useRef<Team | null>(null);
 
   // Helper to get current session object
   const currentSession = sessions.find(s => s.id === currentSessionId);
@@ -465,14 +468,11 @@ const App: React.FC = () => {
         // 정상적인 Firebase 상태 동기화
         setGamePhase(state.phase as GamePhase);
 
-        // 턴 인덱스 동기화 - 더 관대한 조건으로 변경
-        // (참가자 클라이언트가 턴 전환을 놓치지 않도록)
+        // 턴 인덱스 동기화 - 버전이 더 높을 때만 업데이트 (엄격한 조건)
+        // ⚠️ 같은 버전일 때는 무시! (Firestore가 stale 데이터를 재전송할 수 있음)
         const firebaseTurnVersion = state.turnVersion || 0;
         const firebaseTurnIndex = state.currentTeamIndex ?? 0;
 
-        // 케이스 1: Firebase 버전이 더 높음 → 무조건 업데이트
-        // 케이스 2: 버전 같은데 인덱스 다름 → 동기화 필요 (재연결/새로고침 시)
-        // 케이스 3: Firebase 버전이 낮음 → 무시 (오래된 데이터)
         if (firebaseTurnVersion > localTurnVersion.current) {
           console.log('[Firebase] 턴 버전 업데이트:', {
             firebase: firebaseTurnVersion,
@@ -482,23 +482,14 @@ const App: React.FC = () => {
           localTurnVersion.current = firebaseTurnVersion;
           setTurnVersion(firebaseTurnVersion);
           setCurrentTurnIndex(firebaseTurnIndex);
-        } else if (firebaseTurnVersion === localTurnVersion.current) {
-          // 같은 버전이면 인덱스만 동기화 (로컬과 다를 경우)
-          setCurrentTurnIndex(prev => {
-            if (prev !== firebaseTurnIndex) {
-              console.log('[Firebase] 턴 인덱스 동기화 (같은 버전):', {
-                from: prev,
-                to: firebaseTurnIndex
-              });
-              return firebaseTurnIndex;
-            }
-            return prev;
-          });
         } else {
-          console.log('[Firebase] 오래된 턴 버전 무시:', {
-            firebase: firebaseTurnVersion,
-            local: localTurnVersion.current
-          });
+          // 같거나 낮은 버전은 무시 (stale 데이터로 인한 버그 방지)
+          if (firebaseTurnVersion < localTurnVersion.current) {
+            console.log('[Firebase] 오래된 턴 버전 무시:', {
+              firebase: firebaseTurnVersion,
+              local: localTurnVersion.current
+            });
+          }
         }
 
         // diceValue는 값이 실제로 다를 때만 업데이트
@@ -1488,6 +1479,10 @@ const App: React.FC = () => {
   const handleRollDice = () => {
     if (isRolling || gamePhase === GamePhase.Rolling) return;
 
+    // 🎯 현재 팀 캡처 - 롤 중에 Firebase stale 데이터로 currentTurnIndex가 변경되어도 안전
+    rollingTeamRef.current = currentTeam;
+    console.log('[RollDice] 팀 캡처:', currentTeam?.name, '(index:', currentTurnIndex, ')');
+
     // 로컬 작업 시작 - Firebase가 이 상태를 덮어쓰지 않도록 보호
     const timestamp = Date.now();
     localOperationInProgress.current = true;
@@ -1580,18 +1575,21 @@ const App: React.FC = () => {
     setIsRolling(false);
     setGamePhase(GamePhase.Moving);
 
+    // 🎯 캡처된 팀 사용 (Firebase stale 데이터로 currentTurnIndex가 변경되어도 안전)
+    const teamToMove = rollingTeamRef.current || currentTeam;
+    console.log('[PerformMove] 이동할 팀:', teamToMove?.name);
+
     // 주의: 로컬 작업 플래그는 이동이 완전히 완료될 때까지 유지
     // (handleLandOnSquare 완료 또는 턴 전환 시점에 해제)
-    // localOperationInProgress.current는 handleRollDice에서 true로 설정됨
 
-    if (!currentTeam) return;
+    if (!teamToMove) return;
 
     // 더블 체크 (주사위 2개가 같은 숫자)
     const isDouble = die1 === die2;
     if (isDouble && currentSession) {
       // 더블 보너스 즉시 적용 - 30점 고정
       const updatedTeams = currentSession.teams.map(t => {
-        if (t.id === currentTeam.id) {
+        if (t.id === teamToMove.id) {
           const newResources = { ...t.resources };
           newResources.capital += DOUBLE_BONUS_POINTS;  // +30점 고정
           return { ...t, resources: newResources };
@@ -1599,7 +1597,7 @@ const App: React.FC = () => {
         return t;
       });
       updateTeamsInSession(updatedTeams);
-      addLog(`🎲 더블! ${currentTeam.name} 보너스 +${DOUBLE_BONUS_POINTS}점 획득!`);
+      addLog(`🎲 더블! ${teamToMove.name} 보너스 +${DOUBLE_BONUS_POINTS}점 획득!`);
       soundEffects.playCelebration();  // 축하 효과음
     }
 
@@ -1624,7 +1622,7 @@ const App: React.FC = () => {
     }
 
     // 주사위 로그는 리포트에 불필요하므로 제거
-    moveTeamLogic(currentTeam, die1 + die2);
+    moveTeamLogic(teamToMove, die1 + die2);
   };
 
   const moveTeamLogic = (teamToMove: Team, steps: number) => {
