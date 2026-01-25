@@ -7,8 +7,7 @@ interface TollPopupProps {
   receiverTeamName: string;
   tollAmount: number;
   squareIndex: number;
-  onComplete: () => void;
-  duration?: number;
+  onPayToll: () => void;  // 🎯 통행료 지불 버튼 클릭 핸들러
 }
 
 const TollPopup: React.FC<TollPopupProps> = ({
@@ -17,8 +16,7 @@ const TollPopup: React.FC<TollPopupProps> = ({
   receiverTeamName,
   tollAmount,
   squareIndex,
-  onComplete,
-  duration = 4000,
+  onPayToll,
 }) => {
   const [animateIn, setAnimateIn] = useState(false);
 
@@ -47,19 +45,17 @@ const TollPopup: React.FC<TollPopupProps> = ({
         playNote(400, now + 0.2, 0.2);
         setTimeout(() => audioContext.close(), 1000);
       } catch (e) {}
-
-      const timer = setTimeout(() => {
-        setAnimateIn(false);
-        setTimeout(onComplete, 300);
-      }, duration);
-
-      return () => clearTimeout(timer);
     } else {
       setAnimateIn(false);
     }
-  }, [visible, duration, onComplete]);
+  }, [visible]);
 
   if (!visible) return null;
+
+  const handlePayClick = () => {
+    setAnimateIn(false);
+    setTimeout(onPayToll, 300);
+  };
 
   return (
     <div className="fixed inset-0 bg-black/90 z-[100] flex items-center justify-center backdrop-blur-sm">
@@ -122,31 +118,21 @@ const TollPopup: React.FC<TollPopupProps> = ({
             </div>
 
             {/* 다음 행동 안내 */}
-            <div className="bg-blue-500/20 rounded-xl p-4 mb-4">
+            <div className="bg-blue-500/20 rounded-xl p-4 mb-6">
               <div className="flex items-center justify-center gap-2 text-blue-300">
                 <Dice6 size={20} />
-                <span className="font-medium">잠시 후 추가 주사위를 굴립니다!</span>
+                <span className="font-medium">통행료 지불 후 관리자가 주사위를 입력합니다</span>
               </div>
             </div>
 
-            {/* 진행 바 */}
-            <div className="mt-4">
-              <div className="h-1.5 bg-white/20 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-gradient-to-r from-yellow-400 to-orange-500"
-                  style={{
-                    animation: `progress ${duration}ms linear forwards`,
-                  }}
-                />
-              </div>
-            </div>
-
-            <style>{`
-              @keyframes progress {
-                from { width: 0%; }
-                to { width: 100%; }
-              }
-            `}</style>
+            {/* 🎯 통행료 지불 버튼 */}
+            <button
+              onClick={handlePayClick}
+              className="w-full bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-black text-xl py-4 px-8 rounded-xl border-4 border-orange-300 shadow-lg transform hover:scale-105 transition-all duration-200 flex items-center justify-center gap-3"
+            >
+              <Coins size={28} />
+              <span>통행료 지불</span>
+            </button>
           </div>
         </div>
       </div>
