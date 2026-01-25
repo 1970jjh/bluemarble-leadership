@@ -426,16 +426,7 @@ const App: React.FC = () => {
         // === 1단계: 로컬 작업 진행 중 보호 ===
         if (localOperationInProgress.current) {
           console.log('[Firebase GameState] 로컬 작업 진행 중 - 업데이트 스킵');
-
-          // Decision 상태에서 다른 팀원의 입력만 업데이트
-          if (state.currentCard && state.phase === GamePhase.Decision) {
-            isReceivingFromFirebase.current = true;
-            setActiveCard(state.currentCard);
-            setSharedSelectedChoice(state.selectedChoice);
-            setSharedReasoning(state.reasoning || '');
-            setShowCardModal(true);
-            setTimeout(() => { isReceivingFromFirebase.current = false; }, 100);
-          }
+          // 🎯 로컬 작업 중에는 Firebase 상태를 무시 (카드 팝업이 다시 뜨는 버그 방지)
           return;
         }
 
@@ -1736,19 +1727,20 @@ const App: React.FC = () => {
       const newLapCount = team.lapCount + (passedStart ? 1 : 0);
 
       if (passedStart) {
-        // 한바퀴 보너스: 다른 팀에서 각 20점씩 가져오기
+        // 한바퀴 보너스: 다른 팀에서 각 20점씩 가져오기 - score 필드 업데이트
         const otherTeamsCount = currentSession.teams.length - 1;
         const totalBonus = otherTeamsCount * LAP_BONUS_PER_TEAM;
 
         const updatedTeams = currentSession.teams.map(t => {
           if (t.id === team.id) {
-            let newResources = { ...t.resources };
-            newResources.capital += totalBonus;
-            return { ...t, position: newPos, resources: newResources, lapCount: newLapCount };
+            // 완주한 팀: +20점 × 타팀수
+            const currentScore = t.score ?? INITIAL_SCORE;
+            return { ...t, position: newPos, score: currentScore + totalBonus, lapCount: newLapCount };
           } else {
-            let newResources = { ...t.resources };
-            newResources.capital = Math.max(0, newResources.capital - LAP_BONUS_PER_TEAM);
-            return { ...t, resources: newResources };
+            // 다른 팀: 각각 -20점
+            const currentScore = t.score ?? INITIAL_SCORE;
+            const newScore = Math.max(0, currentScore - LAP_BONUS_PER_TEAM);
+            return { ...t, score: newScore };
           }
         });
         updateTeamsInSession(updatedTeams);
@@ -1781,13 +1773,17 @@ const App: React.FC = () => {
 
     const { payerTeamId, receiverTeamId, tollAmount, pendingTeam, payerTeamName, receiverTeamName } = tollPopupInfo;
 
-    // 🎯 통행료 지불 (버튼 클릭 시에만 실행)
+    // 🎯 통행료 지불 (버튼 클릭 시에만 실행) - score 필드 업데이트
     const updatedTeams = currentSession.teams.map(t => {
       if (t.id === payerTeamId) {
-        const newCapital = Math.max(0, t.resources.capital - tollAmount);
-        return { ...t, resources: { ...t.resources, capital: newCapital } };
+        // 지불 팀: 30점 차감
+        const currentScore = t.score ?? INITIAL_SCORE;
+        const newScore = Math.max(0, currentScore - tollAmount);
+        return { ...t, score: newScore };
       } else if (t.id === receiverTeamId) {
-        return { ...t, resources: { ...t.resources, capital: t.resources.capital + tollAmount } };
+        // 소유권 팀: 30점 획득
+        const currentScore = t.score ?? INITIAL_SCORE;
+        return { ...t, score: currentScore + tollAmount };
       }
       return t;
     });
@@ -1817,18 +1813,17 @@ const App: React.FC = () => {
     const otherTeamsCount = currentSession.teams.length - 1;
     const totalBonus = otherTeamsCount * LAP_BONUS_PER_TEAM;
 
-    // 🎯 한바퀴 보너스 지급 (버튼 클릭 시에만 실행)
+    // 🎯 한바퀴 보너스 지급 (버튼 클릭 시에만 실행) - score 필드 업데이트
     const updatedTeams = currentSession.teams.map(t => {
       if (t.id === teamId) {
-        // 완주한 팀: 다른 팀들에서 가져온 점수 획득 + lapCount 업데이트
-        let newResources = { ...t.resources };
-        newResources.capital += totalBonus;
-        return { ...t, resources: newResources, lapCount: lapCount };
+        // 완주한 팀: 다른 팀들에서 가져온 점수 획득 (+20점 × 타팀수) + lapCount 업데이트
+        const currentScore = t.score ?? INITIAL_SCORE;
+        return { ...t, score: currentScore + totalBonus, lapCount: lapCount };
       } else {
-        // 다른 팀: 20점씩 감소
-        let newResources = { ...t.resources };
-        newResources.capital = Math.max(0, newResources.capital - LAP_BONUS_PER_TEAM);
-        return { ...t, resources: newResources };
+        // 다른 팀: 각각 20점씩 차감
+        const currentScore = t.score ?? INITIAL_SCORE;
+        const newScore = Math.max(0, currentScore - LAP_BONUS_PER_TEAM);
+        return { ...t, score: newScore };
       }
     });
 
