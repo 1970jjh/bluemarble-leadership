@@ -299,18 +299,38 @@ const App: React.FC = () => {
 
     if (isFirebaseConfigured) {
       const unsubscribe = firestoreService.subscribeToAllSessions((firebaseSessions) => {
-        // 로컬 작업 진행 중이면 현재 세션 데이터는 보호
-        if (localOperationInProgress.current && currentSessionId) {
-          console.log('[All Sessions] 로컬 작업 진행 중 - 현재 세션 보호');
-          // 현재 세션을 제외한 나머지 세션만 업데이트
-          setSessions(prev => {
-            const currentSession = prev.find(s => s.id === currentSessionId);
-            const otherSessions = firebaseSessions.filter(s => s.id !== currentSessionId);
-            return currentSession
-              ? [...otherSessions, currentSession]
-              : firebaseSessions;
-          });
-          return;
+        // 현재 세션이 있으면 항상 보호 로직 적용
+        if (currentSessionId) {
+          // 로컬 작업 진행 중이면 현재 세션 데이터는 보호
+          if (localOperationInProgress.current) {
+            console.log('[All Sessions] 로컬 작업 진행 중 - 현재 세션 보호');
+            setSessions(prev => {
+              const currentSession = prev.find(s => s.id === currentSessionId);
+              const otherSessions = firebaseSessions.filter(s => s.id !== currentSessionId);
+              return currentSession
+                ? [...otherSessions, currentSession]
+                : firebaseSessions;
+            });
+            return;
+          }
+
+          // Firebase에서 받은 현재 세션의 lastUpdated가 로컬 타임스탬프보다 이전이면 보호
+          const firebaseCurrentSession = firebaseSessions.find(s => s.id === currentSessionId);
+          if (firebaseCurrentSession?.lastUpdated &&
+              firebaseCurrentSession.lastUpdated < localOperationTimestamp.current) {
+            console.log('[All Sessions] 오래된 현재 세션 데이터 보호:', {
+              firebaseLastUpdated: firebaseCurrentSession.lastUpdated,
+              localTimestamp: localOperationTimestamp.current
+            });
+            setSessions(prev => {
+              const currentSession = prev.find(s => s.id === currentSessionId);
+              const otherSessions = firebaseSessions.filter(s => s.id !== currentSessionId);
+              return currentSession
+                ? [...otherSessions, currentSession]
+                : firebaseSessions;
+            });
+            return;
+          }
         }
 
         console.log('[All Sessions] 전체 세션 목록 수신:', firebaseSessions.map(s => ({
@@ -342,18 +362,20 @@ const App: React.FC = () => {
           return;
         }
 
-        // 로컬 작업 완료 후 3초간 보호 (Firebase 지연 응답 방지)
-        const timeSinceLocalOp = Date.now() - localOperationTimestamp.current;
-        if (timeSinceLocalOp < 3000) {
-          console.log('[Session Subscribe] 로컬 작업 완료 직후 - 세션 업데이트 스킵');
+        // 세션의 lastUpdated가 로컬 작업 타임스탬프보다 이전이면 무시 (오래된 데이터)
+        if (session.lastUpdated && session.lastUpdated < localOperationTimestamp.current) {
+          console.log('[Session Subscribe] 오래된 세션 데이터 무시:', {
+            sessionLastUpdated: session.lastUpdated,
+            localTimestamp: localOperationTimestamp.current
+          });
           return;
         }
 
         console.log('[Session Subscribe] 세션 데이터 수신:', {
           sessionId: session.id,
+          lastUpdated: session.lastUpdated,
           hasCustomCards: !!session.customCards,
-          customCardsCount: session.customCards?.length || 0,
-          firstCardTitle: session.customCards?.[0]?.title || 'N/A'
+          customCardsCount: session.customCards?.length || 0
         });
         setSessions(prev => prev.map(s => s.id === currentSessionId ? session : s));
       }
@@ -930,11 +952,19 @@ const App: React.FC = () => {
   const updateTeamsInSession = async (updatedTeams: Team[]) => {
     if (!currentSessionId) return;
 
-    // Firebase에 저장 (설정되어 있으면)
+    const updateTimestamp = Date.now();
+
+    // 로컬 작업 타임스탬프 갱신 (Firebase 구독 보호용)
+    localOperationTimestamp.current = updateTimestamp;
+
+    // Firebase에 저장 (설정되어 있으면) - lastUpdated 포함
     const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
     if (isFirebaseConfigured) {
       try {
-        await firestoreService.updateTeams(currentSessionId, updatedTeams);
+        await firestoreService.updateSession(currentSessionId, {
+          teams: updatedTeams,
+          lastUpdated: updateTimestamp
+        });
       } catch (error) {
         console.error('Firebase 팀 업데이트 실패:', error);
       }
@@ -942,7 +972,7 @@ const App: React.FC = () => {
 
     setSessions(prev => prev.map(s => {
       if (s.id === currentSessionId) {
-        return { ...s, teams: updatedTeams };
+        return { ...s, teams: updatedTeams, lastUpdated: updateTimestamp };
       }
       return s;
     }));
