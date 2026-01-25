@@ -1003,8 +1003,12 @@ const App: React.FC = () => {
     }
   }, [currentSessionId]);
 
-  const nextTurn = useCallback(() => {
+  const nextTurn = useCallback(async () => {
     if (!currentSession) return;
+
+    // 로컬 작업 시작 - Firebase가 이 상태를 덮어쓰지 않도록 보호
+    localOperationInProgress.current = true;
+    localOperationTimestamp.current = Date.now();
 
     // Reset Shared State
     setShowCardModal(false);
@@ -1023,7 +1027,7 @@ const App: React.FC = () => {
 
     setGamePhase(GamePhase.Idle);
     setTurnTimeLeft(120);
-    
+
     // Rotate team members
     const updatedTeams = currentSession.teams.map((team, idx) => {
       if (idx === currentTurnIndex && team.members.length > 0) {
@@ -1032,9 +1036,32 @@ const App: React.FC = () => {
       }
       return team;
     });
-    
+
+    const nextTeamIndex = (currentTurnIndex + 1) % currentSession.teams.length;
+
     updateTeamsInSession(updatedTeams);
-    setCurrentTurnIndex((prev) => (prev + 1) % currentSession.teams.length);
+    setCurrentTurnIndex(nextTeamIndex);
+
+    // Firebase에 다음 턴 상태 저장
+    const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+    if (isFirebaseConfigured && currentSessionId) {
+      try {
+        await firestoreService.updateGameState(currentSessionId, {
+          phase: GamePhase.Idle,
+          currentTeamIndex: nextTeamIndex,
+          currentCard: null,
+          selectedChoice: null,
+          reasoning: '',
+          isSubmitted: false,
+          lastUpdated: Date.now()
+        });
+      } catch (err) {
+        console.warn('[Firebase] nextTurn 상태 저장 실패:', err);
+      }
+    }
+
+    // 로컬 작업 완료 - Firebase 동기화 다시 허용
+    localOperationInProgress.current = false;
   }, [currentSession, currentTurnIndex, currentSessionId]);
 
   // 게임 리셋 함수
@@ -1353,6 +1380,9 @@ const App: React.FC = () => {
         addLog(`🎯 ${multiplier}배 찬스 칸에 도착!`);
         // Firebase 업데이트는 알림 확인 후 handleMultiplierAlertComplete에서 수행
       } else {
+        // 로컬 작업 완료 - 카드 표시 전에 Firebase 동기화 다시 허용
+        localOperationInProgress.current = false;
+
         // 일반 칸이면 바로 카드 표시
         setActiveCard(selectedCard);
         setGamePhase(GamePhase.Decision);
@@ -1379,6 +1409,9 @@ const App: React.FC = () => {
           }).catch(err => console.error('Firebase 상태 저장 실패:', err));
         }
       }
+    } else {
+      // 카드가 없으면 (예: 출발 칸 외 특수 칸) 플래그 해제
+      localOperationInProgress.current = false;
     }
   };
 
@@ -1459,9 +1492,9 @@ const App: React.FC = () => {
     setIsRolling(false);
     setGamePhase(GamePhase.Moving);
 
-    // 로컬 작업 완료 - Firebase 동기화 다시 허용
-    localOperationInProgress.current = false;
-    localOperationTimestamp.current = Date.now();
+    // 주의: 로컬 작업 플래그는 이동이 완전히 완료될 때까지 유지
+    // (handleLandOnSquare 완료 또는 턴 전환 시점에 해제)
+    // localOperationInProgress.current는 handleRollDice에서 true로 설정됨
 
     if (!currentTeam) return;
 
@@ -1710,6 +1743,9 @@ const App: React.FC = () => {
   // x2/x3 배율 알림 완료 핸들러
   const handleMultiplierAlertComplete = () => {
     setShowMultiplierAlert(false);
+
+    // 로컬 작업 완료 - 카드 표시 전에 Firebase 동기화 다시 허용
+    localOperationInProgress.current = false;
 
     // 보류 중인 카드가 있으면 표시
     if (pendingCardAfterAlert) {
@@ -2167,6 +2203,10 @@ ${evaluationGuidelines}
   const handleCloseScorePopupAndNextTurn = async () => {
     if (!currentSessionId || !currentSession) return;
 
+    // 로컬 작업 시작 - Firebase가 이 상태를 덮어쓰지 않도록 보호
+    localOperationInProgress.current = true;
+    localOperationTimestamp.current = Date.now();
+
     setShowScorePopup(false);
     setScorePopupData([]);
 
@@ -2194,11 +2234,15 @@ ${evaluationGuidelines}
         currentCard: null,
         isRevealed: false,
         aiComparativeResult: null,
-        isAnalyzing: false
+        isAnalyzing: false,
+        lastUpdated: Date.now()
       });
     }
 
     addLog(`---`);
+
+    // 로컬 작업 완료 - Firebase 동기화 다시 허용
+    localOperationInProgress.current = false;
   };
 
   // ============================================================
@@ -2386,9 +2430,14 @@ ${evaluationGuidelines}
   };
 
   const handleApplyResult = async () => {
+    // 로컬 작업 시작 - Firebase가 이 상태를 덮어쓰지 않도록 보호
+    localOperationInProgress.current = true;
+    localOperationTimestamp.current = Date.now();
+
     if (!currentSession || !aiEvaluationResult || !currentTeam || !activeCard) {
       // 조건 미충족 시에도 다음 턴으로 넘어감
       nextTurn();
+      localOperationInProgress.current = false;
       return;
     }
 
@@ -2544,6 +2593,9 @@ ${evaluationGuidelines}
 
     // 4. 다음 팀으로 전환 (nextTurn 호출 없이 직접 업데이트)
     setCurrentTurnIndex(nextTeamIndex);
+
+    // 로컬 작업 완료 - Firebase 동기화 다시 허용
+    localOperationInProgress.current = false;
   };
 
   const handleBoardSquareClick = (index: number) => {
