@@ -78,6 +78,7 @@ const App: React.FC = () => {
   const [adminViewMode, setAdminViewMode] = useState<AdminViewMode>('dashboard');
   const [monitoringTeamId, setMonitoringTeamId] = useState<string | null>(null);
   const [currentTurnIndex, setCurrentTurnIndex] = useState(0);
+  const [turnVersion, setTurnVersion] = useState(0);  // 턴 버전 (증가만 함 - 동기화 충돌 방지)
   const [startingTeamIndex, setStartingTeamIndex] = useState(0);  // 시작 팀 인덱스 (관리자가 선택)
   const [gamePhase, setGamePhase] = useState<GamePhase>(GamePhase.WaitingToStart);
   const [diceValue, setDiceValue] = useState<[number, number]>([1, 1]);
@@ -180,6 +181,9 @@ const App: React.FC = () => {
   // 마지막으로 수락한 타임스탬프 추적 (오래된 데이터 거부용)
   const lastAcceptedGameStateTimestamp = useRef(0);
   const lastAcceptedSessionTimestamp = useRef(0);
+
+  // 턴 버전 추적 (로컬에서 관리하는 최신 턴 버전)
+  const localTurnVersion = useRef(0);
 
   // gameLogs를 ref로 관리하여 저장 시 최신 값 사용 (의존성 루프 방지)
   const gameLogsRef = useRef<string[]>([]);
@@ -460,7 +464,24 @@ const App: React.FC = () => {
 
         // 정상적인 Firebase 상태 동기화
         setGamePhase(state.phase as GamePhase);
-        setCurrentTurnIndex(state.currentTeamIndex);
+
+        // 턴 인덱스는 턴 버전이 더 높을 때만 업데이트 (오래된 데이터 덮어쓰기 방지)
+        const firebaseTurnVersion = state.turnVersion || 0;
+        if (firebaseTurnVersion > localTurnVersion.current) {
+          console.log('[Firebase] 턴 버전 업데이트:', {
+            firebase: firebaseTurnVersion,
+            local: localTurnVersion.current,
+            newTurnIndex: state.currentTeamIndex
+          });
+          localTurnVersion.current = firebaseTurnVersion;
+          setTurnVersion(firebaseTurnVersion);
+          setCurrentTurnIndex(state.currentTeamIndex);
+        } else if (firebaseTurnVersion < localTurnVersion.current) {
+          console.log('[Firebase] 오래된 턴 버전 무시:', {
+            firebase: firebaseTurnVersion,
+            local: localTurnVersion.current
+          });
+        }
 
         // diceValue는 값이 실제로 다를 때만 업데이트
         const newDiceValue = state.diceValue || [1, 1];
@@ -745,6 +766,9 @@ const App: React.FC = () => {
 
   const handleEnterSession = (session: Session) => {
     setCurrentSessionId(session.id);
+    // 턴 버전과 인덱스 초기화 (Firebase에서 동기화될 때까지 기본값)
+    localTurnVersion.current = 0;
+    setTurnVersion(0);
     setCurrentTurnIndex(0);
     setGamePhase(GamePhase.WaitingToStart);
     setIsGameStarted(false);
@@ -755,7 +779,10 @@ const App: React.FC = () => {
 
   // 게임 시작 핸들러
   const handleStartGame = async () => {
-    // 시작 팀 인덱스로 현재 턴 설정
+    // 턴 버전 1로 시작 (게임 시작 = 첫 번째 턴)
+    const newTurnVersion = 1;
+    localTurnVersion.current = newTurnVersion;
+    setTurnVersion(newTurnVersion);
     setCurrentTurnIndex(startingTeamIndex);
     setIsGameStarted(true);
     setGamePhase(GamePhase.Idle);
@@ -772,6 +799,7 @@ const App: React.FC = () => {
           sessionId: currentSessionId,
           phase: GamePhase.Idle,
           currentTeamIndex: startingTeamIndex,
+          turnVersion: newTurnVersion,  // 턴 버전 저장
           currentTurn: 0,
           diceValue: [1, 1],
           currentCard: null,
@@ -1119,7 +1147,6 @@ const App: React.FC = () => {
     const timestamp = Date.now();
     localOperationInProgress.current = true;
     localOperationTimestamp.current = timestamp;
-    // 현재 타임스탬프보다 오래된 데이터 모두 거부
     lastAcceptedGameStateTimestamp.current = timestamp;
     lastAcceptedSessionTimestamp.current = timestamp;
 
@@ -1152,8 +1179,19 @@ const App: React.FC = () => {
 
     const nextTeamIndex = (currentTurnIndex + 1) % currentSession.teams.length;
 
-    updateTeamsInSession(updatedTeams);
+    // 턴 버전 증가 (핵심!)
+    const newTurnVersion = localTurnVersion.current + 1;
+    localTurnVersion.current = newTurnVersion;
+    setTurnVersion(newTurnVersion);
     setCurrentTurnIndex(nextTeamIndex);
+
+    console.log('[NextTurn] 턴 전환:', {
+      from: currentTurnIndex,
+      to: nextTeamIndex,
+      turnVersion: newTurnVersion
+    });
+
+    updateTeamsInSession(updatedTeams);
 
     // Firebase에 다음 턴 상태 저장
     const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
@@ -1162,6 +1200,7 @@ const App: React.FC = () => {
         await firestoreService.updateGameState(currentSessionId, {
           phase: GamePhase.Idle,
           currentTeamIndex: nextTeamIndex,
+          turnVersion: newTurnVersion,  // 턴 버전 저장
           currentCard: null,
           selectedChoice: null,
           reasoning: '',
@@ -1212,7 +1251,12 @@ const App: React.FC = () => {
     setAiComparativeResult(null);
     setIsComparingTeams(false);
     setGamePhase(GamePhase.Idle);
+
+    // 턴 버전과 인덱스 초기화
+    localTurnVersion.current = 0;
+    setTurnVersion(0);
     setCurrentTurnIndex(0);
+
     setDiceValue([1, 1]);
     setTurnTimeLeft(120);
     setGameLogs(['[시스템] 게임이 리셋되었습니다.']);
@@ -1228,6 +1272,7 @@ const App: React.FC = () => {
           sessionId: currentSessionId,
           phase: GamePhase.Idle,
           currentTeamIndex: 0,
+          turnVersion: 0,  // 턴 버전 초기화
           currentTurn: 0,
           diceValue: [1, 1],
           currentCard: null,
@@ -2427,7 +2472,6 @@ ${evaluationGuidelines}
     const timestamp = Date.now();
     localOperationInProgress.current = true;
     localOperationTimestamp.current = timestamp;
-    // 현재 타임스탬프보다 오래된 데이터 모두 거부
     lastAcceptedGameStateTimestamp.current = timestamp;
     lastAcceptedSessionTimestamp.current = timestamp;
 
@@ -2444,9 +2488,18 @@ ${evaluationGuidelines}
     setGamePhase(GamePhase.Idle);
     setTurnTimeLeft(120);
 
-    // 다음 턴으로
+    // 다음 턴으로 (턴 버전 증가!)
     const nextTeamIndex = (currentTurnIndex + 1) % currentSession.teams.length;
+    const newTurnVersion = localTurnVersion.current + 1;
+    localTurnVersion.current = newTurnVersion;
+    setTurnVersion(newTurnVersion);
     setCurrentTurnIndex(nextTeamIndex);
+
+    console.log('[ScorePopup → NextTurn] 턴 전환:', {
+      from: currentTurnIndex,
+      to: nextTeamIndex,
+      turnVersion: newTurnVersion
+    });
 
     // Firebase 업데이트
     const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
@@ -2455,6 +2508,7 @@ ${evaluationGuidelines}
       await firestoreService.updateGameState(currentSessionId, {
         phase: GamePhase.Idle,
         currentTeamIndex: nextTeamIndex,
+        turnVersion: newTurnVersion,  // 턴 버전 저장
         currentCard: null,
         isRevealed: false,
         aiComparativeResult: null,
@@ -2792,7 +2846,18 @@ ${evaluationGuidelines}
     setGamePhase(GamePhase.Idle);
     setTurnTimeLeft(120);
 
+    // 다음 턴으로 (턴 버전 증가!)
     const nextTeamIndex = (currentTurnIndex + 1) % currentSession.teams.length;
+    const newTurnVersion = localTurnVersion.current + 1;
+    localTurnVersion.current = newTurnVersion;
+    setTurnVersion(newTurnVersion);
+    setCurrentTurnIndex(nextTeamIndex);
+
+    console.log('[ApplyResult → NextTurn] 턴 전환:', {
+      from: currentTurnIndex,
+      to: nextTeamIndex,
+      turnVersion: newTurnVersion
+    });
 
     // 3. Firebase에 Idle 상태 저장
     const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
@@ -2802,6 +2867,7 @@ ${evaluationGuidelines}
           sessionId: currentSessionId,
           phase: GamePhase.Idle,
           currentTeamIndex: nextTeamIndex,
+          turnVersion: newTurnVersion,  // 턴 버전 저장
           currentTurn: 0,
           diceValue: [1, 1],
           currentCard: null,
@@ -2818,9 +2884,6 @@ ${evaluationGuidelines}
         console.error('Firebase 턴 종료 상태 저장 실패:', err);
       }
     }
-
-    // 4. 다음 팀으로 전환 (nextTurn 호출 없이 직접 업데이트)
-    setCurrentTurnIndex(nextTeamIndex);
 
     // 로컬 작업 완료 - Firebase 동기화 다시 허용
     localOperationInProgress.current = false;
