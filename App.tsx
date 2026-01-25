@@ -79,7 +79,6 @@ const App: React.FC = () => {
   const [monitoringTeamId, setMonitoringTeamId] = useState<string | null>(null);
   const [currentTurnIndex, setCurrentTurnIndex] = useState(0);
   const [turnVersion, setTurnVersion] = useState(0);  // 턴 버전 (증가만 함 - 동기화 충돌 방지)
-  const [startingTeamIndex, setStartingTeamIndex] = useState(0);  // 시작 팀 인덱스 (관리자가 선택)
   const [gamePhase, setGamePhase] = useState<GamePhase>(GamePhase.WaitingToStart);
   const [diceValue, setDiceValue] = useState<[number, number]>([1, 1]);
   const [isRolling, setIsRolling] = useState(false);
@@ -123,6 +122,8 @@ const App: React.FC = () => {
   const [showCardModal, setShowCardModal] = useState(false);
   const [previewCard, setPreviewCard] = useState<GameCard | null>(null);
   const [currentCardSquareIndex, setCurrentCardSquareIndex] = useState<number | null>(null);  // 현재 카드가 표시된 칸 인덱스
+  // 🎯 영토 설정용 칸 인덱스 ref (AI 평가 중 다른 이동이 발생해도 변경되지 않도록)
+  const territorySquareIndexRef = useRef<number | null>(null);
 
   // --- Preview Card State (관리자 미리보기용 - 게임에 반영 안됨) ---
   const [previewSelectedChoice, setPreviewSelectedChoice] = useState<Choice | null>(null);
@@ -786,17 +787,17 @@ const App: React.FC = () => {
     setView('game');
   };
 
-  // 게임 시작 핸들러
+  // 게임 시작 핸들러 (항상 1팀부터 시작)
   const handleStartGame = async () => {
     // 턴 버전 1로 시작 (게임 시작 = 첫 번째 턴)
     const newTurnVersion = 1;
     localTurnVersion.current = newTurnVersion;
     setTurnVersion(newTurnVersion);
-    setCurrentTurnIndex(startingTeamIndex);
+    setCurrentTurnIndex(0);  // 항상 1팀(인덱스 0)부터 시작
     setIsGameStarted(true);
     setGamePhase(GamePhase.Idle);
 
-    const startingTeam = teams[startingTeamIndex];
+    const startingTeam = teams[0];
     addLog(`🎮 게임이 시작되었습니다! ${startingTeam?.name || '1조'}부터 시작합니다.`);
     soundEffects.playGameStart();
 
@@ -807,7 +808,7 @@ const App: React.FC = () => {
         await firestoreService.updateGameState(currentSessionId, {
           sessionId: currentSessionId,
           phase: GamePhase.Idle,
-          currentTeamIndex: startingTeamIndex,
+          currentTeamIndex: 0,  // 항상 1팀부터 시작
           turnVersion: newTurnVersion,  // 턴 버전 저장
           currentTurn: 0,
           diceValue: [1, 1],
@@ -1424,6 +1425,8 @@ const App: React.FC = () => {
       const multiplier = getSquareMultiplier(squareIndex);
       setCustomScoreMultiplier(multiplier);
       setCurrentCardSquareIndex(squareIndex);  // 현재 카드가 표시된 칸 인덱스 저장
+      territorySquareIndexRef.current = squareIndex;  // 🎯 ref에도 저장 (AI 평가 중 변경 방지)
+      console.log(`[Territory] 영토 칸 인덱스 설정: ${squareIndex}`);
 
       // 동시 응답 시스템 초기화 - 새 카드 시작
       setSharedSelectedChoice(null);
@@ -2390,8 +2393,9 @@ ${evaluationGuidelines}
 
     const rankings = aiComparativeResult.rankings;
 
-    // x2/x3 배율 적용 (현재 카드 칸에 따라)
-    const multiplier = currentCardSquareIndex !== null ? getSquareMultiplier(currentCardSquareIndex) : 1;
+    // x2/x3 배율 적용 (ref 사용 - AI 평가 중 다른 이동이 발생해도 올바른 칸 기준)
+    const squareForMultiplier = territorySquareIndexRef.current ?? currentCardSquareIndex;
+    const multiplier = squareForMultiplier !== null ? getSquareMultiplier(squareForMultiplier) : 1;
     const multiplierText = multiplier > 1 ? ` (x${multiplier} 특수칸!)` : '';
 
     // 점수 변경 정보 수집 (팝업용)
@@ -2431,7 +2435,11 @@ ${evaluationGuidelines}
     await updateTeamsInSession(updatedTeams);
 
     // 영토 소유권 설정 (1등 팀이 해당 칸 소유)
-    if (currentCardSquareIndex !== null && currentCardSquareIndex !== 0 && firstPlaceRanking) {
+    // 🎯 ref 사용 - AI 평가 중 다른 이동이 발생해도 올바른 칸 인덱스 유지
+    const territorySquareIndex = territorySquareIndexRef.current;
+    console.log(`[Territory] 영토 설정 시점 - ref: ${territorySquareIndex}, state: ${currentCardSquareIndex}`);
+
+    if (territorySquareIndex !== null && territorySquareIndex !== 0 && firstPlaceRanking) {
       const winnerTeam = currentSession.teams.find(t =>
         t.id === firstPlaceRanking.teamId || t.name === firstPlaceRanking.teamName
       );
@@ -2439,7 +2447,7 @@ ${evaluationGuidelines}
         // 로컬 상태 업데이트
         setTerritories(prev => ({
           ...prev,
-          [currentCardSquareIndex.toString()]: {
+          [territorySquareIndex.toString()]: {
             ownerTeamId: winnerTeam.id,
             ownerTeamName: winnerTeam.name,
             ownerTeamColor: winnerTeam.color,
@@ -2452,14 +2460,14 @@ ${evaluationGuidelines}
         if (isFirebaseConfigured && currentSessionId) {
           firestoreService.updateTerritoryOwnership(
             currentSessionId,
-            currentCardSquareIndex,
+            territorySquareIndex,
             winnerTeam.id,
             winnerTeam.name,
             winnerTeam.color
           ).catch(err => console.warn('Firebase 영토 소유권 저장 실패:', err));
         }
 
-        addLog(`🏠 ${winnerTeam.name}이(가) ${currentCardSquareIndex}번 칸을 점령!`);
+        addLog(`🏠 ${winnerTeam.name}이(가) ${territorySquareIndex}번 칸을 점령!`);
       }
     }
 
@@ -3452,8 +3460,6 @@ ${evaluationGuidelines}
                   onStartGame={handleStartGame}
                   onPauseGame={handlePauseGame}
                   onResumeGame={handleResumeGame}
-                  startingTeamIndex={startingTeamIndex}
-                  onStartingTeamChange={setStartingTeamIndex}
                 />
              )}
           </div>
