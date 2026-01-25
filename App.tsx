@@ -1394,9 +1394,9 @@ const App: React.FC = () => {
         return;
       }
 
-      // ===== 케이스 B: 자기 소유 → 통행료 없이 재굴림 =====
-      addLog(`🏠 ${team.name}: 자기 소유 칸입니다. 추가 주사위를 굴립니다!`);
-      rollExtraDiceAndMove(team, squareIndex);
+      // ===== 케이스 B: 자기 소유 → 통행료 없이 관리자 주사위 입력 대기 =====
+      addLog(`🏠 ${team.name}: 자기 소유 칸입니다. 관리자가 주사위를 입력해주세요.`);
+      setGamePhase(GamePhase.Idle);
       return;
     }
 
@@ -1850,12 +1850,13 @@ const App: React.FC = () => {
     setShowTollPopup(false);
 
     if (tollPopupInfo) {
-      const { pendingTeam, pendingNewPos } = tollPopupInfo;
+      const { pendingTeam } = tollPopupInfo;
       setTollPopupInfo(null);
 
-      // 추가 주사위 굴리기
-      addLog(`🎲 ${pendingTeam.name}: 추가 주사위를 굴립니다!`);
-      rollExtraDiceAndMove(pendingTeam, pendingNewPos);
+      // 🎯 자동 주사위 제거 - 관리자가 대시보드에서 해당 팀 선택 후 주사위 입력해야 함
+      addLog(`✅ ${pendingTeam.name}: 통행료 지불 완료! 관리자가 주사위를 입력해주세요.`);
+      // 게임 상태를 Idle로 설정하여 관리자가 다음 입력 가능하도록
+      setGamePhase(GamePhase.Idle);
     }
   };
 
@@ -2321,6 +2322,16 @@ ${evaluationGuidelines}
 
       // 점수 기준으로 순위 재정렬
       rankings.sort((a: any, b: any) => b.score - a.score);
+
+      // 🎯 동점 방지: 같은 점수가 있으면 1점씩 차이나도록 조정
+      for (let i = 1; i < rankings.length; i++) {
+        if (rankings[i].score >= rankings[i - 1].score) {
+          // 이전 순위보다 같거나 높으면 1점 낮게 조정
+          rankings[i].score = Math.max(0, rankings[i - 1].score - 1);
+        }
+      }
+      console.log('동점 방지 후 점수:', rankings.map((r: any) => `${r.teamName}: ${r.score}점`));
+
       rankings = rankings.map((r: any, idx: number) => ({ ...r, rank: idx + 1 }));
 
       console.log('최종 순위 (점수 조정 후):', rankings.map((r: any) => `${r.rank}. ${r.teamName}: ${r.score}점`));
