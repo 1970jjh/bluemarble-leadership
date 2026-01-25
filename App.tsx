@@ -1366,11 +1366,12 @@ const App: React.FC = () => {
 
         addLog(`🏠 ${team.name}이(가) ${territory.ownerTeamName} 소유 칸에 도착!`);
 
-        // 통행료 지불 (현재 팀 → 소유자 팀) - resources.capital 사용
+        // 🎯 통행료 지불 + 위치 업데이트 (캐릭터가 해당 칸에 머물도록)
         const updatedTeams = currentSession.teams.map(t => {
           if (t.id === team.id) {
             const newCapital = Math.max(0, t.resources.capital - tollAmount);
-            return { ...t, resources: { ...t.resources, capital: newCapital } };
+            // 위치도 함께 업데이트 (캐릭터가 도착한 칸에 유지)
+            return { ...t, position: squareIndex, resources: { ...t.resources, capital: newCapital } };
           } else if (t.id === territory.ownerTeamId) {
             return { ...t, resources: { ...t.resources, capital: t.resources.capital + tollAmount } };
           }
@@ -1399,6 +1400,16 @@ const App: React.FC = () => {
       }
 
       // ===== 케이스 B: 자기 소유 → 통행료 없이 관리자 주사위 입력 대기 =====
+      // 🎯 위치 업데이트 (캐릭터가 도착한 칸에 유지)
+      if (currentSession) {
+        const updatedTeams = currentSession.teams.map(t => {
+          if (t.id === team.id) {
+            return { ...t, position: squareIndex };
+          }
+          return t;
+        });
+        await updateTeamsInSession(updatedTeams);
+      }
       addLog(`🏠 ${team.name}: 자기 소유 칸입니다. 관리자가 주사위를 입력해주세요.`);
       setGamePhase(GamePhase.Idle);
       return;
