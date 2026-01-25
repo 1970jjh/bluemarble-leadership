@@ -7,16 +7,7 @@ interface LapBonusPopupProps {
   lapCount: number;
   bonusPerTeam?: number;  // 다른 팀당 가져올 점수 (기본 20)
   otherTeamsCount?: number;  // 다른 팀 수
-  onComplete: () => void;
-  duration?: number;
-  // Legacy props (호환성 유지)
-  bonuses?: {
-    capital: number;
-    energy: number;
-    trust: number;
-    competency: number;
-    insight: number;
-  };
+  onPayBonus: () => void;  // 🎯 보너스 지급 버튼 클릭 핸들러
 }
 
 const LapBonusPopup: React.FC<LapBonusPopupProps> = ({
@@ -25,9 +16,7 @@ const LapBonusPopup: React.FC<LapBonusPopupProps> = ({
   lapCount,
   bonusPerTeam = 20,
   otherTeamsCount = 3,
-  onComplete,
-  duration = 5000,
-  bonuses,  // Legacy - 사용되지 않지만 호환성 유지
+  onPayBonus,
 }) => {
   const [animateIn, setAnimateIn] = useState(false);
 
@@ -64,20 +53,17 @@ const LapBonusPopup: React.FC<LapBonusPopupProps> = ({
 
         setTimeout(() => audioContext.close(), 1500);
       } catch (e) {}
-
-      // duration 후 자동 완료
-      const timer = setTimeout(() => {
-        setAnimateIn(false);
-        setTimeout(onComplete, 300);
-      }, duration);
-
-      return () => clearTimeout(timer);
     } else {
       setAnimateIn(false);
     }
-  }, [visible, duration, onComplete]);
+  }, [visible]);
 
   if (!visible) return null;
+
+  const handlePayClick = () => {
+    setAnimateIn(false);
+    setTimeout(onPayBonus, 300);
+  };
 
   return (
     <div className="fixed inset-0 bg-black/90 z-[100] flex items-center justify-center backdrop-blur-sm">
@@ -145,27 +131,14 @@ const LapBonusPopup: React.FC<LapBonusPopupProps> = ({
               </div>
             </div>
 
-            {/* 진행 바 */}
-            <div className="mt-4">
-              <div className="h-1.5 bg-white/20 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-gradient-to-r from-yellow-400 to-orange-500"
-                  style={{
-                    animation: `progress ${duration}ms linear forwards`,
-                  }}
-                />
-              </div>
-              <div className="text-center text-white/50 text-xs mt-2">
-                잠시 후 게임이 계속됩니다...
-              </div>
-            </div>
-
-            <style>{`
-              @keyframes progress {
-                from { width: 0%; }
-                to { width: 100%; }
-              }
-            `}</style>
+            {/* 🎯 완주 보너스 지급 버튼 */}
+            <button
+              onClick={handlePayClick}
+              className="w-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white font-black text-xl py-4 px-8 rounded-xl border-4 border-green-300 shadow-lg transform hover:scale-105 transition-all duration-200 flex items-center justify-center gap-3"
+            >
+              <Trophy size={28} />
+              <span>완주 보너스 지급</span>
+            </button>
           </div>
         </div>
       </div>
