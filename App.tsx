@@ -427,6 +427,16 @@ const App: React.FC = () => {
           setIsComparingTeams(state.isAnalyzing);
         }
 
+        // 영토 소유권 동기화 (새로고침 시에도 유지)
+        if (state.territories) {
+          setTerritories(state.territories as { [squareIndex: string]: {
+            ownerTeamId: string;
+            ownerTeamName: string;
+            ownerTeamColor: string;
+            acquiredAt: number;
+          } });
+        }
+
         // gameLogs는 길이가 다를 때만 업데이트 (배열 참조 비교로 인한 무한 루프 방지)
         if (state.gameLogs?.length) {
           setGameLogs(prev => {
@@ -2175,6 +2185,7 @@ ${evaluationGuidelines}
         t.id === firstPlaceRanking.teamId || t.name === firstPlaceRanking.teamName
       );
       if (winnerTeam) {
+        // 로컬 상태 업데이트
         setTerritories(prev => ({
           ...prev,
           [currentCardSquareIndex.toString()]: {
@@ -2184,6 +2195,19 @@ ${evaluationGuidelines}
             acquiredAt: Date.now()
           }
         }));
+
+        // Firebase에 영토 소유권 저장 (새로고침 시에도 유지되도록)
+        const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+        if (isFirebaseConfigured && currentSessionId) {
+          firestoreService.updateTerritoryOwnership(
+            currentSessionId,
+            currentCardSquareIndex,
+            winnerTeam.id,
+            winnerTeam.name,
+            winnerTeam.color
+          ).catch(err => console.warn('Firebase 영토 소유권 저장 실패:', err));
+        }
+
         addLog(`🏠 ${winnerTeam.name}이(가) ${currentCardSquareIndex}번 칸을 점령!`);
       }
     }
