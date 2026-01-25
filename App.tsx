@@ -1345,7 +1345,7 @@ const App: React.FC = () => {
     return competencyId;
   };
 
-  const handleLandOnSquare = (team: Team, squareIndex: number) => {
+  const handleLandOnSquare = async (team: Team, squareIndex: number) => {
     const square = BOARD_SQUARES.find(s => s.index === squareIndex);
     if (!square) return;
 
@@ -1377,11 +1377,16 @@ const App: React.FC = () => {
           }
           return t;
         });
-        updateTeamsInSession(updatedTeams);
 
-        addLog(`💰 ${team.name}이(가) ${territory.ownerTeamName}에게 통행료 ${tollAmount}점 지불!${multiplier > 1 ? ` (x${multiplier} 특수칸)` : ''}`);
+        // 🎯 통행료 즉시 반영: await로 상태 업데이트 완료 대기
+        await updateTeamsInSession(updatedTeams);
 
-        // 통행료 팝업 표시 (팝업 완료 후 추가 주사위 굴리기)
+        // 🎯 보고서용 로그: 통행료 지불 내역
+        addLog(`━━━━━━ [통행료 지불] ━━━━━━`);
+        addLog(`💰 ${team.name} → ${territory.ownerTeamName}: ${tollAmount}점`);
+        addLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+
+        // 통행료 팝업 표시 (팝업 완료 후 관리자 주사위 입력 대기)
         setTollPopupInfo({
           payerTeamName: team.name,
           receiverTeamName: territory.ownerTeamName,
@@ -2079,7 +2084,13 @@ const App: React.FC = () => {
           submittedAt: Date.now(),
           isSubmitted: true
         });
-        addLog(`✅ ${teamName} 응답 제출 완료`);
+        // 🎯 상세 로그 기록 (보고서용 - 선택과 이유 포함)
+        addLog(`━━━━━━ [${teamName} 응답 제출] ━━━━━━`);
+        if (selectedChoice) {
+          addLog(`✅ [선택] ${selectedChoice.text}`);
+        }
+        addLog(`💭 [이유] ${reasoning}`);
+        addLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
       } catch (err) {
         console.error('팀 응답 저장 실패:', err);
       }
