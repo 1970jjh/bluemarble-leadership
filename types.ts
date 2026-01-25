@@ -141,6 +141,7 @@ export interface Session {
   status: SessionStatus;
   accessCode: string;
   createdAt: number;
+  lastUpdated?: number;  // 마지막 업데이트 시간 (Firebase 동기화용)
   teams: Team[]; // Snapshot of teams in this session
   customCards?: GameCard[];  // 관리자가 수정한 커스텀 카드 (optional)
   customBoardImage?: string;  // 커스텀 모드용 게임판 배경 이미지 URL (optional)

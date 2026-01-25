@@ -12,6 +12,7 @@ import CompetencyCardPreview from './components/CompetencyCardPreview';
 import LapBonusPopup from './components/LapBonusPopup';
 import LotteryBonusPopup from './components/LotteryBonusPopup';
 import RiskCardPopup from './components/RiskCardPopup';
+import TollPopup from './components/TollPopup';
 import AdminDashboard from './components/AdminDashboard';
 import GameRulesModal from './components/GameRulesModal';
 import SimultaneousResponseView from './components/SimultaneousResponseView';
@@ -77,6 +78,7 @@ const App: React.FC = () => {
   const [adminViewMode, setAdminViewMode] = useState<AdminViewMode>('dashboard');
   const [monitoringTeamId, setMonitoringTeamId] = useState<string | null>(null);
   const [currentTurnIndex, setCurrentTurnIndex] = useState(0);
+  const [turnVersion, setTurnVersion] = useState(0);  // 턴 버전 (증가만 함 - 동기화 충돌 방지)
   const [startingTeamIndex, setStartingTeamIndex] = useState(0);  // 시작 팀 인덱스 (관리자가 선택)
   const [gamePhase, setGamePhase] = useState<GamePhase>(GamePhase.WaitingToStart);
   const [diceValue, setDiceValue] = useState<[number, number]>([1, 1]);
@@ -100,6 +102,15 @@ const App: React.FC = () => {
   const [showRiskCard, setShowRiskCard] = useState(false);  // 리스크 카드 팝업
   const [riskCardInfo, setRiskCardInfo] = useState<{ teamName: string; chanceCardNumber: number } | null>(null);
   const [isRiskCardMode, setIsRiskCardMode] = useState(false);  // 리스크 카드 상황 (모든 점수 마이너스)
+  const [showTollPopup, setShowTollPopup] = useState(false);  // 통행료 팝업
+  const [tollPopupInfo, setTollPopupInfo] = useState<{
+    payerTeamName: string;
+    receiverTeamName: string;
+    tollAmount: number;
+    squareIndex: number;
+    pendingTeam: Team;
+    pendingNewPos: number;
+  } | null>(null);
 
   // 커스텀 모드 특수 효과 상태
   const [customScoreMultiplier, setCustomScoreMultiplier] = useState(1);  // 커스텀 모드 점수 배수 (2배 찬스, 3배 찬스)
@@ -166,6 +177,13 @@ const App: React.FC = () => {
   const isReceivingFromFirebase = useRef(false);
   const lastReceivedTimestamp = useRef(0);
   const saveDebounceTimer = useRef<any>(null);
+
+  // 마지막으로 수락한 타임스탬프 추적 (오래된 데이터 거부용)
+  const lastAcceptedGameStateTimestamp = useRef(0);
+  const lastAcceptedSessionTimestamp = useRef(0);
+
+  // 턴 버전 추적 (로컬에서 관리하는 최신 턴 버전)
+  const localTurnVersion = useRef(0);
 
   // gameLogs를 ref로 관리하여 저장 시 최신 값 사용 (의존성 루프 방지)
   const gameLogsRef = useRef<string[]>([]);
@@ -289,6 +307,40 @@ const App: React.FC = () => {
 
     if (isFirebaseConfigured) {
       const unsubscribe = firestoreService.subscribeToAllSessions((firebaseSessions) => {
+        // 현재 세션이 있으면 항상 보호 로직 적용
+        if (currentSessionId) {
+          // 로컬 작업 진행 중이면 현재 세션 데이터는 보호
+          if (localOperationInProgress.current) {
+            console.log('[All Sessions] 로컬 작업 진행 중 - 현재 세션 보호');
+            setSessions(prev => {
+              const currentSession = prev.find(s => s.id === currentSessionId);
+              const otherSessions = firebaseSessions.filter(s => s.id !== currentSessionId);
+              return currentSession
+                ? [...otherSessions, currentSession]
+                : firebaseSessions;
+            });
+            return;
+          }
+
+          // Firebase에서 받은 현재 세션의 lastUpdated가 로컬 타임스탬프보다 이전이면 보호
+          const firebaseCurrentSession = firebaseSessions.find(s => s.id === currentSessionId);
+          if (firebaseCurrentSession?.lastUpdated &&
+              firebaseCurrentSession.lastUpdated < localOperationTimestamp.current) {
+            console.log('[All Sessions] 오래된 현재 세션 데이터 보호:', {
+              firebaseLastUpdated: firebaseCurrentSession.lastUpdated,
+              localTimestamp: localOperationTimestamp.current
+            });
+            setSessions(prev => {
+              const currentSession = prev.find(s => s.id === currentSessionId);
+              const otherSessions = firebaseSessions.filter(s => s.id !== currentSessionId);
+              return currentSession
+                ? [...otherSessions, currentSession]
+                : firebaseSessions;
+            });
+            return;
+          }
+        }
+
         console.log('[All Sessions] 전체 세션 목록 수신:', firebaseSessions.map(s => ({
           id: s.id,
           name: s.name,
@@ -299,7 +351,7 @@ const App: React.FC = () => {
       });
       return () => unsubscribe();
     }
-  }, []);
+  }, [currentSessionId]);
 
   // --- Firebase: 현재 세션 실시간 구독 (참가자/관리자 동기화) ---
   useEffect(() => {
@@ -312,11 +364,40 @@ const App: React.FC = () => {
 
     const unsubscribe = firestoreService.subscribeToSession(currentSessionId, (session) => {
       if (session) {
+        const sessionTimestamp = session.lastUpdated || 0;
+
+        // === 1단계: 로컬 작업 진행 중 보호 ===
+        if (localOperationInProgress.current) {
+          console.log('[Session Subscribe] 로컬 작업 진행 중 - 세션 업데이트 스킵');
+          return;
+        }
+
+        // === 2단계: 타임스탬프 기반 오래된 데이터 거부 ===
+        if (sessionTimestamp <= lastAcceptedSessionTimestamp.current) {
+          console.log('[Session Subscribe] 오래된/중복 세션 데이터 무시:', {
+            received: sessionTimestamp,
+            lastAccepted: lastAcceptedSessionTimestamp.current
+          });
+          return;
+        }
+
+        // === 3단계: 로컬 작업 직후 보호 (5초) ===
+        const timeSinceLocalOp = Date.now() - localOperationTimestamp.current;
+        if (timeSinceLocalOp < 5000 && sessionTimestamp < localOperationTimestamp.current) {
+          console.log('[Session Subscribe] 로컬 작업 이전 세션 데이터 무시:', {
+            sessionTimestamp,
+            localOpTimestamp: localOperationTimestamp.current
+          });
+          return;
+        }
+
+        // 타임스탬프 업데이트
+        lastAcceptedSessionTimestamp.current = sessionTimestamp;
+
         console.log('[Session Subscribe] 세션 데이터 수신:', {
           sessionId: session.id,
-          hasCustomCards: !!session.customCards,
-          customCardsCount: session.customCards?.length || 0,
-          firstCardTitle: session.customCards?.[0]?.title || 'N/A'
+          lastUpdated: session.lastUpdated,
+          teamsPositions: session.teams?.map(t => ({ name: t.name, pos: t.position }))
         });
         setSessions(prev => prev.map(s => s.id === currentSessionId ? session : s));
       }
@@ -336,9 +417,11 @@ const App: React.FC = () => {
 
     const unsubscribe = firestoreService.subscribeToGameState(currentSessionId, (state) => {
       if (state) {
-        // 로컬 작업 진행 중이면 Firebase 상태 무시 (로컬 상태가 우선)
+        const stateTimestamp = state.lastUpdated || 0;
+
+        // === 1단계: 로컬 작업 진행 중 보호 ===
         if (localOperationInProgress.current) {
-          console.log('[Firebase] 로컬 작업 진행 중 - 업데이트 스킵');
+          console.log('[Firebase GameState] 로컬 작업 진행 중 - 업데이트 스킵');
 
           // Decision 상태에서 다른 팀원의 입력만 업데이트
           if (state.currentCard && state.phase === GamePhase.Decision) {
@@ -347,31 +430,76 @@ const App: React.FC = () => {
             setSharedSelectedChoice(state.selectedChoice);
             setSharedReasoning(state.reasoning || '');
             setShowCardModal(true);
-            // 짧은 지연 후 플래그 해제
             setTimeout(() => { isReceivingFromFirebase.current = false; }, 100);
           }
           return;
         }
 
-        // 로컬 작업이 끝난 후 일정 시간 동안도 보호 (Firebase 지연 응답 방지)
-        const timeSinceLocalOp = Date.now() - localOperationTimestamp.current;
-        if (timeSinceLocalOp < 2000 && state.lastUpdated < localOperationTimestamp.current) {
-          console.log('[Firebase] 오래된 Firebase 데이터 무시');
+        // === 2단계: 타임스탬프 기반 오래된 데이터 거부 ===
+        // lastUpdated가 없거나 마지막 수락 타임스탬프보다 이전/같으면 무시
+        if (stateTimestamp <= lastAcceptedGameStateTimestamp.current) {
+          console.log('[Firebase GameState] 오래된/중복 데이터 무시:', {
+            received: stateTimestamp,
+            lastAccepted: lastAcceptedGameStateTimestamp.current
+          });
           return;
         }
 
-        // 이미 같은 timestamp의 데이터를 받았으면 스킵 (중복 처리 방지)
-        if (state.lastUpdated && state.lastUpdated === lastReceivedTimestamp.current) {
+        // === 3단계: 로컬 작업 직후 보호 (5초) ===
+        const timeSinceLocalOp = Date.now() - localOperationTimestamp.current;
+        if (timeSinceLocalOp < 5000 && stateTimestamp < localOperationTimestamp.current) {
+          console.log('[Firebase GameState] 로컬 작업 이전 데이터 무시:', {
+            stateTimestamp,
+            localOpTimestamp: localOperationTimestamp.current
+          });
           return;
         }
-        lastReceivedTimestamp.current = state.lastUpdated || 0;
+
+        // 타임스탬프 업데이트
+        lastAcceptedGameStateTimestamp.current = stateTimestamp;
+        lastReceivedTimestamp.current = stateTimestamp;
 
         // Firebase 수신 플래그 설정 (무한 루프 방지)
         isReceivingFromFirebase.current = true;
 
         // 정상적인 Firebase 상태 동기화
         setGamePhase(state.phase as GamePhase);
-        setCurrentTurnIndex(state.currentTeamIndex);
+
+        // 턴 인덱스 동기화 - 더 관대한 조건으로 변경
+        // (참가자 클라이언트가 턴 전환을 놓치지 않도록)
+        const firebaseTurnVersion = state.turnVersion || 0;
+        const firebaseTurnIndex = state.currentTeamIndex ?? 0;
+
+        // 케이스 1: Firebase 버전이 더 높음 → 무조건 업데이트
+        // 케이스 2: 버전 같은데 인덱스 다름 → 동기화 필요 (재연결/새로고침 시)
+        // 케이스 3: Firebase 버전이 낮음 → 무시 (오래된 데이터)
+        if (firebaseTurnVersion > localTurnVersion.current) {
+          console.log('[Firebase] 턴 버전 업데이트:', {
+            firebase: firebaseTurnVersion,
+            local: localTurnVersion.current,
+            newTurnIndex: firebaseTurnIndex
+          });
+          localTurnVersion.current = firebaseTurnVersion;
+          setTurnVersion(firebaseTurnVersion);
+          setCurrentTurnIndex(firebaseTurnIndex);
+        } else if (firebaseTurnVersion === localTurnVersion.current) {
+          // 같은 버전이면 인덱스만 동기화 (로컬과 다를 경우)
+          setCurrentTurnIndex(prev => {
+            if (prev !== firebaseTurnIndex) {
+              console.log('[Firebase] 턴 인덱스 동기화 (같은 버전):', {
+                from: prev,
+                to: firebaseTurnIndex
+              });
+              return firebaseTurnIndex;
+            }
+            return prev;
+          });
+        } else {
+          console.log('[Firebase] 오래된 턴 버전 무시:', {
+            firebase: firebaseTurnVersion,
+            local: localTurnVersion.current
+          });
+        }
 
         // diceValue는 값이 실제로 다를 때만 업데이트
         const newDiceValue = state.diceValue || [1, 1];
@@ -425,6 +553,16 @@ const App: React.FC = () => {
         }
         if (state.isAnalyzing !== undefined) {
           setIsComparingTeams(state.isAnalyzing);
+        }
+
+        // 영토 소유권 동기화 (새로고침 시에도 유지)
+        if (state.territories) {
+          setTerritories(state.territories as { [squareIndex: string]: {
+            ownerTeamId: string;
+            ownerTeamName: string;
+            ownerTeamColor: string;
+            acquiredAt: number;
+          } });
         }
 
         // gameLogs는 길이가 다를 때만 업데이트 (배열 참조 비교로 인한 무한 루프 방지)
@@ -646,6 +784,9 @@ const App: React.FC = () => {
 
   const handleEnterSession = (session: Session) => {
     setCurrentSessionId(session.id);
+    // 턴 버전과 인덱스 초기화 (Firebase에서 동기화될 때까지 기본값)
+    localTurnVersion.current = 0;
+    setTurnVersion(0);
     setCurrentTurnIndex(0);
     setGamePhase(GamePhase.WaitingToStart);
     setIsGameStarted(false);
@@ -656,7 +797,10 @@ const App: React.FC = () => {
 
   // 게임 시작 핸들러
   const handleStartGame = async () => {
-    // 시작 팀 인덱스로 현재 턴 설정
+    // 턴 버전 1로 시작 (게임 시작 = 첫 번째 턴)
+    const newTurnVersion = 1;
+    localTurnVersion.current = newTurnVersion;
+    setTurnVersion(newTurnVersion);
     setCurrentTurnIndex(startingTeamIndex);
     setIsGameStarted(true);
     setGamePhase(GamePhase.Idle);
@@ -673,6 +817,7 @@ const App: React.FC = () => {
           sessionId: currentSessionId,
           phase: GamePhase.Idle,
           currentTeamIndex: startingTeamIndex,
+          turnVersion: newTurnVersion,  // 턴 버전 저장
           currentTurn: 0,
           diceValue: [1, 1],
           currentCard: null,
@@ -880,11 +1025,21 @@ const App: React.FC = () => {
   const updateTeamsInSession = async (updatedTeams: Team[]) => {
     if (!currentSessionId) return;
 
-    // Firebase에 저장 (설정되어 있으면)
+    const updateTimestamp = Date.now();
+
+    // 로컬 작업 타임스탬프 갱신 (Firebase 구독 보호용)
+    localOperationTimestamp.current = updateTimestamp;
+    // 현재 타임스탬프보다 오래된 세션 데이터 거부
+    lastAcceptedSessionTimestamp.current = updateTimestamp;
+
+    // Firebase에 저장 (설정되어 있으면) - lastUpdated 포함
     const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
     if (isFirebaseConfigured) {
       try {
-        await firestoreService.updateTeams(currentSessionId, updatedTeams);
+        await firestoreService.updateSession(currentSessionId, {
+          teams: updatedTeams,
+          lastUpdated: updateTimestamp
+        });
       } catch (error) {
         console.error('Firebase 팀 업데이트 실패:', error);
       }
@@ -892,7 +1047,7 @@ const App: React.FC = () => {
 
     setSessions(prev => prev.map(s => {
       if (s.id === currentSessionId) {
-        return { ...s, teams: updatedTeams };
+        return { ...s, teams: updatedTeams, lastUpdated: updateTimestamp };
       }
       return s;
     }));
@@ -1003,8 +1158,15 @@ const App: React.FC = () => {
     }
   }, [currentSessionId]);
 
-  const nextTurn = useCallback(() => {
+  const nextTurn = useCallback(async () => {
     if (!currentSession) return;
+
+    // 로컬 작업 시작 - Firebase가 이 상태를 덮어쓰지 않도록 보호
+    const timestamp = Date.now();
+    localOperationInProgress.current = true;
+    localOperationTimestamp.current = timestamp;
+    lastAcceptedGameStateTimestamp.current = timestamp;
+    lastAcceptedSessionTimestamp.current = timestamp;
 
     // Reset Shared State
     setShowCardModal(false);
@@ -1023,7 +1185,7 @@ const App: React.FC = () => {
 
     setGamePhase(GamePhase.Idle);
     setTurnTimeLeft(120);
-    
+
     // Rotate team members
     const updatedTeams = currentSession.teams.map((team, idx) => {
       if (idx === currentTurnIndex && team.members.length > 0) {
@@ -1032,9 +1194,44 @@ const App: React.FC = () => {
       }
       return team;
     });
-    
+
+    const nextTeamIndex = (currentTurnIndex + 1) % currentSession.teams.length;
+
+    // 턴 버전 증가 (핵심!)
+    const newTurnVersion = localTurnVersion.current + 1;
+    localTurnVersion.current = newTurnVersion;
+    setTurnVersion(newTurnVersion);
+    setCurrentTurnIndex(nextTeamIndex);
+
+    console.log('[NextTurn] 턴 전환:', {
+      from: currentTurnIndex,
+      to: nextTeamIndex,
+      turnVersion: newTurnVersion
+    });
+
     updateTeamsInSession(updatedTeams);
-    setCurrentTurnIndex((prev) => (prev + 1) % currentSession.teams.length);
+
+    // Firebase에 다음 턴 상태 저장
+    const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+    if (isFirebaseConfigured && currentSessionId) {
+      try {
+        await firestoreService.updateGameState(currentSessionId, {
+          phase: GamePhase.Idle,
+          currentTeamIndex: nextTeamIndex,
+          turnVersion: newTurnVersion,  // 턴 버전 저장
+          currentCard: null,
+          selectedChoice: null,
+          reasoning: '',
+          isSubmitted: false,
+          lastUpdated: Date.now()
+        });
+      } catch (err) {
+        console.warn('[Firebase] nextTurn 상태 저장 실패:', err);
+      }
+    }
+
+    // 로컬 작업 완료 - Firebase 동기화 다시 허용
+    localOperationInProgress.current = false;
   }, [currentSession, currentTurnIndex, currentSessionId]);
 
   // 게임 리셋 함수
@@ -1072,7 +1269,12 @@ const App: React.FC = () => {
     setAiComparativeResult(null);
     setIsComparingTeams(false);
     setGamePhase(GamePhase.Idle);
+
+    // 턴 버전과 인덱스 초기화
+    localTurnVersion.current = 0;
+    setTurnVersion(0);
     setCurrentTurnIndex(0);
+
     setDiceValue([1, 1]);
     setTurnTimeLeft(120);
     setGameLogs(['[시스템] 게임이 리셋되었습니다.']);
@@ -1088,6 +1290,7 @@ const App: React.FC = () => {
           sessionId: currentSessionId,
           phase: GamePhase.Idle,
           currentTeamIndex: 0,
+          turnVersion: 0,  // 턴 버전 초기화
           currentTurn: 0,
           diceValue: [1, 1],
           currentCard: null,
@@ -1154,160 +1357,54 @@ const App: React.FC = () => {
     const square = BOARD_SQUARES.find(s => s.index === squareIndex);
     if (!square) return;
 
+    console.log(`[LandOnSquare] ${team.name} → ${squareIndex}번 칸 도착`);
+
     // ============================================================
-    // 영토 소유권 체크 - 다른 팀 소유 칸이면 통행료 지불 후 재굴림
+    // 1단계: 이미 푼 문제인지 확인 (영토 소유권 = 누군가 풀었음)
     // ============================================================
     const territory = territories[squareIndex.toString()];
-    if (territory && territory.ownerTeamId !== team.id && square.type === SquareType.City) {
-      // 다른 팀이 소유한 칸에 도착 → 통행료 지불 + 재굴림
-      const ownerTeam = currentSession?.teams.find(t => t.id === territory.ownerTeamId);
 
-      if (ownerTeam && currentSession) {
-        // x2/x3 배율 적용된 통행료 계산
+    // City 칸이고 영토 소유자가 있는 경우 = 이미 푼 문제
+    if (square.type === SquareType.City && territory) {
+      console.log(`[LandOnSquare] 영토 소유자: ${territory.ownerTeamName}`);
+
+      // ===== 케이스 A: 다른 팀 소유 → 통행료 지불 + 팝업 + 재굴림 =====
+      if (territory.ownerTeamId !== team.id && currentSession) {
         const multiplier = getSquareMultiplier(squareIndex);
         const tollAmount = TOLL_AMOUNT * multiplier;
 
         addLog(`🏠 ${team.name}이(가) ${territory.ownerTeamName} 소유 칸에 도착!`);
-        addLog(`💰 통행료 ${tollAmount}점을 ${territory.ownerTeamName}에게 지불!${multiplier > 1 ? ` (x${multiplier} 특수칸)` : ''}`);
 
-        // 통행료 지불 (현재 팀 → 소유자 팀)
+        // 통행료 지불 (현재 팀 → 소유자 팀) - resources.capital 사용
         const updatedTeams = currentSession.teams.map(t => {
           if (t.id === team.id) {
-            // 통행료 지불
-            const newScore = Math.max(0, (t.score ?? INITIAL_SCORE) - tollAmount);
-            return { ...t, score: newScore };
+            const newCapital = Math.max(0, t.resources.capital - tollAmount);
+            return { ...t, resources: { ...t.resources, capital: newCapital } };
           } else if (t.id === territory.ownerTeamId) {
-            // 통행료 수령
-            const newScore = (t.score ?? INITIAL_SCORE) + tollAmount;
-            return { ...t, score: newScore };
+            return { ...t, resources: { ...t.resources, capital: t.resources.capital + tollAmount } };
           }
           return t;
         });
         updateTeamsInSession(updatedTeams);
 
-        // 재굴림 (추가 주사위)
-        addLog(`🎲 ${team.name}: 소유된 칸이므로 추가 주사위를 굴립니다!`);
-        const extraDie1 = Math.ceil(Math.random() * 6);
-        const extraDie2 = Math.ceil(Math.random() * 6);
-        const extraSteps = extraDie1 + extraDie2;
-        addLog(`🎲 추가 주사위: ${extraDie1} + ${extraDie2} = ${extraSteps}칸 이동`);
+        addLog(`💰 ${team.name}이(가) ${territory.ownerTeamName}에게 통행료 ${tollAmount}점 지불!${multiplier > 1 ? ` (x${multiplier} 특수칸)` : ''}`);
 
-        // 새 위치 계산
-        let newPos = squareIndex + extraSteps;
-        let passedStart = false;
-        if (newPos >= BOARD_SIZE) {
-          newPos = newPos % BOARD_SIZE;
-          passedStart = true;
-        }
-
-        // 팀 위치 업데이트 (점수는 이미 위에서 업데이트됨)
-        if (passedStart) {
-          const newLapCount = team.lapCount + 1;
-          const otherTeamsCount = currentSession.teams.length - 1;
-          const totalBonus = otherTeamsCount * LAP_BONUS_PER_TEAM;
-
-          setSessions(prevSessions => {
-            const session = prevSessions.find(s => s.id === currentSessionId);
-            if (!session) return prevSessions;
-
-            const bonusUpdatedTeams = session.teams.map(t => {
-              if (t.id === team.id) {
-                return { ...t, position: newPos, score: (t.score ?? INITIAL_SCORE) + totalBonus, lapCount: newLapCount };
-              } else {
-                return { ...t, score: Math.max(0, (t.score ?? INITIAL_SCORE) - LAP_BONUS_PER_TEAM) };
-              }
-            });
-
-            const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
-            if (isFirebaseConfigured && currentSessionId) {
-              firestoreService.updateTeams(currentSessionId, bonusUpdatedTeams).catch(err =>
-                console.warn('Firebase 업데이트 실패:', err)
-              );
-            }
-
-            return prevSessions.map(s => s.id === currentSessionId ? { ...s, teams: bonusUpdatedTeams } : s);
-          });
-
-          addLog(`🎉 ${team.name} 한 바퀴 완주! +${totalBonus}점 획득!`);
-          soundEffects.playCelebration();
-        }
-
-        // 새 위치에서 다시 handleLandOnSquare 호출 (재귀)
-        setTimeout(() => {
-          handleLandOnSquare({ ...team, position: newPos }, newPos);
-        }, 1000);
+        // 통행료 팝업 표시 (팝업 완료 후 추가 주사위 굴리기)
+        setTollPopupInfo({
+          payerTeamName: team.name,
+          receiverTeamName: territory.ownerTeamName,
+          tollAmount: tollAmount,
+          squareIndex: squareIndex,
+          pendingTeam: team,
+          pendingNewPos: squareIndex  // 현재 위치에서 추가 주사위 시작
+        });
+        setShowTollPopup(true);
         return;
       }
-    }
 
-    // ============================================================
-    // 기존 로직: 이미 푼 카드 체크
-    // ============================================================
-    // 자기 팀이 이미 해당 위치에서 카드를 풀었는지 확인 (City 칸만 해당)
-    // 현재 세션에서 팀 정보 가져오기
-    const currentTeamFromSession = currentSession?.teams.find(t => t.id === team.id);
-    const alreadySolvedPositions = currentTeamFromSession?.history
-      ?.filter(h => h.position !== undefined)
-      .map(h => h.position) || [];
-
-    if (square.type === SquareType.City && alreadySolvedPositions.includes(squareIndex)) {
-      // 이미 푼 역량카드 → 추가 주사위 굴리기
-      addLog(`🔄 ${team.name}: 이미 풀었던 역량카드입니다. 추가 주사위를 굴립니다!`);
-
-      // 추가 주사위 굴리기 (1~6 랜덤)
-      const extraDie1 = Math.ceil(Math.random() * 6);
-      const extraDie2 = Math.ceil(Math.random() * 6);
-      const extraSteps = extraDie1 + extraDie2;
-
-      addLog(`🎲 추가 주사위: ${extraDie1} + ${extraDie2} = ${extraSteps}칸 이동`);
-
-      // 새 위치 계산
-      let newPos = squareIndex + extraSteps;
-      let passedStart = false;
-      if (newPos >= BOARD_SIZE) {
-        newPos = newPos % BOARD_SIZE;
-        passedStart = true;
-      }
-
-      // 팀 위치 업데이트
-      if (currentSession) {
-        const newLapCount = team.lapCount + (passedStart ? 1 : 0);
-
-        if (passedStart) {
-          // 한바퀴 보너스: 다른 팀에서 각 20점씩 가져오기
-          const otherTeamsCount = currentSession.teams.length - 1;
-          const totalBonus = otherTeamsCount * LAP_BONUS_PER_TEAM;
-
-          const updatedTeams = currentSession.teams.map(t => {
-            if (t.id === team.id) {
-              let newResources = { ...t.resources };
-              newResources.capital += totalBonus;
-              return { ...t, position: newPos, resources: newResources, lapCount: newLapCount };
-            } else {
-              let newResources = { ...t.resources };
-              newResources.capital = Math.max(0, newResources.capital - LAP_BONUS_PER_TEAM);
-              return { ...t, resources: newResources };
-            }
-          });
-          updateTeamsInSession(updatedTeams);
-          addLog(`🎉 ${team.name} 한 바퀴 완주! 다른 팀에서 각 ${LAP_BONUS_PER_TEAM}점씩 총 +${totalBonus}점 획득!`);
-          soundEffects.playCelebration();
-        } else {
-          // 한바퀴 통과 없이 위치만 업데이트
-          const updatedTeams = currentSession.teams.map(t => {
-            if (t.id === team.id) {
-              return { ...t, position: newPos };
-            }
-            return t;
-          });
-          updateTeamsInSession(updatedTeams);
-        }
-      }
-
-      // 새 위치에서 다시 handleLandOnSquare 호출 (재귀)
-      setTimeout(() => {
-        handleLandOnSquare({ ...team, position: newPos }, newPos);
-      }, 1000);
+      // ===== 케이스 B: 자기 소유 → 통행료 없이 재굴림 =====
+      addLog(`🏠 ${team.name}: 자기 소유 칸입니다. 추가 주사위를 굴립니다!`);
+      rollExtraDiceAndMove(team, squareIndex);
       return;
     }
 
@@ -1353,6 +1450,9 @@ const App: React.FC = () => {
         addLog(`🎯 ${multiplier}배 찬스 칸에 도착!`);
         // Firebase 업데이트는 알림 확인 후 handleMultiplierAlertComplete에서 수행
       } else {
+        // 로컬 작업 완료 - 카드 표시 전에 Firebase 동기화 다시 허용
+        localOperationInProgress.current = false;
+
         // 일반 칸이면 바로 카드 표시
         setActiveCard(selectedCard);
         setGamePhase(GamePhase.Decision);
@@ -1379,6 +1479,9 @@ const App: React.FC = () => {
           }).catch(err => console.error('Firebase 상태 저장 실패:', err));
         }
       }
+    } else {
+      // 카드가 없으면 (예: 출발 칸 외 특수 칸) 플래그 해제
+      localOperationInProgress.current = false;
     }
   };
 
@@ -1386,8 +1489,12 @@ const App: React.FC = () => {
     if (isRolling || gamePhase === GamePhase.Rolling) return;
 
     // 로컬 작업 시작 - Firebase가 이 상태를 덮어쓰지 않도록 보호
+    const timestamp = Date.now();
     localOperationInProgress.current = true;
-    localOperationTimestamp.current = Date.now();
+    localOperationTimestamp.current = timestamp;
+    // 현재 타임스탬프보다 오래된 Firebase 데이터 모두 거부
+    lastAcceptedGameStateTimestamp.current = timestamp;
+    lastAcceptedSessionTimestamp.current = timestamp;
 
     // 주사위 결과 미리 계산
     const die1 = Math.ceil(Math.random() * 6);
@@ -1424,14 +1531,19 @@ const App: React.FC = () => {
     setIsRolling(false);
     setDiceValue(pendingDice);
 
-    // 더블 체크 및 음향 효과
-    const isDouble = pendingDice[0] === pendingDice[1];
-    setIsDoubleChance(isDouble);  // 더블 찬스 설정 (AI 점수 2배 적용)
+    // 로컬에서 시작한 롤일 때만 더블 체크 및 로그 (중복 방지)
+    if (localOperationInProgress.current) {
+      const isDouble = pendingDice[0] === pendingDice[1];
+      setIsDoubleChance(isDouble);  // 더블 찬스 설정 (AI 점수 2배 적용)
 
-    if (isDouble) {
-      soundEffects.playDoubleBonus();
-      addLog(`🎲 더블! (${pendingDice[0]}+${pendingDice[1]}) 보너스 ${DOUBLE_BONUS_POINTS}점 획득!`);
+      if (isDouble) {
+        soundEffects.playDoubleBonus();
+        addLog(`🎲 더블! (${pendingDice[0]}+${pendingDice[1]}) 보너스 ${DOUBLE_BONUS_POINTS}점 획득!`);
+      } else {
+        soundEffects.playDiceResult();
+      }
     } else {
+      // Firebase 수신 롤은 음향만 재생 (로그/점수 변경 없음)
       soundEffects.playDiceResult();
     }
   };
@@ -1439,7 +1551,16 @@ const App: React.FC = () => {
   // 주사위 결과 표시 완료 핸들러 (3초 후)
   const handleDiceResultComplete = () => {
     setShowDiceOverlay(false);
-    performMove(pendingDice[0], pendingDice[1]);
+
+    // ⚠️ 핵심 수정: 로컬에서 시작한 롤일 때만 이동 실행
+    // Firebase 수신으로 표시된 오버레이는 애니메이션만 표시하고 이동 로직은 실행 안 함
+    // (이동은 롤을 시작한 클라이언트에서만 처리해야 함)
+    if (localOperationInProgress.current) {
+      console.log('[DiceResult] 로컬 롤 완료 - 이동 실행');
+      performMove(pendingDice[0], pendingDice[1]);
+    } else {
+      console.log('[DiceResult] Firebase 수신 롤 - 이동 스킵 (애니메이션만 표시)');
+    }
   };
 
   const finalizeRoll = () => {
@@ -1459,9 +1580,9 @@ const App: React.FC = () => {
     setIsRolling(false);
     setGamePhase(GamePhase.Moving);
 
-    // 로컬 작업 완료 - Firebase 동기화 다시 허용
-    localOperationInProgress.current = false;
-    localOperationTimestamp.current = Date.now();
+    // 주의: 로컬 작업 플래그는 이동이 완전히 완료될 때까지 유지
+    // (handleLandOnSquare 완료 또는 턴 전환 시점에 해제)
+    // localOperationInProgress.current는 handleRollDice에서 true로 설정됨
 
     if (!currentTeam) return;
 
@@ -1687,6 +1808,77 @@ const App: React.FC = () => {
   // 보류 중인 이동 정보 (한 바퀴 보너스 팝업 후 계속 이동하기 위함)
   const pendingMoveRef = useRef<{ teamToMove: Team; remainingSteps: number; finalPos: number } | null>(null);
 
+  // 추가 주사위 굴리기 (이미 푼 카드 도착 시)
+  const rollExtraDiceAndMove = (team: Team, fromPos: number) => {
+    const extraDie1 = Math.ceil(Math.random() * 6);
+    const extraDie2 = Math.ceil(Math.random() * 6);
+    const extraSteps = extraDie1 + extraDie2;
+
+    addLog(`🎲 추가 주사위: ${extraDie1} + ${extraDie2} = ${extraSteps}칸 이동`);
+
+    // 새 위치 계산
+    let newPos = fromPos + extraSteps;
+    let passedStart = false;
+    if (newPos >= BOARD_SIZE) {
+      newPos = newPos % BOARD_SIZE;
+      passedStart = true;
+    }
+
+    // 팀 위치 업데이트
+    if (currentSession) {
+      const newLapCount = team.lapCount + (passedStart ? 1 : 0);
+
+      if (passedStart) {
+        // 한바퀴 보너스: 다른 팀에서 각 20점씩 가져오기
+        const otherTeamsCount = currentSession.teams.length - 1;
+        const totalBonus = otherTeamsCount * LAP_BONUS_PER_TEAM;
+
+        const updatedTeams = currentSession.teams.map(t => {
+          if (t.id === team.id) {
+            let newResources = { ...t.resources };
+            newResources.capital += totalBonus;
+            return { ...t, position: newPos, resources: newResources, lapCount: newLapCount };
+          } else {
+            let newResources = { ...t.resources };
+            newResources.capital = Math.max(0, newResources.capital - LAP_BONUS_PER_TEAM);
+            return { ...t, resources: newResources };
+          }
+        });
+        updateTeamsInSession(updatedTeams);
+        addLog(`🎉 ${team.name} 한 바퀴 완주! 다른 팀에서 각 ${LAP_BONUS_PER_TEAM}점씩 총 +${totalBonus}점 획득!`);
+        soundEffects.playCelebration();
+      } else {
+        // 한바퀴 통과 없이 위치만 업데이트
+        const updatedTeams = currentSession.teams.map(t => {
+          if (t.id === team.id) {
+            return { ...t, position: newPos };
+          }
+          return t;
+        });
+        updateTeamsInSession(updatedTeams);
+      }
+    }
+
+    // 새 위치에서 다시 handleLandOnSquare 호출 (재귀)
+    setTimeout(() => {
+      handleLandOnSquare({ ...team, position: newPos }, newPos);
+    }, 1000);
+  };
+
+  // 통행료 팝업 완료 핸들러
+  const handleTollPopupComplete = () => {
+    setShowTollPopup(false);
+
+    if (tollPopupInfo) {
+      const { pendingTeam, pendingNewPos } = tollPopupInfo;
+      setTollPopupInfo(null);
+
+      // 추가 주사위 굴리기
+      addLog(`🎲 ${pendingTeam.name}: 추가 주사위를 굴립니다!`);
+      rollExtraDiceAndMove(pendingTeam, pendingNewPos);
+    }
+  };
+
   // 한 바퀴 보너스 팝업 완료 핸들러
   const handleLapBonusComplete = () => {
     setShowLapBonus(false);
@@ -1710,6 +1902,9 @@ const App: React.FC = () => {
   // x2/x3 배율 알림 완료 핸들러
   const handleMultiplierAlertComplete = () => {
     setShowMultiplierAlert(false);
+
+    // 로컬 작업 완료 - 카드 표시 전에 Firebase 동기화 다시 허용
+    localOperationInProgress.current = false;
 
     // 보류 중인 카드가 있으면 표시
     if (pendingCardAfterAlert) {
@@ -1955,12 +2150,44 @@ const App: React.FC = () => {
       console.log('allTeamResponses:', allTeamResponses);
       console.log('teamResponsesList:', teamResponsesList);
 
+      // ===== 성의없는 답변 사전 감지 =====
+      const lazyPatterns = [
+        /^[ㄱ-ㅎㅏ-ㅣ\s]+$/,  // 자음/모음만
+        /^[a-zA-Z]{1,5}$/,   // 짧은 영문 (예: GG, ok, hi)
+        /^[ㅋㅎㅠㅜ]+$/,      // ㅋㅋㅋ, ㅎㅎㅎ, ㅠㅠ
+        /^\.+$/,             // ...
+        /^[0-9\s]+$/,        // 숫자만
+        /^(ㅇㅇ|ㄴㄴ|ㄱㄱ|gg|ok|no|yes|네|응|아|음)$/i,  // 단답
+      ];
+
+      const isLazyAnswer = (text: string): boolean => {
+        if (!text || text.trim().length < 5) return true;  // 5글자 미만
+        const trimmed = text.trim();
+        return lazyPatterns.some(pattern => pattern.test(trimmed));
+      };
+
+      // 각 팀의 성의도 분석
+      const teamQualityInfo = teamResponsesList.map(resp => ({
+        teamId: resp.teamId,
+        teamName: resp.teamName,
+        reasoning: resp.reasoning,
+        reasoningLength: resp.reasoning?.length || 0,
+        isLazy: isLazyAnswer(resp.reasoning || ''),
+        qualityHint: isLazyAnswer(resp.reasoning || '')
+          ? '⚠️ 성의없음 (0-20점 강제)'
+          : resp.reasoning?.length < 20
+            ? '⚠️ 너무 짧음 (감점 필요)'
+            : '✓ 정상'
+      }));
+
+      console.log('팀별 품질 분석:', teamQualityInfo);
+
       // 세션별 커스텀 AI 평가 지침 사용 (없으면 기본값)
       const evaluationGuidelines = currentSession?.aiEvaluationGuidelines || DEFAULT_AI_EVALUATION_GUIDELINES;
 
-      // Gemini AI에 비교 평가 요청
+      // Gemini AI에 비교 평가 요청 (강화된 프롬프트)
       const prompt = `
-당신은 리더십 교육 게임의 AI 평가자입니다.
+당신은 리더십 교육 게임의 **엄격한** AI 평가자입니다.
 다음 상황에 대해 여러 팀의 응답을 비교 평가해주세요.
 
 ## 카드 정보
@@ -1969,14 +2196,39 @@ const App: React.FC = () => {
 - 상황: ${activeCard.situation}
 ${activeCard.choices ? `- 선택지:\n${activeCard.choices.map((c, i) => `  ${c.id}. ${c.text}`).join('\n')}` : '- (개방형 질문)'}
 
-## 팀별 응답
-${teamResponsesList.map((resp) => `
+## 팀별 응답 (품질 분석 포함)
+${teamResponsesList.map((resp) => {
+  const quality = teamQualityInfo.find(q => q.teamId === resp.teamId);
+  return `
 ### ${resp.teamName} (ID: ${resp.teamId})
 - 선택: ${resp.selectedChoice?.text || '(개방형 응답)'}
-- 이유: ${resp.reasoning}
-`).join('\n')}
+- 이유: "${resp.reasoning}"
+- 글자수: ${resp.reasoning?.length || 0}자
+- 품질: ${quality?.qualityHint || '분석 필요'}
+`;
+}).join('\n')}
 
 ${evaluationGuidelines}
+
+## 🚨🚨🚨 절대 규칙 (반드시 준수!) 🚨🚨🚨
+
+**1. 성의없는 답변 = 무조건 최하위 (0~20점)**
+다음은 성의없는 답변의 예시입니다:
+- "ㅋㅋㅋ", "ㅎㅎ", "ㅠㅠ", "ㅇㅇ" 등 자음/모음만
+- "GG", "ok", "ㅐㅐ", "asdf" 등 무의미한 입력
+- "..." , "네", "응" 등 단답
+- 5글자 미만의 답변
+
+**2. 글자수와 성의에 따른 점수 범위:**
+- 5글자 미만 → 0~10점 (무조건)
+- 5~15글자 → 10~30점 (매우 짧음)
+- 15~30글자 → 30~50점 (짧음)
+- 30~50글자 → 50~70점 (보통)
+- 50글자 이상 + 논리적 → 70~100점 (우수)
+
+**3. 긴 답변이 짧은 답변보다 항상 높아야 함!**
+- 100자 논리적 답변 > 20자 답변 (무조건!)
+- 성의있는 답변이 대충 쓴 답변보다 반드시 높은 점수
 
 ## 응답 형식 (JSON)
 {
@@ -1997,13 +2249,12 @@ ${evaluationGuidelines}
   - 2팀: 1등 100점, 2등 60점
   - 3팀: 1등 100점, 2등 70점, 3등 40점
   - 4팀: 1등 100점, 2등 75점, 3등 50점, 4등 25점
-  - 5팀 이상: 1등 100점부터 순위별 적절히 배분
-- **성의 없는 답변은 무조건 0~20점 범위로 제한**
+- **성의 없는 답변은 무조건 0~20점 범위로 제한 (절대 규칙!)**
 
-중요:
+최종 확인:
+- 짧은 답변(20자 미만)이 긴 답변(50자 이상)보다 높은 점수를 받으면 안 됩니다!
 - 모든 팀에 대해 rankings 배열에 포함해야 합니다.
 - teamId는 위에서 제공된 ID를 정확히 그대로 사용하세요.
-- 답변의 "질"을 가장 중요하게 평가하세요. 의미 없는 답변이 높은 점수를 받으면 안 됩니다!
 `;
 
       const result = await genAI.models.generateContent({
@@ -2021,42 +2272,81 @@ ${evaluationGuidelines}
       console.log('AI 응답:', parsed);
 
       // teamId 매핑 수정: 팀 이름으로 매칭 시도 (AI가 ID를 정확히 복사하지 않을 경우 대비)
-      const comparativeResult: AIComparativeResult = {
-        rankings: parsed.rankings.map((r: any) => {
-          // 먼저 teamId로 찾기
-          let teamResponse = allTeamResponses[r.teamId];
-          console.log(`팀 "${r.teamName}" (ID: ${r.teamId}) - teamId로 찾기:`, teamResponse ? '성공' : '실패');
+      let rankings = parsed.rankings.map((r: any) => {
+        // 먼저 teamId로 찾기
+        let teamResponse = allTeamResponses[r.teamId];
+        console.log(`팀 "${r.teamName}" (ID: ${r.teamId}) - teamId로 찾기:`, teamResponse ? '성공' : '실패');
 
-          // 못 찾으면 팀 이름으로 찾기
-          if (!teamResponse) {
-            const foundEntry = Object.entries(allTeamResponses).find(
-              ([_, resp]) => resp.teamName === r.teamName
-            );
-            if (foundEntry) {
-              teamResponse = foundEntry[1];
-              r.teamId = foundEntry[0]; // 실제 teamId로 교체
-              console.log(`팀 "${r.teamName}" - teamName으로 찾기: 성공 (새 ID: ${r.teamId})`);
-            } else {
-              console.log(`팀 "${r.teamName}" - teamName으로도 찾기 실패`);
-            }
+        // 못 찾으면 팀 이름으로 찾기
+        if (!teamResponse) {
+          const foundEntry = Object.entries(allTeamResponses).find(
+            ([_, resp]) => resp.teamName === r.teamName
+          );
+          if (foundEntry) {
+            teamResponse = foundEntry[1];
+            r.teamId = foundEntry[0]; // 실제 teamId로 교체
+            console.log(`팀 "${r.teamName}" - teamName으로 찾기: 성공 (새 ID: ${r.teamId})`);
+          } else {
+            console.log(`팀 "${r.teamName}" - teamName으로도 찾기 실패`);
           }
+        }
 
-          // 최종 결과 확인
-          console.log(`팀 "${r.teamName}" 최종 데이터:`, {
-            selectedChoice: teamResponse?.selectedChoice,
-            reasoning: teamResponse?.reasoning
-          });
+        // ===== 성의없는 답변 점수 강제 조정 =====
+        const reasoning = teamResponse?.reasoning || '';
+        const reasoningLength = reasoning.trim().length;
+        let adjustedScore = r.score;
+        let scoreAdjusted = false;
 
-          return {
-            teamId: r.teamId,
-            teamName: r.teamName,
-            rank: r.rank,
-            score: r.score,
-            feedback: r.feedback,
-            selectedChoice: teamResponse?.selectedChoice || null,
-            reasoning: teamResponse?.reasoning || ''
-          };
-        }),
+        // 성의없는 답변 패턴 체크
+        const lazyPatterns = [
+          /^[ㄱ-ㅎㅏ-ㅣ\s]+$/,  // 자음/모음만
+          /^[a-zA-Z]{1,5}$/,   // 짧은 영문 (예: GG, ok, hi)
+          /^[ㅋㅎㅠㅜ]+$/,      // ㅋㅋㅋ, ㅎㅎㅎ, ㅠㅠ
+          /^\.+$/,             // ...
+          /^[0-9\s]+$/,        // 숫자만
+          /^(ㅇㅇ|ㄴㄴ|ㄱㄱ|gg|ok|no|yes|네|응|아|음)$/i,  // 단답
+        ];
+        const isLazy = reasoningLength < 5 || lazyPatterns.some(p => p.test(reasoning.trim()));
+
+        if (isLazy) {
+          // 성의없는 답변: 0~20점으로 강제 제한
+          adjustedScore = Math.min(r.score, Math.floor(Math.random() * 15) + 5); // 5~20점
+          scoreAdjusted = true;
+          console.log(`⚠️ ${r.teamName}: 성의없는 답변 감지! ${r.score}점 → ${adjustedScore}점`);
+        } else if (reasoningLength < 15) {
+          // 매우 짧은 답변: 최대 35점
+          adjustedScore = Math.min(r.score, 35);
+          scoreAdjusted = adjustedScore !== r.score;
+        } else if (reasoningLength < 30) {
+          // 짧은 답변: 최대 55점
+          adjustedScore = Math.min(r.score, 55);
+          scoreAdjusted = adjustedScore !== r.score;
+        }
+
+        if (scoreAdjusted) {
+          console.log(`📊 ${r.teamName} 점수 조정: ${r.score}점 → ${adjustedScore}점 (글자수: ${reasoningLength})`);
+        }
+
+        return {
+          teamId: r.teamId,
+          teamName: r.teamName,
+          rank: r.rank,
+          score: adjustedScore,
+          originalScore: r.score,  // 원래 AI 점수 저장
+          feedback: r.feedback + (scoreAdjusted ? ` (답변 길이 ${reasoningLength}자 - 점수 조정됨)` : ''),
+          selectedChoice: teamResponse?.selectedChoice || null,
+          reasoning: reasoning
+        };
+      });
+
+      // 점수 기준으로 순위 재정렬
+      rankings.sort((a: any, b: any) => b.score - a.score);
+      rankings = rankings.map((r: any, idx: number) => ({ ...r, rank: idx + 1 }));
+
+      console.log('최종 순위 (점수 조정 후):', rankings.map((r: any) => `${r.rank}. ${r.teamName}: ${r.score}점`));
+
+      const comparativeResult: AIComparativeResult = {
+        rankings,
         guidance: parsed.guidance,
         analysisTimestamp: Date.now()
       };
@@ -2090,6 +2380,15 @@ ${evaluationGuidelines}
   // 관리자: 비교 평가 결과를 점수에 적용
   const handleApplyComparativeResult = async () => {
     if (!currentSessionId || !currentSession || !aiComparativeResult) return;
+
+    // 로컬 작업 시작 - Firebase가 이 상태를 덮어쓰지 않도록 보호
+    // (점수 팝업이 닫힐 때까지 유지 - handleCloseScorePopupAndNextTurn에서 해제)
+    const timestamp = Date.now();
+    localOperationInProgress.current = true;
+    localOperationTimestamp.current = timestamp;
+    // 현재 타임스탬프보다 오래된 데이터 모두 거부
+    lastAcceptedGameStateTimestamp.current = timestamp;
+    lastAcceptedSessionTimestamp.current = timestamp;
 
     const rankings = aiComparativeResult.rankings;
 
@@ -2139,6 +2438,7 @@ ${evaluationGuidelines}
         t.id === firstPlaceRanking.teamId || t.name === firstPlaceRanking.teamName
       );
       if (winnerTeam) {
+        // 로컬 상태 업데이트
         setTerritories(prev => ({
           ...prev,
           [currentCardSquareIndex.toString()]: {
@@ -2148,15 +2448,52 @@ ${evaluationGuidelines}
             acquiredAt: Date.now()
           }
         }));
+
+        // Firebase에 영토 소유권 저장 (새로고침 시에도 유지되도록)
+        const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+        if (isFirebaseConfigured && currentSessionId) {
+          firestoreService.updateTerritoryOwnership(
+            currentSessionId,
+            currentCardSquareIndex,
+            winnerTeam.id,
+            winnerTeam.name,
+            winnerTeam.color
+          ).catch(err => console.warn('Firebase 영토 소유권 저장 실패:', err));
+        }
+
         addLog(`🏠 ${winnerTeam.name}이(가) ${currentCardSquareIndex}번 칸을 점령!`);
       }
     }
 
-    // 로그 기록
+    // 상세 로그 기록 (리포트용)
+    addLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+    if (activeCard) {
+      addLog(`📋 [문제] ${activeCard.title}`);
+      addLog(`📖 [상황] ${activeCard.situation}`);
+    }
+
+    // 각 팀별 선택, 이유, AI 피드백 기록
     rankings.forEach(r => {
       const appliedScore = r.score * multiplier;
-      addLog(`🏆 ${r.rank}등 ${r.teamName}: +${appliedScore}점${multiplierText}`);
+      addLog(`---`);
+      addLog(`🏆 [${r.rank}등] ${r.teamName} (+${appliedScore}점${multiplierText})`);
+      if (r.selectedChoice) {
+        addLog(`✅ [선택] ${r.selectedChoice.text}`);
+      }
+      if (r.reasoning) {
+        addLog(`💭 [이유] ${r.reasoning}`);
+      }
+      if (r.feedback) {
+        addLog(`🤖 [AI 평가] ${r.feedback}`);
+      }
     });
+
+    // Best Practice 기록
+    if (aiComparativeResult.guidance) {
+      addLog(`---`);
+      addLog(`💡 [Best Practice] ${aiComparativeResult.guidance}`);
+    }
+    addLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
 
     // 점수 변경 팝업 표시 (정렬: 순위별)
     setScorePopupData(scoreChanges.sort((a, b) => a.rank - b.rank));
@@ -2166,6 +2503,13 @@ ${evaluationGuidelines}
   // 점수 팝업 닫고 다음 턴으로 전환
   const handleCloseScorePopupAndNextTurn = async () => {
     if (!currentSessionId || !currentSession) return;
+
+    // 로컬 작업 시작 - Firebase가 이 상태를 덮어쓰지 않도록 보호
+    const timestamp = Date.now();
+    localOperationInProgress.current = true;
+    localOperationTimestamp.current = timestamp;
+    lastAcceptedGameStateTimestamp.current = timestamp;
+    lastAcceptedSessionTimestamp.current = timestamp;
 
     setShowScorePopup(false);
     setScorePopupData([]);
@@ -2180,9 +2524,18 @@ ${evaluationGuidelines}
     setGamePhase(GamePhase.Idle);
     setTurnTimeLeft(120);
 
-    // 다음 턴으로
+    // 다음 턴으로 (턴 버전 증가!)
     const nextTeamIndex = (currentTurnIndex + 1) % currentSession.teams.length;
+    const newTurnVersion = localTurnVersion.current + 1;
+    localTurnVersion.current = newTurnVersion;
+    setTurnVersion(newTurnVersion);
     setCurrentTurnIndex(nextTeamIndex);
+
+    console.log('[ScorePopup → NextTurn] 턴 전환:', {
+      from: currentTurnIndex,
+      to: nextTeamIndex,
+      turnVersion: newTurnVersion
+    });
 
     // Firebase 업데이트
     const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
@@ -2191,14 +2544,19 @@ ${evaluationGuidelines}
       await firestoreService.updateGameState(currentSessionId, {
         phase: GamePhase.Idle,
         currentTeamIndex: nextTeamIndex,
+        turnVersion: newTurnVersion,  // 턴 버전 저장
         currentCard: null,
         isRevealed: false,
         aiComparativeResult: null,
-        isAnalyzing: false
+        isAnalyzing: false,
+        lastUpdated: Date.now()
       });
     }
 
     addLog(`---`);
+
+    // 로컬 작업 완료 - Firebase 동기화 다시 허용
+    localOperationInProgress.current = false;
   };
 
   // ============================================================
@@ -2386,9 +2744,18 @@ ${evaluationGuidelines}
   };
 
   const handleApplyResult = async () => {
+    // 로컬 작업 시작 - Firebase가 이 상태를 덮어쓰지 않도록 보호
+    const timestamp = Date.now();
+    localOperationInProgress.current = true;
+    localOperationTimestamp.current = timestamp;
+    // 현재 타임스탬프보다 오래된 데이터 모두 거부
+    lastAcceptedGameStateTimestamp.current = timestamp;
+    lastAcceptedSessionTimestamp.current = timestamp;
+
     if (!currentSession || !aiEvaluationResult || !currentTeam || !activeCard) {
       // 조건 미충족 시에도 다음 턴으로 넘어감
       nextTurn();
+      localOperationInProgress.current = false;
       return;
     }
 
@@ -2515,7 +2882,18 @@ ${evaluationGuidelines}
     setGamePhase(GamePhase.Idle);
     setTurnTimeLeft(120);
 
+    // 다음 턴으로 (턴 버전 증가!)
     const nextTeamIndex = (currentTurnIndex + 1) % currentSession.teams.length;
+    const newTurnVersion = localTurnVersion.current + 1;
+    localTurnVersion.current = newTurnVersion;
+    setTurnVersion(newTurnVersion);
+    setCurrentTurnIndex(nextTeamIndex);
+
+    console.log('[ApplyResult → NextTurn] 턴 전환:', {
+      from: currentTurnIndex,
+      to: nextTeamIndex,
+      turnVersion: newTurnVersion
+    });
 
     // 3. Firebase에 Idle 상태 저장
     const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
@@ -2525,6 +2903,7 @@ ${evaluationGuidelines}
           sessionId: currentSessionId,
           phase: GamePhase.Idle,
           currentTeamIndex: nextTeamIndex,
+          turnVersion: newTurnVersion,  // 턴 버전 저장
           currentTurn: 0,
           diceValue: [1, 1],
           currentCard: null,
@@ -2542,8 +2921,8 @@ ${evaluationGuidelines}
       }
     }
 
-    // 4. 다음 팀으로 전환 (nextTurn 호출 없이 직접 업데이트)
-    setCurrentTurnIndex(nextTeamIndex);
+    // 로컬 작업 완료 - Firebase 동기화 다시 허용
+    localOperationInProgress.current = false;
   };
 
   const handleBoardSquareClick = (index: number) => {
@@ -3312,6 +3691,17 @@ ${evaluationGuidelines}
         otherTeamsCount={currentSession ? currentSession.teams.length - 1 : 3}
         onComplete={handleLapBonusComplete}
         duration={5000}
+      />
+
+      {/* 통행료 팝업 (이미 푼 카드 도착 시) */}
+      <TollPopup
+        visible={showTollPopup}
+        payerTeamName={tollPopupInfo?.payerTeamName || ''}
+        receiverTeamName={tollPopupInfo?.receiverTeamName || ''}
+        tollAmount={tollPopupInfo?.tollAmount || 0}
+        squareIndex={tollPopupInfo?.squareIndex || 0}
+        onComplete={handleTollPopupComplete}
+        duration={4000}
       />
 
       {/* x2/x3 배율 알림 팝업 */}

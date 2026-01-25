@@ -114,7 +114,7 @@ export async function updateSessionStatus(sessionId: string, status: SessionStat
 
 // 팀 정보 업데이트 (세션 내의 teams 배열 업데이트)
 export async function updateTeams(sessionId: string, teams: Team[]): Promise<void> {
-  await updateSession(sessionId, { teams });
+  await updateSession(sessionId, { teams, lastUpdated: Date.now() });
 }
 
 // 특정 팀 업데이트
