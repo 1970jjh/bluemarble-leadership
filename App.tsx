@@ -12,6 +12,7 @@ import CompetencyCardPreview from './components/CompetencyCardPreview';
 import LapBonusPopup from './components/LapBonusPopup';
 import LotteryBonusPopup from './components/LotteryBonusPopup';
 import RiskCardPopup from './components/RiskCardPopup';
+import TollPopup from './components/TollPopup';
 import AdminDashboard from './components/AdminDashboard';
 import GameRulesModal from './components/GameRulesModal';
 import SimultaneousResponseView from './components/SimultaneousResponseView';
@@ -100,6 +101,15 @@ const App: React.FC = () => {
   const [showRiskCard, setShowRiskCard] = useState(false);  // 리스크 카드 팝업
   const [riskCardInfo, setRiskCardInfo] = useState<{ teamName: string; chanceCardNumber: number } | null>(null);
   const [isRiskCardMode, setIsRiskCardMode] = useState(false);  // 리스크 카드 상황 (모든 점수 마이너스)
+  const [showTollPopup, setShowTollPopup] = useState(false);  // 통행료 팝업
+  const [tollPopupInfo, setTollPopupInfo] = useState<{
+    payerTeamName: string;
+    receiverTeamName: string;
+    tollAmount: number;
+    squareIndex: number;
+    pendingTeam: Team;
+    pendingNewPos: number;
+  } | null>(null);
 
   // 커스텀 모드 특수 효과 상태
   const [customScoreMultiplier, setCustomScoreMultiplier] = useState(1);  // 커스텀 모드 점수 배수 (2배 찬스, 3배 찬스)
@@ -1294,63 +1304,48 @@ const App: React.FC = () => {
       .map(h => h.position) || [];
 
     if (square.type === SquareType.City && alreadySolvedPositions.includes(squareIndex)) {
-      // 이미 푼 역량카드 → 추가 주사위 굴리기
-      addLog(`🔄 ${team.name}: 이미 풀었던 역량카드입니다. 추가 주사위를 굴립니다!`);
+      // 이미 푼 역량카드 도착
+      addLog(`🔄 ${team.name}: 이미 풀었던 역량카드입니다.`);
 
-      // 추가 주사위 굴리기 (1~6 랜덤)
-      const extraDie1 = Math.ceil(Math.random() * 6);
-      const extraDie2 = Math.ceil(Math.random() * 6);
-      const extraSteps = extraDie1 + extraDie2;
+      // 영토 소유권 확인 → 통행료 지불
+      const territory = territories[squareIndex.toString()];
+      if (territory && territory.ownerTeamId !== team.id && currentSession) {
+        // 다른 팀이 소유한 칸 → 통행료 지불 후 팝업 표시
+        const ownerTeam = currentSession.teams.find(t => t.id === territory.ownerTeamId);
+        if (ownerTeam) {
+          const multiplier = getSquareMultiplier(squareIndex);
+          const tollAmount = TOLL_AMOUNT * multiplier;
 
-      addLog(`🎲 추가 주사위: ${extraDie1} + ${extraDie2} = ${extraSteps}칸 이동`);
-
-      // 새 위치 계산
-      let newPos = squareIndex + extraSteps;
-      let passedStart = false;
-      if (newPos >= BOARD_SIZE) {
-        newPos = newPos % BOARD_SIZE;
-        passedStart = true;
-      }
-
-      // 팀 위치 업데이트
-      if (currentSession) {
-        const newLapCount = team.lapCount + (passedStart ? 1 : 0);
-
-        if (passedStart) {
-          // 한바퀴 보너스: 다른 팀에서 각 20점씩 가져오기
-          const otherTeamsCount = currentSession.teams.length - 1;
-          const totalBonus = otherTeamsCount * LAP_BONUS_PER_TEAM;
-
+          // 통행료 지불 (현재 팀 → 소유자 팀)
           const updatedTeams = currentSession.teams.map(t => {
             if (t.id === team.id) {
-              let newResources = { ...t.resources };
-              newResources.capital += totalBonus;
-              return { ...t, position: newPos, resources: newResources, lapCount: newLapCount };
-            } else {
-              let newResources = { ...t.resources };
-              newResources.capital = Math.max(0, newResources.capital - LAP_BONUS_PER_TEAM);
-              return { ...t, resources: newResources };
-            }
-          });
-          updateTeamsInSession(updatedTeams);
-          addLog(`🎉 ${team.name} 한 바퀴 완주! 다른 팀에서 각 ${LAP_BONUS_PER_TEAM}점씩 총 +${totalBonus}점 획득!`);
-          soundEffects.playCelebration();
-        } else {
-          // 한바퀴 통과 없이 위치만 업데이트
-          const updatedTeams = currentSession.teams.map(t => {
-            if (t.id === team.id) {
-              return { ...t, position: newPos };
+              const newCapital = Math.max(0, t.resources.capital - tollAmount);
+              return { ...t, resources: { ...t.resources, capital: newCapital } };
+            } else if (t.id === territory.ownerTeamId) {
+              return { ...t, resources: { ...t.resources, capital: t.resources.capital + tollAmount } };
             }
             return t;
           });
           updateTeamsInSession(updatedTeams);
+
+          addLog(`💰 ${team.name}이(가) ${territory.ownerTeamName}에게 통행료 ${tollAmount}점 지불!`);
+
+          // 통행료 팝업 표시 (팝업 완료 후 추가 주사위 굴리기)
+          setTollPopupInfo({
+            payerTeamName: team.name,
+            receiverTeamName: territory.ownerTeamName,
+            tollAmount: tollAmount,
+            squareIndex: squareIndex,
+            pendingTeam: team,
+            pendingNewPos: squareIndex  // 현재 위치에서 추가 주사위 시작
+          });
+          setShowTollPopup(true);
+          return;
         }
       }
 
-      // 새 위치에서 다시 handleLandOnSquare 호출 (재귀)
-      setTimeout(() => {
-        handleLandOnSquare({ ...team, position: newPos }, newPos);
-      }, 1000);
+      // 영토가 없거나 자기 소유 칸 → 바로 추가 주사위 굴리기
+      rollExtraDiceAndMove(team, squareIndex);
       return;
     }
 
@@ -1735,6 +1730,77 @@ const App: React.FC = () => {
 
   // 보류 중인 이동 정보 (한 바퀴 보너스 팝업 후 계속 이동하기 위함)
   const pendingMoveRef = useRef<{ teamToMove: Team; remainingSteps: number; finalPos: number } | null>(null);
+
+  // 추가 주사위 굴리기 (이미 푼 카드 도착 시)
+  const rollExtraDiceAndMove = (team: Team, fromPos: number) => {
+    const extraDie1 = Math.ceil(Math.random() * 6);
+    const extraDie2 = Math.ceil(Math.random() * 6);
+    const extraSteps = extraDie1 + extraDie2;
+
+    addLog(`🎲 추가 주사위: ${extraDie1} + ${extraDie2} = ${extraSteps}칸 이동`);
+
+    // 새 위치 계산
+    let newPos = fromPos + extraSteps;
+    let passedStart = false;
+    if (newPos >= BOARD_SIZE) {
+      newPos = newPos % BOARD_SIZE;
+      passedStart = true;
+    }
+
+    // 팀 위치 업데이트
+    if (currentSession) {
+      const newLapCount = team.lapCount + (passedStart ? 1 : 0);
+
+      if (passedStart) {
+        // 한바퀴 보너스: 다른 팀에서 각 20점씩 가져오기
+        const otherTeamsCount = currentSession.teams.length - 1;
+        const totalBonus = otherTeamsCount * LAP_BONUS_PER_TEAM;
+
+        const updatedTeams = currentSession.teams.map(t => {
+          if (t.id === team.id) {
+            let newResources = { ...t.resources };
+            newResources.capital += totalBonus;
+            return { ...t, position: newPos, resources: newResources, lapCount: newLapCount };
+          } else {
+            let newResources = { ...t.resources };
+            newResources.capital = Math.max(0, newResources.capital - LAP_BONUS_PER_TEAM);
+            return { ...t, resources: newResources };
+          }
+        });
+        updateTeamsInSession(updatedTeams);
+        addLog(`🎉 ${team.name} 한 바퀴 완주! 다른 팀에서 각 ${LAP_BONUS_PER_TEAM}점씩 총 +${totalBonus}점 획득!`);
+        soundEffects.playCelebration();
+      } else {
+        // 한바퀴 통과 없이 위치만 업데이트
+        const updatedTeams = currentSession.teams.map(t => {
+          if (t.id === team.id) {
+            return { ...t, position: newPos };
+          }
+          return t;
+        });
+        updateTeamsInSession(updatedTeams);
+      }
+    }
+
+    // 새 위치에서 다시 handleLandOnSquare 호출 (재귀)
+    setTimeout(() => {
+      handleLandOnSquare({ ...team, position: newPos }, newPos);
+    }, 1000);
+  };
+
+  // 통행료 팝업 완료 핸들러
+  const handleTollPopupComplete = () => {
+    setShowTollPopup(false);
+
+    if (tollPopupInfo) {
+      const { pendingTeam, pendingNewPos } = tollPopupInfo;
+      setTollPopupInfo(null);
+
+      // 추가 주사위 굴리기
+      addLog(`🎲 ${pendingTeam.name}: 추가 주사위를 굴립니다!`);
+      rollExtraDiceAndMove(pendingTeam, pendingNewPos);
+    }
+  };
 
   // 한 바퀴 보너스 팝업 완료 핸들러
   const handleLapBonusComplete = () => {
@@ -2218,11 +2284,35 @@ ${evaluationGuidelines}
       }
     }
 
-    // 로그 기록
+    // 상세 로그 기록 (리포트용)
+    addLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+    if (activeCard) {
+      addLog(`📋 [문제] ${activeCard.title}`);
+      addLog(`📖 [상황] ${activeCard.situation}`);
+    }
+
+    // 각 팀별 선택, 이유, AI 피드백 기록
     rankings.forEach(r => {
       const appliedScore = r.score * multiplier;
-      addLog(`🏆 ${r.rank}등 ${r.teamName}: +${appliedScore}점${multiplierText}`);
+      addLog(`---`);
+      addLog(`🏆 [${r.rank}등] ${r.teamName} (+${appliedScore}점${multiplierText})`);
+      if (r.selectedChoice) {
+        addLog(`✅ [선택] ${r.selectedChoice.text}`);
+      }
+      if (r.reasoning) {
+        addLog(`💭 [이유] ${r.reasoning}`);
+      }
+      if (r.feedback) {
+        addLog(`🤖 [AI 평가] ${r.feedback}`);
+      }
     });
+
+    // Best Practice 기록
+    if (aiComparativeResult.guidance) {
+      addLog(`---`);
+      addLog(`💡 [Best Practice] ${aiComparativeResult.guidance}`);
+    }
+    addLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
 
     // 점수 변경 팝업 표시 (정렬: 순위별)
     setScorePopupData(scoreChanges.sort((a, b) => a.rank - b.rank));
@@ -3394,6 +3484,17 @@ ${evaluationGuidelines}
         otherTeamsCount={currentSession ? currentSession.teams.length - 1 : 3}
         onComplete={handleLapBonusComplete}
         duration={5000}
+      />
+
+      {/* 통행료 팝업 (이미 푼 카드 도착 시) */}
+      <TollPopup
+        visible={showTollPopup}
+        payerTeamName={tollPopupInfo?.payerTeamName || ''}
+        receiverTeamName={tollPopupInfo?.receiverTeamName || ''}
+        tollAmount={tollPopupInfo?.tollAmount || 0}
+        squareIndex={tollPopupInfo?.squareIndex || 0}
+        onComplete={handleTollPopupComplete}
+        duration={4000}
       />
 
       {/* x2/x3 배율 알림 팝업 */}
