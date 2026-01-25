@@ -329,16 +329,10 @@ const MobileTeamView: React.FC<MobileTeamViewProps> = ({
               <MapPin size={28} />
               <span>이동 중...</span>
             </div>
-          ) : isMyTurn ? (
-            <div className="w-full py-6 border-4 border-yellow-500 text-lg font-black shadow-hard flex flex-col items-center justify-center gap-2 bg-yellow-50 text-yellow-700">
-              <div className="animate-pulse text-2xl">🎲</div>
-              <span className="text-yellow-800">우리 팀 차례입니다!</span>
-              <span className="text-sm font-medium">관리자가 주사위를 입력합니다</span>
-            </div>
           ) : (
-            <div className="w-full py-6 border-4 border-gray-300 text-lg font-bold shadow-hard flex flex-col items-center justify-center gap-2 bg-gray-100 text-gray-600">
-              <span>현재 턴: {activeTeamName}</span>
-              <span className="text-sm font-medium">관리자가 주사위를 입력합니다</span>
+            <div className="w-full py-8 border-4 border-gray-400 text-2xl font-black shadow-hard flex flex-col items-center justify-center gap-2 bg-gray-200 text-gray-700 uppercase tracking-wider">
+              <div className="animate-pulse text-3xl">⏳</div>
+              <span>WAITING</span>
             </div>
           )}
         </div>
