@@ -312,6 +312,12 @@ const App: React.FC = () => {
 
     const unsubscribe = firestoreService.subscribeToSession(currentSessionId, (session) => {
       if (session) {
+        // 로컬 작업 진행 중이면 세션 업데이트 스킵 (이동 중 위치 덮어쓰기 방지)
+        if (localOperationInProgress.current) {
+          console.log('[Session Subscribe] 로컬 작업 진행 중 - 세션 업데이트 스킵');
+          return;
+        }
+
         console.log('[Session Subscribe] 세션 데이터 수신:', {
           sessionId: session.id,
           hasCustomCards: !!session.customCards,
