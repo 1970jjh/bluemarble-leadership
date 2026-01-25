@@ -465,18 +465,36 @@ const App: React.FC = () => {
         // 정상적인 Firebase 상태 동기화
         setGamePhase(state.phase as GamePhase);
 
-        // 턴 인덱스는 턴 버전이 더 높을 때만 업데이트 (오래된 데이터 덮어쓰기 방지)
+        // 턴 인덱스 동기화 - 더 관대한 조건으로 변경
+        // (참가자 클라이언트가 턴 전환을 놓치지 않도록)
         const firebaseTurnVersion = state.turnVersion || 0;
+        const firebaseTurnIndex = state.currentTeamIndex ?? 0;
+
+        // 케이스 1: Firebase 버전이 더 높음 → 무조건 업데이트
+        // 케이스 2: 버전 같은데 인덱스 다름 → 동기화 필요 (재연결/새로고침 시)
+        // 케이스 3: Firebase 버전이 낮음 → 무시 (오래된 데이터)
         if (firebaseTurnVersion > localTurnVersion.current) {
           console.log('[Firebase] 턴 버전 업데이트:', {
             firebase: firebaseTurnVersion,
             local: localTurnVersion.current,
-            newTurnIndex: state.currentTeamIndex
+            newTurnIndex: firebaseTurnIndex
           });
           localTurnVersion.current = firebaseTurnVersion;
           setTurnVersion(firebaseTurnVersion);
-          setCurrentTurnIndex(state.currentTeamIndex);
-        } else if (firebaseTurnVersion < localTurnVersion.current) {
+          setCurrentTurnIndex(firebaseTurnIndex);
+        } else if (firebaseTurnVersion === localTurnVersion.current) {
+          // 같은 버전이면 인덱스만 동기화 (로컬과 다를 경우)
+          setCurrentTurnIndex(prev => {
+            if (prev !== firebaseTurnIndex) {
+              console.log('[Firebase] 턴 인덱스 동기화 (같은 버전):', {
+                from: prev,
+                to: firebaseTurnIndex
+              });
+              return firebaseTurnIndex;
+            }
+            return prev;
+          });
+        } else {
           console.log('[Firebase] 오래된 턴 버전 무시:', {
             firebase: firebaseTurnVersion,
             local: localTurnVersion.current
@@ -1513,14 +1531,19 @@ const App: React.FC = () => {
     setIsRolling(false);
     setDiceValue(pendingDice);
 
-    // 더블 체크 및 음향 효과
-    const isDouble = pendingDice[0] === pendingDice[1];
-    setIsDoubleChance(isDouble);  // 더블 찬스 설정 (AI 점수 2배 적용)
+    // 로컬에서 시작한 롤일 때만 더블 체크 및 로그 (중복 방지)
+    if (localOperationInProgress.current) {
+      const isDouble = pendingDice[0] === pendingDice[1];
+      setIsDoubleChance(isDouble);  // 더블 찬스 설정 (AI 점수 2배 적용)
 
-    if (isDouble) {
-      soundEffects.playDoubleBonus();
-      addLog(`🎲 더블! (${pendingDice[0]}+${pendingDice[1]}) 보너스 ${DOUBLE_BONUS_POINTS}점 획득!`);
+      if (isDouble) {
+        soundEffects.playDoubleBonus();
+        addLog(`🎲 더블! (${pendingDice[0]}+${pendingDice[1]}) 보너스 ${DOUBLE_BONUS_POINTS}점 획득!`);
+      } else {
+        soundEffects.playDiceResult();
+      }
     } else {
+      // Firebase 수신 롤은 음향만 재생 (로그/점수 변경 없음)
       soundEffects.playDiceResult();
     }
   };
@@ -1528,7 +1551,16 @@ const App: React.FC = () => {
   // 주사위 결과 표시 완료 핸들러 (3초 후)
   const handleDiceResultComplete = () => {
     setShowDiceOverlay(false);
-    performMove(pendingDice[0], pendingDice[1]);
+
+    // ⚠️ 핵심 수정: 로컬에서 시작한 롤일 때만 이동 실행
+    // Firebase 수신으로 표시된 오버레이는 애니메이션만 표시하고 이동 로직은 실행 안 함
+    // (이동은 롤을 시작한 클라이언트에서만 처리해야 함)
+    if (localOperationInProgress.current) {
+      console.log('[DiceResult] 로컬 롤 완료 - 이동 실행');
+      performMove(pendingDice[0], pendingDice[1]);
+    } else {
+      console.log('[DiceResult] Firebase 수신 롤 - 이동 스킵 (애니메이션만 표시)');
+    }
   };
 
   const finalizeRoll = () => {
