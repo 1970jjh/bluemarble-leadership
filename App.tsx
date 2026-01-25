@@ -2376,7 +2376,22 @@ ${evaluationGuidelines}
           rank: ranking.rank
         });
 
-        return { ...team, score: newScore };
+        // 🎯 팀 히스토리 업데이트 (리포트 생성용)
+        const turnRecord: TurnRecord = {
+          turnNumber: team.history.length + 1,
+          cardId: activeCard?.id || '',
+          cardTitle: activeCard?.title || '',
+          situation: activeCard?.situation || '',
+          choiceId: ranking.selectedChoice?.id || 'OPEN',
+          choiceText: ranking.selectedChoice?.text || '',
+          reasoning: ranking.reasoning || '',
+          aiFeedback: ranking.feedback || '',
+          scoreChanges: { capital: appliedScore },
+          timestamp: Date.now(),
+          position: team.position
+        };
+
+        return { ...team, score: newScore, history: [...team.history, turnRecord] };
       }
       return team;
     });
