@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { GamePhase, Team } from '../types';
 import Dice from './Dice';
-import { Play, SkipForward, BarChart2, RefreshCcw, ArrowRight, Terminal, Pause, PlayCircle } from 'lucide-react';
+import { SkipForward, BarChart2, RefreshCcw, Terminal, Pause, PlayCircle } from 'lucide-react';
 
 interface ControlPanelProps {
   currentTeam: Team;
@@ -9,8 +9,7 @@ interface ControlPanelProps {
   phase: GamePhase;
   diceValue: [number, number];
   rolling: boolean;
-  onRoll: () => void;
-  onManualRoll: (total: number) => void;
+  onManualRoll: (total: number, teamIndex: number) => void;  // 팀 인덱스 포함
   onSkip: () => void;
   onOpenReport: () => void;
   onReset: () => void;
@@ -28,7 +27,6 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
   phase,
   diceValue,
   rolling,
-  onRoll,
   onManualRoll,
   onSkip,
   onOpenReport,
@@ -40,6 +38,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
   onResumeGame,
 }) => {
   const [manualInput, setManualInput] = useState<string>('');
+  const [selectedTeamIndex, setSelectedTeamIndex] = useState<number>(0);  // 선택된 팀 인덱스
   const logEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom of logs
@@ -51,10 +50,10 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
     e.preventDefault();
     const val = parseInt(manualInput);
     if (!isNaN(val) && val >= 2 && val <= 12) {
-      onManualRoll(val);
+      onManualRoll(val, selectedTeamIndex);
       setManualInput('');
     } else {
-      alert("Please enter a value between 2 and 12");
+      alert("2~12 사이의 숫자를 입력해주세요");
     }
   };
 
@@ -142,41 +141,48 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
            <Dice value={diceValue[1]} rolling={rolling} />
         </div>
 
-        {/* Digital Roll Button */}
-        <button
-          onClick={onRoll}
-          disabled={!isGameStarted || phase !== GamePhase.Idle || rolling}
-          className={`w-full py-4 border-4 border-black font-black text-2xl shadow-hard transition-all transform active:translate-x-1 active:translate-y-1 flex items-center justify-center gap-3
-            ${isGameStarted && phase === GamePhase.Idle && !rolling
-              ? 'bg-yellow-400 text-black hover:bg-yellow-300'
-              : 'bg-gray-500 text-gray-300 cursor-not-allowed border-gray-600'}`}
-        >
-          <Play size={24} fill="currentColor" strokeWidth={3} />
-          ROLL DICE
-        </button>
-
-        {/* Manual Input */}
-        <div className="bg-white p-3 border-4 border-black text-black">
-          <label className="block text-xs font-bold uppercase mb-1">Offline Dice Input</label>
-          <form onSubmit={handleManualSubmit} className="flex gap-2">
-            <input
-              type="number"
-              min="2"
-              max="12"
-              value={manualInput}
-              onChange={(e) => setManualInput(e.target.value)}
-              placeholder="2-12"
-              className="w-full border-2 border-black p-1 font-mono font-bold text-lg focus:outline-none focus:bg-yellow-100"
+        {/* 팀 선택 + 주사위 입력 */}
+        <div className="bg-white p-4 border-4 border-black text-black space-y-3">
+          {/* 이동할 팀 선택 */}
+          <div>
+            <label className="block text-xs font-bold uppercase mb-2 text-gray-600">🎯 이동할 팀 선택</label>
+            <select
+              value={selectedTeamIndex}
+              onChange={(e) => setSelectedTeamIndex(parseInt(e.target.value))}
+              className="w-full border-2 border-black p-2 font-bold text-lg focus:outline-none focus:bg-yellow-100 cursor-pointer"
               disabled={!isGameStarted || phase !== GamePhase.Idle || rolling}
-            />
-            <button
-              type="submit"
-              disabled={!isGameStarted || phase !== GamePhase.Idle || rolling}
-              className="bg-purple-900 text-white border-2 border-black px-4 hover:bg-purple-700 disabled:bg-gray-400"
             >
-              <ArrowRight strokeWidth={3} />
-            </button>
-          </form>
+              {teams.map((team, index) => (
+                <option key={team.id} value={index}>
+                  {index + 1}팀 - {team.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* 주사위 입력 */}
+          <div>
+            <label className="block text-xs font-bold uppercase mb-2 text-gray-600">🎲 주사위 입력 (2~12)</label>
+            <form onSubmit={handleManualSubmit} className="flex gap-2">
+              <input
+                type="number"
+                min="2"
+                max="12"
+                value={manualInput}
+                onChange={(e) => setManualInput(e.target.value)}
+                placeholder="2-12"
+                className="w-full border-2 border-black p-2 font-mono font-bold text-xl focus:outline-none focus:bg-yellow-100"
+                disabled={!isGameStarted || phase !== GamePhase.Idle || rolling}
+              />
+              <button
+                type="submit"
+                disabled={!isGameStarted || phase !== GamePhase.Idle || rolling || !manualInput}
+                className="bg-green-600 text-white border-2 border-black px-6 font-bold hover:bg-green-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              >
+                GO
+              </button>
+            </form>
+          </div>
         </div>
 
         {/* Skip Button - Moved Here */}

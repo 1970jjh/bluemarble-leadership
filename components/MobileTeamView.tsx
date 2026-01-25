@@ -8,7 +8,6 @@ interface MobileTeamViewProps {
   activeTeamName: string;
   isMyTurn: boolean;
   gamePhase: GamePhase;
-  onRollDice: () => void;
   onLogout?: () => void;
 
   // Active Turn Props
@@ -39,7 +38,6 @@ const MobileTeamView: React.FC<MobileTeamViewProps> = ({
   activeTeamName,
   isMyTurn,
   gamePhase,
-  onRollDice,
   onLogout,
   activeCard,
   activeInput,
@@ -86,10 +84,6 @@ const MobileTeamView: React.FC<MobileTeamViewProps> = ({
     }
   };
 
-  // ROLLER: 현재 주사위를 굴릴 팀원 이름
-  const currentRollerName = team.members.length > 0
-    ? team.members[team.currentMemberIndex]?.name || team.members[0]?.name || 'Leader'
-    : 'Leader';
 
   return (
     <div className="min-h-screen bg-gray-100 p-4 pb-8 flex flex-col font-sans max-w-md mx-auto border-x-4 border-black bg-white">
@@ -314,55 +308,38 @@ const MobileTeamView: React.FC<MobileTeamViewProps> = ({
              </div>
           </div>
 
-          {/* ROLLER 표시 - 내 턴일 때만 */}
-          {isMyTurn && team.members.length > 0 && (
-            <div className="mb-3 bg-yellow-100 border-4 border-yellow-500 p-3 text-center">
-              <p className="text-xs text-yellow-700 font-bold uppercase mb-1">🎲 ROLLER</p>
-              <p className="text-2xl font-black text-yellow-800">{currentRollerName}</p>
-              <p className="text-xs text-yellow-600 mt-1">팀원들과 돌아가며 주사위를 굴려보세요!</p>
-            </div>
-          )}
-
-          {/* 게임 시작 대기 중 */}
+          {/* 게임 상태 표시 (관리자가 주사위 입력) */}
           {!isGameStarted || gamePhase === GamePhase.WaitingToStart ? (
             <div className="w-full py-6 border-4 border-black text-xl font-black shadow-hard uppercase flex flex-col items-center justify-center gap-2 bg-gray-200 text-gray-600">
               <div className="animate-pulse">⏳</div>
-              <span>관리자가 게임을 시작하면</span>
-              <span>주사위를 굴릴 수 있습니다</span>
+              <span>게임 시작 대기 중</span>
             </div>
           ) : gamePhase === GamePhase.Paused ? (
             <div className="w-full py-6 border-4 border-black text-xl font-black shadow-hard uppercase flex flex-col items-center justify-center gap-2 bg-orange-100 text-orange-700">
               <div>⏸️</div>
               <span>게임 일시정지 중</span>
             </div>
+          ) : gamePhase === GamePhase.Rolling ? (
+            <div className="w-full py-6 border-4 border-black text-xl font-black shadow-hard uppercase flex flex-col items-center justify-center gap-2 bg-yellow-100 text-yellow-700">
+              <Dice5 size={28} className="animate-spin" />
+              <span>주사위 굴리는 중...</span>
+            </div>
+          ) : gamePhase === GamePhase.Moving ? (
+            <div className="w-full py-6 border-4 border-black text-xl font-black shadow-hard uppercase flex flex-col items-center justify-center gap-2 bg-blue-100 text-blue-700">
+              <MapPin size={28} />
+              <span>이동 중...</span>
+            </div>
+          ) : isMyTurn ? (
+            <div className="w-full py-6 border-4 border-yellow-500 text-lg font-black shadow-hard flex flex-col items-center justify-center gap-2 bg-yellow-50 text-yellow-700">
+              <div className="animate-pulse text-2xl">🎲</div>
+              <span className="text-yellow-800">우리 팀 차례입니다!</span>
+              <span className="text-sm font-medium">관리자가 주사위를 입력합니다</span>
+            </div>
           ) : (
-            <button
-              onClick={onRollDice}
-              disabled={!isMyTurn || gamePhase !== GamePhase.Idle}
-              className={`w-full py-6 border-4 border-black text-xl font-black shadow-hard uppercase flex items-center justify-center gap-3 transition-all
-                ${isMyTurn && gamePhase === GamePhase.Idle
-                  ? 'bg-yellow-400 hover:bg-yellow-300 animate-pulse text-black'
-                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}
-            >
-              {gamePhase === GamePhase.Rolling ? (
-                <>
-                  <Dice5 size={28} className="animate-spin" />
-                  주사위 굴리는 중...
-                </>
-              ) : gamePhase === GamePhase.Moving ? (
-                <>
-                  <MapPin size={28} />
-                  이동 중...
-                </>
-              ) : isMyTurn ? (
-                <>
-                  <Dice5 size={28} />
-                  ROLL DICE
-                </>
-              ) : (
-                `Wait: ${activeTeamName}'s Turn`
-              )}
-            </button>
+            <div className="w-full py-6 border-4 border-gray-300 text-lg font-bold shadow-hard flex flex-col items-center justify-center gap-2 bg-gray-100 text-gray-600">
+              <span>현재 턴: {activeTeamName}</span>
+              <span className="text-sm font-medium">관리자가 주사위를 입력합니다</span>
+            </div>
           )}
         </div>
       )}
