@@ -214,10 +214,10 @@ const GameRulesModal: React.FC<GameRulesModalProps> = ({
                 보드를 한 바퀴 돌아 <strong>출발점을 지나거나 도착</strong>하면 보너스를 받습니다!
               </p>
               <div className="flex flex-wrap gap-2">
-                <span className="bg-green-300 text-green-900 px-3 py-1 rounded text-sm font-bold">다른 팀에서 각 20점씩 획득!</span>
+                <span className="bg-green-300 text-green-900 px-3 py-1 rounded text-sm font-bold">완주한 팀 +60점!</span>
               </div>
               <p className="text-xs text-gray-500 mt-2">
-                * 예: 4팀 게임에서 완주 시 → 다른 3팀에서 각 20점 = 총 60점 획득
+                * 완주한 팀에게만 60점의 보너스가 지급됩니다 (다른 팀 점수는 영향 없음)
               </p>
             </div>
           </section>

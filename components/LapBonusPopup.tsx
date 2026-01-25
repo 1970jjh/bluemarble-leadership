@@ -1,12 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { Trophy, Coins, PartyPopper, ArrowRight, Users } from 'lucide-react';
+import { Trophy, Coins, PartyPopper } from 'lucide-react';
 
 interface LapBonusPopupProps {
   visible: boolean;
   teamName: string;
   lapCount: number;
-  bonusPerTeam?: number;  // 다른 팀당 가져올 점수 (기본 20)
-  otherTeamsCount?: number;  // 다른 팀 수
+  bonusAmount?: number;  // 완주 보너스 점수 (기본 60)
   onPayBonus: () => void;  // 🎯 보너스 지급 버튼 클릭 핸들러
 }
 
@@ -14,13 +13,10 @@ const LapBonusPopup: React.FC<LapBonusPopupProps> = ({
   visible,
   teamName,
   lapCount,
-  bonusPerTeam = 20,
-  otherTeamsCount = 3,
+  bonusAmount = 60,
   onPayBonus,
 }) => {
   const [animateIn, setAnimateIn] = useState(false);
-
-  const totalBonus = bonusPerTeam * otherTeamsCount;
 
   useEffect(() => {
     if (visible) {
@@ -95,39 +91,26 @@ const LapBonusPopup: React.FC<LapBonusPopupProps> = ({
               </div>
             </div>
 
-            {/* 새로운 보너스 표시 - 다른 팀에서 점수 가져오기 */}
+            {/* 보너스 표시 - 완주 팀에게만 +60점 */}
             <div className="bg-black/30 rounded-2xl p-5 mb-6">
               <div className="text-center text-white/70 text-sm uppercase tracking-wider mb-4">
-                보너스 획득
+                완주 보너스
               </div>
 
-              {/* 계산 표시 */}
-              <div className="flex items-center justify-center gap-3 mb-4">
-                <div className="flex items-center gap-2 bg-red-500/20 px-4 py-2 rounded-xl">
-                  <Users className="text-red-400" size={20} />
-                  <span className="text-white font-bold">다른 팀 {otherTeamsCount}개</span>
-                </div>
-                <span className="text-white/50 text-xl">×</span>
-                <div className="bg-yellow-500/20 px-4 py-2 rounded-xl">
-                  <span className="text-yellow-400 font-bold">{bonusPerTeam}점</span>
-                </div>
-              </div>
-
-              {/* 화살표와 결과 */}
+              {/* 보너스 금액 */}
               <div className="flex flex-col items-center">
-                <ArrowRight className="text-green-400 rotate-90 mb-2" size={24} />
-                <div className="bg-gradient-to-r from-green-500 to-emerald-500 px-6 py-3 rounded-xl flex items-center gap-3">
-                  <Coins className="text-yellow-300" size={28} />
+                <div className="bg-gradient-to-r from-green-500 to-emerald-500 px-8 py-4 rounded-xl flex items-center gap-4 shadow-lg">
+                  <Coins className="text-yellow-300" size={36} />
                   <div className="text-white">
-                    <div className="text-3xl font-black">+{totalBonus}</div>
-                    <div className="text-xs opacity-80">포인트 획득!</div>
+                    <div className="text-4xl font-black">+{bonusAmount}</div>
+                    <div className="text-sm opacity-80">포인트 획득!</div>
                   </div>
                 </div>
               </div>
 
               {/* 설명 */}
               <div className="text-center text-white/60 text-sm mt-4">
-                다른 팀들은 각각 {bonusPerTeam}점씩 감소합니다
+                한 바퀴를 완주하여 보너스 점수를 획득합니다!
               </div>
             </div>
 

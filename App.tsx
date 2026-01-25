@@ -39,7 +39,7 @@ import {
   BOARD_SIZE,
   INITIAL_RESOURCES,
   INITIAL_SCORE,
-  LAP_BONUS_PER_TEAM,
+  LAP_BONUS_POINTS,
   EVENT_CARDS,
   getChanceCardType,
   CHANCE_CARD_SQUARES,
@@ -1727,21 +1727,14 @@ const App: React.FC = () => {
       const newLapCount = team.lapCount + (passedStart ? 1 : 0);
 
       if (passedStart) {
-        // 한바퀴 보너스: 다른 팀에서 각 20점씩 가져오기 - score 필드 업데이트
-        const otherTeamsCount = currentSession.teams.length - 1;
-        const totalBonus = otherTeamsCount * LAP_BONUS_PER_TEAM;
-
+        // 한바퀴 보너스: 완주한 팀에게만 +60점 - score 필드 업데이트
         const updatedTeams = currentSession.teams.map(t => {
           if (t.id === team.id) {
-            // 완주한 팀: +20점 × 타팀수
+            // 완주한 팀: +60점
             const currentScore = t.score ?? INITIAL_SCORE;
-            return { ...t, position: newPos, score: currentScore + totalBonus, lapCount: newLapCount };
-          } else {
-            // 다른 팀: 각각 -20점
-            const currentScore = t.score ?? INITIAL_SCORE;
-            const newScore = Math.max(0, currentScore - LAP_BONUS_PER_TEAM);
-            return { ...t, score: newScore };
+            return { ...t, position: newPos, score: currentScore + LAP_BONUS_POINTS, lapCount: newLapCount };
           }
+          return t;
         });
         updateTeamsInSession(updatedTeams);
         soundEffects.playCelebration();
@@ -1810,21 +1803,15 @@ const App: React.FC = () => {
     }
 
     const { teamId, teamName, lapCount } = lapBonusInfo;
-    const otherTeamsCount = currentSession.teams.length - 1;
-    const totalBonus = otherTeamsCount * LAP_BONUS_PER_TEAM;
 
-    // 🎯 한바퀴 보너스 지급 (버튼 클릭 시에만 실행) - score 필드 업데이트
+    // 🎯 한바퀴 보너스 지급 (버튼 클릭 시에만 실행) - 완주한 팀에게만 +60점
     const updatedTeams = currentSession.teams.map(t => {
       if (t.id === teamId) {
-        // 완주한 팀: 다른 팀들에서 가져온 점수 획득 (+20점 × 타팀수) + lapCount 업데이트
+        // 완주한 팀: +60점 + lapCount 업데이트
         const currentScore = t.score ?? INITIAL_SCORE;
-        return { ...t, score: currentScore + totalBonus, lapCount: lapCount };
-      } else {
-        // 다른 팀: 각각 20점씩 차감
-        const currentScore = t.score ?? INITIAL_SCORE;
-        const newScore = Math.max(0, currentScore - LAP_BONUS_PER_TEAM);
-        return { ...t, score: newScore };
+        return { ...t, score: currentScore + LAP_BONUS_POINTS, lapCount: lapCount };
       }
+      return t;
     });
 
     // 즉시 점수 반영
@@ -3631,8 +3618,7 @@ ${evaluationGuidelines}
         visible={showLapBonus}
         teamName={lapBonusInfo?.teamName || ''}
         lapCount={lapBonusInfo?.lapCount || 1}
-        bonusPerTeam={LAP_BONUS_PER_TEAM}
-        otherTeamsCount={currentSession ? currentSession.teams.length - 1 : 3}
+        bonusAmount={LAP_BONUS_POINTS}
         onPayBonus={handleLapBonusComplete}
       />
 
