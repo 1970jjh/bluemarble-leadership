@@ -299,6 +299,20 @@ const App: React.FC = () => {
 
     if (isFirebaseConfigured) {
       const unsubscribe = firestoreService.subscribeToAllSessions((firebaseSessions) => {
+        // 로컬 작업 진행 중이면 현재 세션 데이터는 보호
+        if (localOperationInProgress.current && currentSessionId) {
+          console.log('[All Sessions] 로컬 작업 진행 중 - 현재 세션 보호');
+          // 현재 세션을 제외한 나머지 세션만 업데이트
+          setSessions(prev => {
+            const currentSession = prev.find(s => s.id === currentSessionId);
+            const otherSessions = firebaseSessions.filter(s => s.id !== currentSessionId);
+            return currentSession
+              ? [...otherSessions, currentSession]
+              : firebaseSessions;
+          });
+          return;
+        }
+
         console.log('[All Sessions] 전체 세션 목록 수신:', firebaseSessions.map(s => ({
           id: s.id,
           name: s.name,
@@ -309,7 +323,7 @@ const App: React.FC = () => {
       });
       return () => unsubscribe();
     }
-  }, []);
+  }, [currentSessionId]);
 
   // --- Firebase: 현재 세션 실시간 구독 (참가자/관리자 동기화) ---
   useEffect(() => {
@@ -325,6 +339,13 @@ const App: React.FC = () => {
         // 로컬 작업 진행 중이면 세션 업데이트 스킵 (이동 중 위치 덮어쓰기 방지)
         if (localOperationInProgress.current) {
           console.log('[Session Subscribe] 로컬 작업 진행 중 - 세션 업데이트 스킵');
+          return;
+        }
+
+        // 로컬 작업 완료 후 3초간 보호 (Firebase 지연 응답 방지)
+        const timeSinceLocalOp = Date.now() - localOperationTimestamp.current;
+        if (timeSinceLocalOp < 3000) {
+          console.log('[Session Subscribe] 로컬 작업 완료 직후 - 세션 업데이트 스킵');
           return;
         }
 
@@ -371,9 +392,12 @@ const App: React.FC = () => {
 
         // 로컬 작업이 끝난 후 일정 시간 동안도 보호 (Firebase 지연 응답 방지)
         const timeSinceLocalOp = Date.now() - localOperationTimestamp.current;
-        if (timeSinceLocalOp < 2000 && state.lastUpdated < localOperationTimestamp.current) {
-          console.log('[Firebase] 오래된 Firebase 데이터 무시');
-          return;
+        if (timeSinceLocalOp < 3000) {
+          // 3초 내에는 로컬 작업 이전의 데이터 무시
+          if (state.lastUpdated && state.lastUpdated < localOperationTimestamp.current) {
+            console.log('[Firebase] 오래된 Firebase 데이터 무시 (로컬 작업 이전 데이터)');
+            return;
+          }
         }
 
         // 이미 같은 timestamp의 데이터를 받았으면 스킵 (중복 처리 방지)
