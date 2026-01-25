@@ -20,6 +20,9 @@ interface MobileTeamViewProps {
   isGameStarted?: boolean;  // 게임 시작 여부
   isAiProcessing?: boolean;  // AI 분석 중 여부
 
+  // 주사위 굴리기 (자기 턴일 때)
+  onRollDice?: () => void;  // 주사위 굴리기 핸들러
+
   // 관람자 투표 (다른 팀 턴일 때)
   spectatorVote?: Choice | null;  // 관람자의 현재 선택
   onSpectatorVote?: (choice: Choice) => void;  // 관람자 투표 핸들러
@@ -47,6 +50,7 @@ const MobileTeamView: React.FC<MobileTeamViewProps> = ({
   isSaving,
   isGameStarted = true,
   isAiProcessing = false,
+  onRollDice,
   spectatorVote,
   onSpectatorVote,
   spectatorVotes = {},
@@ -329,6 +333,15 @@ const MobileTeamView: React.FC<MobileTeamViewProps> = ({
               <MapPin size={28} />
               <span>이동 중...</span>
             </div>
+          ) : isMyTurn && gamePhase === GamePhase.Idle && onRollDice ? (
+            <button
+              onClick={onRollDice}
+              className="w-full py-6 border-4 border-black text-xl font-black shadow-hard uppercase flex flex-col items-center justify-center gap-3 bg-yellow-400 text-black hover:bg-yellow-300 active:bg-yellow-500 transition-colors"
+            >
+              <Dice5 size={36} className="animate-bounce" />
+              <span>🎲 주사위 굴리기</span>
+              <span className="text-sm font-bold text-yellow-800">당신의 차례입니다!</span>
+            </button>
           ) : (
             <div className="w-full py-8 border-4 border-gray-400 text-2xl font-black shadow-hard flex flex-col items-center justify-center gap-2 bg-gray-200 text-gray-700 uppercase tracking-wider">
               <div className="animate-pulse text-3xl">⏳</div>
