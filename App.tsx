@@ -1339,144 +1339,53 @@ const App: React.FC = () => {
     const square = BOARD_SQUARES.find(s => s.index === squareIndex);
     if (!square) return;
 
+    console.log(`[LandOnSquare] ${team.name} → ${squareIndex}번 칸 도착`);
+
     // ============================================================
-    // 영토 소유권 체크 - 다른 팀 소유 칸이면 통행료 지불 후 재굴림
+    // 1단계: 이미 푼 문제인지 확인 (영토 소유권 = 누군가 풀었음)
     // ============================================================
     const territory = territories[squareIndex.toString()];
-    if (territory && territory.ownerTeamId !== team.id && square.type === SquareType.City) {
-      // 다른 팀이 소유한 칸에 도착 → 통행료 지불 + 재굴림
-      const ownerTeam = currentSession?.teams.find(t => t.id === territory.ownerTeamId);
 
-      if (ownerTeam && currentSession) {
-        // x2/x3 배율 적용된 통행료 계산
+    // City 칸이고 영토 소유자가 있는 경우 = 이미 푼 문제
+    if (square.type === SquareType.City && territory) {
+      console.log(`[LandOnSquare] 영토 소유자: ${territory.ownerTeamName}`);
+
+      // ===== 케이스 A: 다른 팀 소유 → 통행료 지불 + 팝업 + 재굴림 =====
+      if (territory.ownerTeamId !== team.id && currentSession) {
         const multiplier = getSquareMultiplier(squareIndex);
         const tollAmount = TOLL_AMOUNT * multiplier;
 
         addLog(`🏠 ${team.name}이(가) ${territory.ownerTeamName} 소유 칸에 도착!`);
-        addLog(`💰 통행료 ${tollAmount}점을 ${territory.ownerTeamName}에게 지불!${multiplier > 1 ? ` (x${multiplier} 특수칸)` : ''}`);
 
-        // 통행료 지불 (현재 팀 → 소유자 팀)
+        // 통행료 지불 (현재 팀 → 소유자 팀) - resources.capital 사용
         const updatedTeams = currentSession.teams.map(t => {
           if (t.id === team.id) {
-            // 통행료 지불
-            const newScore = Math.max(0, (t.score ?? INITIAL_SCORE) - tollAmount);
-            return { ...t, score: newScore };
+            const newCapital = Math.max(0, t.resources.capital - tollAmount);
+            return { ...t, resources: { ...t.resources, capital: newCapital } };
           } else if (t.id === territory.ownerTeamId) {
-            // 통행료 수령
-            const newScore = (t.score ?? INITIAL_SCORE) + tollAmount;
-            return { ...t, score: newScore };
+            return { ...t, resources: { ...t.resources, capital: t.resources.capital + tollAmount } };
           }
           return t;
         });
         updateTeamsInSession(updatedTeams);
 
-        // 재굴림 (추가 주사위)
-        addLog(`🎲 ${team.name}: 소유된 칸이므로 추가 주사위를 굴립니다!`);
-        const extraDie1 = Math.ceil(Math.random() * 6);
-        const extraDie2 = Math.ceil(Math.random() * 6);
-        const extraSteps = extraDie1 + extraDie2;
-        addLog(`🎲 추가 주사위: ${extraDie1} + ${extraDie2} = ${extraSteps}칸 이동`);
+        addLog(`💰 ${team.name}이(가) ${territory.ownerTeamName}에게 통행료 ${tollAmount}점 지불!${multiplier > 1 ? ` (x${multiplier} 특수칸)` : ''}`);
 
-        // 새 위치 계산
-        let newPos = squareIndex + extraSteps;
-        let passedStart = false;
-        if (newPos >= BOARD_SIZE) {
-          newPos = newPos % BOARD_SIZE;
-          passedStart = true;
-        }
-
-        // 팀 위치 업데이트 (점수는 이미 위에서 업데이트됨)
-        if (passedStart) {
-          const newLapCount = team.lapCount + 1;
-          const otherTeamsCount = currentSession.teams.length - 1;
-          const totalBonus = otherTeamsCount * LAP_BONUS_PER_TEAM;
-
-          setSessions(prevSessions => {
-            const session = prevSessions.find(s => s.id === currentSessionId);
-            if (!session) return prevSessions;
-
-            const bonusUpdatedTeams = session.teams.map(t => {
-              if (t.id === team.id) {
-                return { ...t, position: newPos, score: (t.score ?? INITIAL_SCORE) + totalBonus, lapCount: newLapCount };
-              } else {
-                return { ...t, score: Math.max(0, (t.score ?? INITIAL_SCORE) - LAP_BONUS_PER_TEAM) };
-              }
-            });
-
-            const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
-            if (isFirebaseConfigured && currentSessionId) {
-              firestoreService.updateTeams(currentSessionId, bonusUpdatedTeams).catch(err =>
-                console.warn('Firebase 업데이트 실패:', err)
-              );
-            }
-
-            return prevSessions.map(s => s.id === currentSessionId ? { ...s, teams: bonusUpdatedTeams } : s);
-          });
-
-          addLog(`🎉 ${team.name} 한 바퀴 완주! +${totalBonus}점 획득!`);
-          soundEffects.playCelebration();
-        }
-
-        // 새 위치에서 다시 handleLandOnSquare 호출 (재귀)
-        setTimeout(() => {
-          handleLandOnSquare({ ...team, position: newPos }, newPos);
-        }, 1000);
+        // 통행료 팝업 표시 (팝업 완료 후 추가 주사위 굴리기)
+        setTollPopupInfo({
+          payerTeamName: team.name,
+          receiverTeamName: territory.ownerTeamName,
+          tollAmount: tollAmount,
+          squareIndex: squareIndex,
+          pendingTeam: team,
+          pendingNewPos: squareIndex  // 현재 위치에서 추가 주사위 시작
+        });
+        setShowTollPopup(true);
         return;
       }
-    }
 
-    // ============================================================
-    // 기존 로직: 이미 푼 카드 체크
-    // ============================================================
-    // 자기 팀이 이미 해당 위치에서 카드를 풀었는지 확인 (City 칸만 해당)
-    // 현재 세션에서 팀 정보 가져오기
-    const currentTeamFromSession = currentSession?.teams.find(t => t.id === team.id);
-    const alreadySolvedPositions = currentTeamFromSession?.history
-      ?.filter(h => h.position !== undefined)
-      .map(h => h.position) || [];
-
-    if (square.type === SquareType.City && alreadySolvedPositions.includes(squareIndex)) {
-      // 이미 푼 역량카드 도착
-      addLog(`🔄 ${team.name}: 이미 풀었던 역량카드입니다.`);
-
-      // 영토 소유권 확인 → 통행료 지불
-      const territory = territories[squareIndex.toString()];
-      if (territory && territory.ownerTeamId !== team.id && currentSession) {
-        // 다른 팀이 소유한 칸 → 통행료 지불 후 팝업 표시
-        const ownerTeam = currentSession.teams.find(t => t.id === territory.ownerTeamId);
-        if (ownerTeam) {
-          const multiplier = getSquareMultiplier(squareIndex);
-          const tollAmount = TOLL_AMOUNT * multiplier;
-
-          // 통행료 지불 (현재 팀 → 소유자 팀)
-          const updatedTeams = currentSession.teams.map(t => {
-            if (t.id === team.id) {
-              const newCapital = Math.max(0, t.resources.capital - tollAmount);
-              return { ...t, resources: { ...t.resources, capital: newCapital } };
-            } else if (t.id === territory.ownerTeamId) {
-              return { ...t, resources: { ...t.resources, capital: t.resources.capital + tollAmount } };
-            }
-            return t;
-          });
-          updateTeamsInSession(updatedTeams);
-
-          addLog(`💰 ${team.name}이(가) ${territory.ownerTeamName}에게 통행료 ${tollAmount}점 지불!`);
-
-          // 통행료 팝업 표시 (팝업 완료 후 추가 주사위 굴리기)
-          setTollPopupInfo({
-            payerTeamName: team.name,
-            receiverTeamName: territory.ownerTeamName,
-            tollAmount: tollAmount,
-            squareIndex: squareIndex,
-            pendingTeam: team,
-            pendingNewPos: squareIndex  // 현재 위치에서 추가 주사위 시작
-          });
-          setShowTollPopup(true);
-          return;
-        }
-      }
-
-      // 영토가 없거나 자기 소유 칸 → 바로 추가 주사위 굴리기
+      // ===== 케이스 B: 자기 소유 → 통행료 없이 재굴림 =====
+      addLog(`🏠 ${team.name}: 자기 소유 칸입니다. 추가 주사위를 굴립니다!`);
       rollExtraDiceAndMove(team, squareIndex);
       return;
     }
@@ -2209,12 +2118,44 @@ const App: React.FC = () => {
       console.log('allTeamResponses:', allTeamResponses);
       console.log('teamResponsesList:', teamResponsesList);
 
+      // ===== 성의없는 답변 사전 감지 =====
+      const lazyPatterns = [
+        /^[ㄱ-ㅎㅏ-ㅣ\s]+$/,  // 자음/모음만
+        /^[a-zA-Z]{1,5}$/,   // 짧은 영문 (예: GG, ok, hi)
+        /^[ㅋㅎㅠㅜ]+$/,      // ㅋㅋㅋ, ㅎㅎㅎ, ㅠㅠ
+        /^\.+$/,             // ...
+        /^[0-9\s]+$/,        // 숫자만
+        /^(ㅇㅇ|ㄴㄴ|ㄱㄱ|gg|ok|no|yes|네|응|아|음)$/i,  // 단답
+      ];
+
+      const isLazyAnswer = (text: string): boolean => {
+        if (!text || text.trim().length < 5) return true;  // 5글자 미만
+        const trimmed = text.trim();
+        return lazyPatterns.some(pattern => pattern.test(trimmed));
+      };
+
+      // 각 팀의 성의도 분석
+      const teamQualityInfo = teamResponsesList.map(resp => ({
+        teamId: resp.teamId,
+        teamName: resp.teamName,
+        reasoning: resp.reasoning,
+        reasoningLength: resp.reasoning?.length || 0,
+        isLazy: isLazyAnswer(resp.reasoning || ''),
+        qualityHint: isLazyAnswer(resp.reasoning || '')
+          ? '⚠️ 성의없음 (0-20점 강제)'
+          : resp.reasoning?.length < 20
+            ? '⚠️ 너무 짧음 (감점 필요)'
+            : '✓ 정상'
+      }));
+
+      console.log('팀별 품질 분석:', teamQualityInfo);
+
       // 세션별 커스텀 AI 평가 지침 사용 (없으면 기본값)
       const evaluationGuidelines = currentSession?.aiEvaluationGuidelines || DEFAULT_AI_EVALUATION_GUIDELINES;
 
-      // Gemini AI에 비교 평가 요청
+      // Gemini AI에 비교 평가 요청 (강화된 프롬프트)
       const prompt = `
-당신은 리더십 교육 게임의 AI 평가자입니다.
+당신은 리더십 교육 게임의 **엄격한** AI 평가자입니다.
 다음 상황에 대해 여러 팀의 응답을 비교 평가해주세요.
 
 ## 카드 정보
@@ -2223,14 +2164,39 @@ const App: React.FC = () => {
 - 상황: ${activeCard.situation}
 ${activeCard.choices ? `- 선택지:\n${activeCard.choices.map((c, i) => `  ${c.id}. ${c.text}`).join('\n')}` : '- (개방형 질문)'}
 
-## 팀별 응답
-${teamResponsesList.map((resp) => `
+## 팀별 응답 (품질 분석 포함)
+${teamResponsesList.map((resp) => {
+  const quality = teamQualityInfo.find(q => q.teamId === resp.teamId);
+  return `
 ### ${resp.teamName} (ID: ${resp.teamId})
 - 선택: ${resp.selectedChoice?.text || '(개방형 응답)'}
-- 이유: ${resp.reasoning}
-`).join('\n')}
+- 이유: "${resp.reasoning}"
+- 글자수: ${resp.reasoning?.length || 0}자
+- 품질: ${quality?.qualityHint || '분석 필요'}
+`;
+}).join('\n')}
 
 ${evaluationGuidelines}
+
+## 🚨🚨🚨 절대 규칙 (반드시 준수!) 🚨🚨🚨
+
+**1. 성의없는 답변 = 무조건 최하위 (0~20점)**
+다음은 성의없는 답변의 예시입니다:
+- "ㅋㅋㅋ", "ㅎㅎ", "ㅠㅠ", "ㅇㅇ" 등 자음/모음만
+- "GG", "ok", "ㅐㅐ", "asdf" 등 무의미한 입력
+- "..." , "네", "응" 등 단답
+- 5글자 미만의 답변
+
+**2. 글자수와 성의에 따른 점수 범위:**
+- 5글자 미만 → 0~10점 (무조건)
+- 5~15글자 → 10~30점 (매우 짧음)
+- 15~30글자 → 30~50점 (짧음)
+- 30~50글자 → 50~70점 (보통)
+- 50글자 이상 + 논리적 → 70~100점 (우수)
+
+**3. 긴 답변이 짧은 답변보다 항상 높아야 함!**
+- 100자 논리적 답변 > 20자 답변 (무조건!)
+- 성의있는 답변이 대충 쓴 답변보다 반드시 높은 점수
 
 ## 응답 형식 (JSON)
 {
@@ -2251,13 +2217,12 @@ ${evaluationGuidelines}
   - 2팀: 1등 100점, 2등 60점
   - 3팀: 1등 100점, 2등 70점, 3등 40점
   - 4팀: 1등 100점, 2등 75점, 3등 50점, 4등 25점
-  - 5팀 이상: 1등 100점부터 순위별 적절히 배분
-- **성의 없는 답변은 무조건 0~20점 범위로 제한**
+- **성의 없는 답변은 무조건 0~20점 범위로 제한 (절대 규칙!)**
 
-중요:
+최종 확인:
+- 짧은 답변(20자 미만)이 긴 답변(50자 이상)보다 높은 점수를 받으면 안 됩니다!
 - 모든 팀에 대해 rankings 배열에 포함해야 합니다.
 - teamId는 위에서 제공된 ID를 정확히 그대로 사용하세요.
-- 답변의 "질"을 가장 중요하게 평가하세요. 의미 없는 답변이 높은 점수를 받으면 안 됩니다!
 `;
 
       const result = await genAI.models.generateContent({
@@ -2275,42 +2240,81 @@ ${evaluationGuidelines}
       console.log('AI 응답:', parsed);
 
       // teamId 매핑 수정: 팀 이름으로 매칭 시도 (AI가 ID를 정확히 복사하지 않을 경우 대비)
-      const comparativeResult: AIComparativeResult = {
-        rankings: parsed.rankings.map((r: any) => {
-          // 먼저 teamId로 찾기
-          let teamResponse = allTeamResponses[r.teamId];
-          console.log(`팀 "${r.teamName}" (ID: ${r.teamId}) - teamId로 찾기:`, teamResponse ? '성공' : '실패');
+      let rankings = parsed.rankings.map((r: any) => {
+        // 먼저 teamId로 찾기
+        let teamResponse = allTeamResponses[r.teamId];
+        console.log(`팀 "${r.teamName}" (ID: ${r.teamId}) - teamId로 찾기:`, teamResponse ? '성공' : '실패');
 
-          // 못 찾으면 팀 이름으로 찾기
-          if (!teamResponse) {
-            const foundEntry = Object.entries(allTeamResponses).find(
-              ([_, resp]) => resp.teamName === r.teamName
-            );
-            if (foundEntry) {
-              teamResponse = foundEntry[1];
-              r.teamId = foundEntry[0]; // 실제 teamId로 교체
-              console.log(`팀 "${r.teamName}" - teamName으로 찾기: 성공 (새 ID: ${r.teamId})`);
-            } else {
-              console.log(`팀 "${r.teamName}" - teamName으로도 찾기 실패`);
-            }
+        // 못 찾으면 팀 이름으로 찾기
+        if (!teamResponse) {
+          const foundEntry = Object.entries(allTeamResponses).find(
+            ([_, resp]) => resp.teamName === r.teamName
+          );
+          if (foundEntry) {
+            teamResponse = foundEntry[1];
+            r.teamId = foundEntry[0]; // 실제 teamId로 교체
+            console.log(`팀 "${r.teamName}" - teamName으로 찾기: 성공 (새 ID: ${r.teamId})`);
+          } else {
+            console.log(`팀 "${r.teamName}" - teamName으로도 찾기 실패`);
           }
+        }
 
-          // 최종 결과 확인
-          console.log(`팀 "${r.teamName}" 최종 데이터:`, {
-            selectedChoice: teamResponse?.selectedChoice,
-            reasoning: teamResponse?.reasoning
-          });
+        // ===== 성의없는 답변 점수 강제 조정 =====
+        const reasoning = teamResponse?.reasoning || '';
+        const reasoningLength = reasoning.trim().length;
+        let adjustedScore = r.score;
+        let scoreAdjusted = false;
 
-          return {
-            teamId: r.teamId,
-            teamName: r.teamName,
-            rank: r.rank,
-            score: r.score,
-            feedback: r.feedback,
-            selectedChoice: teamResponse?.selectedChoice || null,
-            reasoning: teamResponse?.reasoning || ''
-          };
-        }),
+        // 성의없는 답변 패턴 체크
+        const lazyPatterns = [
+          /^[ㄱ-ㅎㅏ-ㅣ\s]+$/,  // 자음/모음만
+          /^[a-zA-Z]{1,5}$/,   // 짧은 영문 (예: GG, ok, hi)
+          /^[ㅋㅎㅠㅜ]+$/,      // ㅋㅋㅋ, ㅎㅎㅎ, ㅠㅠ
+          /^\.+$/,             // ...
+          /^[0-9\s]+$/,        // 숫자만
+          /^(ㅇㅇ|ㄴㄴ|ㄱㄱ|gg|ok|no|yes|네|응|아|음)$/i,  // 단답
+        ];
+        const isLazy = reasoningLength < 5 || lazyPatterns.some(p => p.test(reasoning.trim()));
+
+        if (isLazy) {
+          // 성의없는 답변: 0~20점으로 강제 제한
+          adjustedScore = Math.min(r.score, Math.floor(Math.random() * 15) + 5); // 5~20점
+          scoreAdjusted = true;
+          console.log(`⚠️ ${r.teamName}: 성의없는 답변 감지! ${r.score}점 → ${adjustedScore}점`);
+        } else if (reasoningLength < 15) {
+          // 매우 짧은 답변: 최대 35점
+          adjustedScore = Math.min(r.score, 35);
+          scoreAdjusted = adjustedScore !== r.score;
+        } else if (reasoningLength < 30) {
+          // 짧은 답변: 최대 55점
+          adjustedScore = Math.min(r.score, 55);
+          scoreAdjusted = adjustedScore !== r.score;
+        }
+
+        if (scoreAdjusted) {
+          console.log(`📊 ${r.teamName} 점수 조정: ${r.score}점 → ${adjustedScore}점 (글자수: ${reasoningLength})`);
+        }
+
+        return {
+          teamId: r.teamId,
+          teamName: r.teamName,
+          rank: r.rank,
+          score: adjustedScore,
+          originalScore: r.score,  // 원래 AI 점수 저장
+          feedback: r.feedback + (scoreAdjusted ? ` (답변 길이 ${reasoningLength}자 - 점수 조정됨)` : ''),
+          selectedChoice: teamResponse?.selectedChoice || null,
+          reasoning: reasoning
+        };
+      });
+
+      // 점수 기준으로 순위 재정렬
+      rankings.sort((a: any, b: any) => b.score - a.score);
+      rankings = rankings.map((r: any, idx: number) => ({ ...r, rank: idx + 1 }));
+
+      console.log('최종 순위 (점수 조정 후):', rankings.map((r: any) => `${r.rank}. ${r.teamName}: ${r.score}점`));
+
+      const comparativeResult: AIComparativeResult = {
+        rankings,
         guidance: parsed.guidance,
         analysisTimestamp: Date.now()
       };
