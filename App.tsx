@@ -40,7 +40,6 @@ import {
   INITIAL_RESOURCES,
   INITIAL_SCORE,
   LAP_BONUS_PER_TEAM,
-  DOUBLE_BONUS_POINTS,
   EVENT_CARDS,
   getChanceCardType,
   CHANCE_CARD_SQUARES,
@@ -95,8 +94,7 @@ const App: React.FC = () => {
   const [pendingSquare, setPendingSquare] = useState<any>(null);  // 도착 예정 칸
   const [showLapBonus, setShowLapBonus] = useState(false);  // 한 바퀴 완주 보너스 팝업
   const [lapBonusInfo, setLapBonusInfo] = useState<{ teamName: string; lapCount: number } | null>(null);  // 보너스 받을 팀 정보
-  const [isDoubleChance, setIsDoubleChance] = useState(false);  // 더블 찬스 (AI 점수 2배)
-  const [showLotteryBonus, setShowLotteryBonus] = useState(false);  // 복권 보너스 팝업
+    const [showLotteryBonus, setShowLotteryBonus] = useState(false);  // 복권 보너스 팝업
   const [lotteryBonusInfo, setLotteryBonusInfo] = useState<{ teamName: string; chanceCardNumber: number } | null>(null);
   const [showRiskCard, setShowRiskCard] = useState(false);  // 리스크 카드 팝업
   const [riskCardInfo, setRiskCardInfo] = useState<{ teamName: string; chanceCardNumber: number } | null>(null);
@@ -1024,6 +1022,14 @@ const App: React.FC = () => {
     // 현재 타임스탬프보다 오래된 세션 데이터 거부
     lastAcceptedSessionTimestamp.current = updateTimestamp;
 
+    // 🎯 로컬 상태 먼저 업데이트 (즉시 점수 반영)
+    setSessions(prev => prev.map(s => {
+      if (s.id === currentSessionId) {
+        return { ...s, teams: updatedTeams, lastUpdated: updateTimestamp };
+      }
+      return s;
+    }));
+
     // Firebase에 저장 (설정되어 있으면) - lastUpdated 포함
     const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
     if (isFirebaseConfigured) {
@@ -1036,13 +1042,6 @@ const App: React.FC = () => {
         console.error('Firebase 팀 업데이트 실패:', error);
       }
     }
-
-    setSessions(prev => prev.map(s => {
-      if (s.id === currentSessionId) {
-        return { ...s, teams: updatedTeams, lastUpdated: updateTimestamp };
-      }
-      return s;
-    }));
   };
 
   // 세션에 커스텀 카드 및 배경 이미지, AI 지침 저장 (세션별 맞춤형 카드)
@@ -1367,11 +1366,12 @@ const App: React.FC = () => {
 
         addLog(`🏠 ${team.name}이(가) ${territory.ownerTeamName} 소유 칸에 도착!`);
 
-        // 통행료 지불 (현재 팀 → 소유자 팀) - resources.capital 사용
+        // 🎯 통행료 지불 + 위치 업데이트 (캐릭터가 해당 칸에 머물도록)
         const updatedTeams = currentSession.teams.map(t => {
           if (t.id === team.id) {
             const newCapital = Math.max(0, t.resources.capital - tollAmount);
-            return { ...t, resources: { ...t.resources, capital: newCapital } };
+            // 위치도 함께 업데이트 (캐릭터가 도착한 칸에 유지)
+            return { ...t, position: squareIndex, resources: { ...t.resources, capital: newCapital } };
           } else if (t.id === territory.ownerTeamId) {
             return { ...t, resources: { ...t.resources, capital: t.resources.capital + tollAmount } };
           }
@@ -1400,6 +1400,16 @@ const App: React.FC = () => {
       }
 
       // ===== 케이스 B: 자기 소유 → 통행료 없이 관리자 주사위 입력 대기 =====
+      // 🎯 위치 업데이트 (캐릭터가 도착한 칸에 유지)
+      if (currentSession) {
+        const updatedTeams = currentSession.teams.map(t => {
+          if (t.id === team.id) {
+            return { ...t, position: squareIndex };
+          }
+          return t;
+        });
+        await updateTeamsInSession(updatedTeams);
+      }
       addLog(`🏠 ${team.name}: 자기 소유 칸입니다. 관리자가 주사위를 입력해주세요.`);
       setGamePhase(GamePhase.Idle);
       return;
@@ -1490,21 +1500,8 @@ const App: React.FC = () => {
     setIsRolling(false);
     setDiceValue(pendingDice);
 
-    // 로컬에서 시작한 롤일 때만 더블 체크 및 로그 (중복 방지)
-    if (localOperationInProgress.current) {
-      const isDouble = pendingDice[0] === pendingDice[1];
-      setIsDoubleChance(isDouble);  // 더블 찬스 설정 (AI 점수 2배 적용)
-
-      if (isDouble) {
-        soundEffects.playDoubleBonus();
-        addLog(`🎲 더블! (${pendingDice[0]}+${pendingDice[1]}) 보너스 ${DOUBLE_BONUS_POINTS}점 획득!`);
-      } else {
-        soundEffects.playDiceResult();
-      }
-    } else {
-      // Firebase 수신 롤은 음향만 재생 (로그/점수 변경 없음)
-      soundEffects.playDiceResult();
-    }
+    // 주사위 결과 음향 재생
+    soundEffects.playDiceResult();
   };
 
   // 주사위 결과 표시 완료 핸들러 (3초 후)
@@ -1570,23 +1567,6 @@ const App: React.FC = () => {
     // (handleLandOnSquare 완료 또는 턴 전환 시점에 해제)
 
     if (!teamToMove) return;
-
-    // 더블 체크 (주사위 2개가 같은 숫자)
-    const isDouble = die1 === die2;
-    if (isDouble && currentSession) {
-      // 더블 보너스 즉시 적용 - 30점 고정
-      const updatedTeams = currentSession.teams.map(t => {
-        if (t.id === teamToMove.id) {
-          const newResources = { ...t.resources };
-          newResources.capital += DOUBLE_BONUS_POINTS;  // +30점 고정
-          return { ...t, resources: newResources };
-        }
-        return t;
-      });
-      updateTeamsInSession(updatedTeams);
-      addLog(`🎲 더블! ${teamToMove.name} 보너스 +${DOUBLE_BONUS_POINTS}점 획득!`);
-      soundEffects.playCelebration();  // 축하 효과음
-    }
 
     // Firebase에 주사위 결과와 Moving 상태 저장 (실패해도 로컬 게임은 계속 진행)
     const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
@@ -2791,7 +2771,6 @@ ${evaluationGuidelines}
     };
 
     // 커스텀 배수 적용 (x2, x3 특수 칸 효과)
-    // 더블 주사위는 별도 30점 보너스로 이미 적용됨 (점수 배율에는 영향 없음)
     const customMultiplier = customScoreMultiplier > 1 ? customScoreMultiplier : 1;
 
     let scoreChanges = {
@@ -2882,7 +2861,6 @@ ${evaluationGuidelines}
     setIsResponsesRevealed(false);
     setAiComparativeResult(null);
     setIsComparingTeams(false);
-    setIsDoubleChance(false);  // 더블 찬스 초기화
     setIsRiskCardMode(false);  // 리스크 카드 모드 초기화
     setCustomScoreMultiplier(1);  // 커스텀 모드 점수 배수 초기화
     setIsSharingMode(false);  // 나눔카드 모드 초기화
@@ -3569,7 +3547,6 @@ ${evaluationGuidelines}
           isAdminView={true}
           isTeamSaved={isTeamSaved}
           onAISubmit={handleAdminAISubmit}
-          isDoubleChance={isDoubleChance}
           isRiskCardMode={isRiskCardMode}
           scoreMultiplier={customScoreMultiplier}
           // 동시 응답 시스템 props

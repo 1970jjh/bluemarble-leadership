@@ -35,8 +35,6 @@ interface CardModalProps {
   // 관람자 개인 투표 (readOnly 모드에서 사용)
   spectatorVote?: Choice | null;
   onSpectatorVote?: (choice: Choice) => void;
-  // 더블 찬스 (AI 점수 2배)
-  isDoubleChance?: boolean;
   // 리스크 카드 (모든 점수 마이너스)
   isRiskCardMode?: boolean;
   // x2/x3 점수 배율
@@ -76,7 +74,6 @@ const CardModal: React.FC<CardModalProps> = ({
   spectatorVotes = {},
   spectatorVote,
   onSpectatorVote,
-  isDoubleChance = false,
   isRiskCardMode = false,
   scoreMultiplier = 1,
   // 동시 응답 시스템
@@ -156,11 +153,6 @@ const CardModal: React.FC<CardModalProps> = ({
               {isPreviewMode && (
                 <div className="inline-block bg-orange-500 text-white px-2 py-1 text-xs font-bold uppercase animate-pulse">
                   PREVIEW MODE
-                </div>
-              )}
-              {isDoubleChance && !isPreviewMode && (
-                <div className="inline-block bg-yellow-400 text-black px-2 py-1 text-xs font-black uppercase animate-bounce border-2 border-black">
-                  🎲 DOUBLE CHANCE x2
                 </div>
               )}
               {isRiskCardMode && !isPreviewMode && (
