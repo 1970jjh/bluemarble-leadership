@@ -798,7 +798,7 @@ const App: React.FC = () => {
     setGamePhase(GamePhase.Idle);
 
     const startingTeam = teams[0];
-    addLog(`🎮 게임이 시작되었습니다! ${startingTeam?.name || '1조'}부터 시작합니다.`);
+    // 🎯 보고서용 로그만 - 일반 시스템 로그 제거
     soundEffects.playGameStart();
 
     // Firebase에 게임 상태 저장
@@ -832,7 +832,6 @@ const App: React.FC = () => {
   const handlePauseGame = async () => {
     setPhaseBeforePause(gamePhase);
     setGamePhase(GamePhase.Paused);
-    addLog('⏸️ 게임이 일시정지되었습니다.');
     soundEffects.playPause();
 
     const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
@@ -862,7 +861,6 @@ const App: React.FC = () => {
   // 게임 재개 핸들러
   const handleResumeGame = async () => {
     setGamePhase(phaseBeforePause || GamePhase.Idle);
-    addLog('▶️ 게임이 재개되었습니다.');
 
     const isFirebaseConfigured = import.meta.env.VITE_FIREBASE_PROJECT_ID;
     if (isFirebaseConfigured && currentSessionId) {
@@ -1366,8 +1364,6 @@ const App: React.FC = () => {
         const multiplier = getSquareMultiplier(squareIndex);
         const tollAmount = TOLL_AMOUNT * multiplier;
 
-        addLog(`🏠 ${team.name}이(가) ${territory.ownerTeamName} 소유 칸에 도착!`);
-
         // 🎯 위치만 업데이트 (통행료는 버튼 클릭 시 지불)
         const updatedTeams = currentSession.teams.map(t => {
           if (t.id === team.id) {
@@ -1403,7 +1399,6 @@ const App: React.FC = () => {
         });
         await updateTeamsInSession(updatedTeams);
       }
-      addLog(`🏠 ${team.name}: 자기 소유 칸입니다. 관리자가 주사위를 입력해주세요.`);
       setGamePhase(GamePhase.Idle);
       return;
     }
@@ -1449,7 +1444,6 @@ const App: React.FC = () => {
       if (multiplier > 1) {
         setPendingCardAfterAlert(selectedCard);
         setShowMultiplierAlert(true);
-        addLog(`🎯 ${multiplier}배 찬스 칸에 도착!`);
         // Firebase 업데이트는 알림 확인 후 handleMultiplierAlertComplete에서 수행
       } else {
         // 로컬 작업 완료 - 카드 표시 전에 Firebase 동기화 다시 허용
@@ -1543,7 +1537,6 @@ const App: React.FC = () => {
     const die1 = Math.floor(total / 2);
     const die2 = total - die1;
 
-    addLog(`🎲 관리자 입력: ${selectedTeam.name} - ${total}칸 이동 (${die1}+${die2})`);
     performMove(die1, die2);
   };
 
@@ -1730,8 +1723,6 @@ const App: React.FC = () => {
     const extraDie2 = Math.ceil(Math.random() * 6);
     const extraSteps = extraDie1 + extraDie2;
 
-    addLog(`🎲 추가 주사위: ${extraDie1} + ${extraDie2} = ${extraSteps}칸 이동`);
-
     // 새 위치 계산
     let newPos = fromPos + extraSteps;
     let passedStart = false;
@@ -1761,7 +1752,6 @@ const App: React.FC = () => {
           }
         });
         updateTeamsInSession(updatedTeams);
-        addLog(`🎉 ${team.name} 한 바퀴 완주! 다른 팀에서 각 ${LAP_BONUS_PER_TEAM}점씩 총 +${totalBonus}점 획득!`);
         soundEffects.playCelebration();
       } else {
         // 한바퀴 통과 없이 위치만 업데이트
@@ -1812,8 +1802,6 @@ const App: React.FC = () => {
 
     setShowTollPopup(false);
     setTollPopupInfo(null);
-
-    addLog(`✅ ${pendingTeam.name}: 통행료 지불 완료! 관리자가 주사위를 입력해주세요.`);
     setGamePhase(GamePhase.Idle);
   };
 
@@ -1846,7 +1834,6 @@ const App: React.FC = () => {
 
     // 즉시 점수 반영
     await updateTeamsInSession(updatedTeams);
-    addLog(`🎉 ${teamName} 한 바퀴 완주! 다른 팀에서 각 ${LAP_BONUS_PER_TEAM}점씩 총 +${totalBonus}점 획득!`);
     soundEffects.playCelebration();
 
     setShowLapBonus(false);
@@ -2089,7 +2076,6 @@ const App: React.FC = () => {
     if (isFirebaseConfigured) {
       try {
         await firestoreService.setResponsesRevealed(currentSessionId, true);
-        addLog(`🔓 관리자가 모든 팀의 응답을 공개했습니다.`);
         soundEffects.playDiceResult();  // 공개 효과음
       } catch (err) {
         console.error('응답 공개 상태 저장 실패:', err);
@@ -2346,12 +2332,10 @@ ${evaluationGuidelines}
         });
       }
 
-      addLog(`🤖 AI 비교 평가 완료! 1등: ${comparativeResult.rankings[0]?.teamName}`);
       soundEffects.playCelebration();
 
     } catch (error) {
       console.error('AI 비교 평가 실패:', error);
-      addLog(`❌ AI 비교 평가 중 오류 발생`);
     } finally {
       setIsComparingTeams(false);
     }
@@ -2450,7 +2434,6 @@ ${evaluationGuidelines}
           ).catch(err => console.warn('Firebase 영토 소유권 저장 실패:', err));
         }
 
-        addLog(`🏠 ${winnerTeam.name}이(가) ${territorySquareIndex}번 칸을 점령!`);
       }
     }
 
@@ -2541,8 +2524,6 @@ ${evaluationGuidelines}
         lastUpdated: Date.now()
       });
     }
-
-    addLog(`---`);
 
     // 로컬 작업 완료 - Firebase 동기화 다시 허용
     localOperationInProgress.current = false;
@@ -2794,16 +2775,6 @@ ${evaluationGuidelines}
         competency: applyRiskCard(scoreChanges.competency),
         insight: applyRiskCard(scoreChanges.insight),
       };
-      addLog(`💀 리스크 카드 적용! 모든 점수가 마이너스로 변환됨`);
-    }
-
-    if (customScoreMultiplier > 1) {
-      addLog(`🎯 ${customScoreMultiplier}배 찬스 적용! 모든 점수 x${customScoreMultiplier}`);
-    }
-
-    // 나눔카드 효과: 모든 팀에 동일한 점수 적용
-    if (isSharingMode) {
-      addLog(`🤝 나눔카드 적용! ${currentTeam.name}의 점수가 모든 팀에게 동일하게 적용됩니다.`);
     }
 
     const updatedTeams = currentSession.teams.map((team, idx) => {
@@ -2845,9 +2816,6 @@ ${evaluationGuidelines}
 
     // Firebase에 팀 업데이트 저장 (await로 완료 대기)
     await updateTeamsInSession(updatedTeams);
-
-    addLog(`[턴완료] ${currentTeam.name} 턴 종료 - 점수 적용됨`);
-    addLog(`---`); // 턴 구분선
 
     // 2. 로컬 상태 초기화 (nextTurn 대신 직접 처리 - 팀 덮어쓰기 방지)
     setShowCardModal(false);
@@ -3431,7 +3399,7 @@ ${evaluationGuidelines}
                   diceValue={diceValue}
                   rolling={isRolling}
                   onManualRoll={handleManualRoll}
-                  onSkip={() => { addLog(`${currentTeam.name} skipped turn.`); nextTurn(); }}
+                  onSkip={() => { nextTurn(); }}
                   onOpenReport={() => setShowReport(true)}
                   onReset={handleResetGame}
                   logs={gameLogs}
@@ -3726,15 +3694,10 @@ ${evaluationGuidelines}
         teams={teams}
         currentTeamId={currentTeam?.id || ''}
         onSelectTeam={(targetTeamId) => {
-          const targetTeam = teams.find(t => t.id === targetTeamId);
-          if (targetTeam) {
-            addLog(`🎫 [${riskCardInfo?.teamName}] 복권을 [${targetTeam.name}]에게 양도!`);
-          }
           setShowRiskCard(false);
           setRiskCardInfo(null);
         }}
         onSkip={() => {
-          addLog(`⏭️ [${riskCardInfo?.teamName}] 복권 양도 건너뜀`);
           setShowRiskCard(false);
           setRiskCardInfo(null);
         }}
