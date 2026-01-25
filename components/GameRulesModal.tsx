@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Dice5, MessageSquare, Trophy, Users, Target, Zap, Star, RefreshCw, Eye, Sparkles, Home, Coins } from 'lucide-react';
+import { X, MessageSquare, Trophy, Users, Target, Zap, Star, RefreshCw, Eye, Sparkles, Home, Coins } from 'lucide-react';
 import { GameVersion } from '../types';
 
 interface GameRulesModalProps {
@@ -63,9 +63,10 @@ const GameRulesModal: React.FC<GameRulesModalProps> = ({
                 <div className="flex items-start gap-3">
                   <div className="bg-yellow-400 text-black w-8 h-8 flex items-center justify-center rounded-full font-black shrink-0">1</div>
                   <div>
-                    <div className="font-bold text-gray-800">시작 팀 선택 & 주사위 굴리기 🎲</div>
+                    <div className="font-bold text-gray-800">관리자 주사위 입력 🎲</div>
                     <p className="text-sm text-gray-600 mt-1">
-                      관리자가 시작 팀을 선택합니다. 해당 팀이 주사위를 굴려 칸을 이동합니다.
+                      관리자가 이동할 팀을 선택하고 주사위 값(2~12)을 입력합니다.
+                      <br />해당 팀의 캐릭터가 입력된 칸 수만큼 이동합니다.
                     </p>
                   </div>
                 </div>
@@ -186,34 +187,19 @@ const GameRulesModal: React.FC<GameRulesModalProps> = ({
                 <div>
                   <div className="font-bold text-indigo-800">💰 통행료 시스템</div>
                   <p className="text-sm text-gray-600 mt-1">
-                    다른 팀이 소유한 칸에 도착하면 <strong className="text-red-600">기본 15포인트</strong>를 통행료로 지불합니다.
-                    <br />통행료는 영토 소유자에게 지급됩니다.
-                    <br /><span className="text-yellow-700">x2 칸은 30점, x3 칸은 45점!</span>
+                    다른 팀이 소유한 칸에 도착하면 <strong className="text-red-600">기본 30점</strong>을 통행료로 지불합니다.
+                    <br />통행료는 영토 소유자에게 즉시 지급됩니다.
+                    <br /><span className="text-yellow-700">x2 칸은 60점, x3 칸은 90점!</span>
                   </p>
                 </div>
                 <div>
-                  <div className="font-bold text-indigo-800">🎲 재굴림 기회</div>
+                  <div className="font-bold text-indigo-800">🎲 재이동</div>
                   <p className="text-sm text-gray-600 mt-1">
-                    다른 팀 영토에 도착한 팀은 통행료 지불 후 <strong>주사위를 다시 굴려 이동합니다.</strong>
+                    이미 소유권이 있는 칸에 도착하면 문제를 풀지 않습니다.
+                    <br />관리자가 다시 해당 팀을 선택하고 주사위를 입력하여 이동시킵니다.
                   </p>
                 </div>
               </div>
-            </div>
-          </section>
-
-          {/* 더블 보너스 */}
-          <section>
-            <h3 className="text-lg font-black text-gray-800 mb-3 flex items-center gap-2">
-              <Dice5 className="text-yellow-600" size={20} />
-              주사위 더블 보너스
-            </h3>
-            <div className="bg-yellow-100 p-4 rounded-lg border-2 border-yellow-400">
-              <p className="text-gray-700">
-                주사위 두 개가 <strong className="text-yellow-700">같은 숫자</strong>가 나오면
-              </p>
-              <p className="text-sm text-gray-600 mt-2">
-                🎲 즉시 <strong className="text-yellow-700">보너스 30점</strong>을 획득합니다!
-              </p>
             </div>
           </section>
 
