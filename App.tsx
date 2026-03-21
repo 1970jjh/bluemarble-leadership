@@ -726,6 +726,29 @@ const App: React.FC = () => {
     if (isFirebaseConfigured) {
       try {
         await firestoreService.createSession(newSession);
+        // 새 방의 빈 gameState 문서를 함께 생성 (이전 게임 데이터 잔존 방지)
+        await firestoreService.updateGameState(newSessionId, {
+          sessionId: newSessionId,
+          phase: GamePhase.Idle,
+          currentTeamIndex: 0,
+          turnVersion: 0,
+          currentTurn: 0,
+          diceValue: [1, 1],
+          currentCard: null,
+          selectedChoice: null,
+          reasoning: '',
+          aiResult: null,
+          isSubmitted: false,
+          isAiProcessing: false,
+          isGameStarted: false,
+          territories: {},
+          teamResponses: {},
+          isRevealed: false,
+          aiComparativeResult: null,
+          isAnalyzing: false,
+          gameLogs: [],
+          lastUpdated: Date.now()
+        });
         // Firebase 구독이 자동으로 세션을 추가하므로 여기서는 추가하지 않음
         return;
       } catch (error) {
@@ -774,6 +797,18 @@ const App: React.FC = () => {
     setGamePhase(GamePhase.WaitingToStart);
     setIsGameStarted(false);
     setMonitoringTeamId(session.teams[0]?.id || null);
+    // 이전 방의 게임 상태 잔존 방지 - 모든 게임 상태 초기화
+    setTerritories({});
+    setAllTeamResponses({});
+    setIsResponsesRevealed(false);
+    setAiComparativeResult(null);
+    setActiveCard(null);
+    setShowCardModal(false);
+    setSharedSelectedChoice(null);
+    setSharedReasoning('');
+    setAiEvaluationResult(null);
+    setIsAiProcessing(false);
+    setDiceValue([1, 1]);
     setGameLogs([`Entered Session: ${session.name}`, `Status: ${session.status}`]);
     setView('game');
   };
@@ -810,6 +845,11 @@ const App: React.FC = () => {
           isSubmitted: false,
           isAiProcessing: false,
           isGameStarted: true,
+          territories: {},
+          teamResponses: {},
+          isRevealed: false,
+          aiComparativeResult: null,
+          isAnalyzing: false,
           gameLogs: gameLogsRef.current,
           lastUpdated: Date.now()
         });
@@ -1250,6 +1290,8 @@ const App: React.FC = () => {
     setIsResponsesRevealed(false);
     setAiComparativeResult(null);
     setIsComparingTeams(false);
+    // 영토 소유권 초기화
+    setTerritories({});
     setGamePhase(GamePhase.Idle);
 
     // 턴 버전과 인덱스 초기화
@@ -1281,6 +1323,11 @@ const App: React.FC = () => {
           aiResult: null,
           isSubmitted: false,
           isAiProcessing: false,
+          territories: {},
+          teamResponses: {},
+          isRevealed: false,
+          aiComparativeResult: null,
+          isAnalyzing: false,
           gameLogs: ['[시스템] 게임이 리셋되었습니다.'],
           lastUpdated: Date.now()
         });
