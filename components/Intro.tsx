@@ -178,7 +178,7 @@ const Intro: React.FC<IntroProps> = ({
         {/* JJ Creative 교육연구소 로고 */}
         <div className="mt-6 flex justify-center">
           <img
-            src="https://i.ibb.co/tFytdkx/JJ-CREATIVE-CI-2.png"
+            src="https://i.ibb.co/wF52n01n/jj-png-Artboard-5.png"
             alt="JJ CREATIVE 교육연구소"
             className="h-12 object-contain"
           />
