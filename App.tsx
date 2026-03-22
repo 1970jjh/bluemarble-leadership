@@ -2511,8 +2511,8 @@ ${evaluationGuidelines}
     }
     addLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
 
-    // 점수 변경 팝업 표시 (정렬: 순위별)
-    setScorePopupData(scoreChanges.sort((a, b) => a.rank - b.rank));
+    // 점수 변경 팝업 표시 (정렬: 총점 높은 순)
+    setScorePopupData(scoreChanges.sort((a, b) => b.newScore - a.newScore));
     setShowScorePopup(true);
   };
 
