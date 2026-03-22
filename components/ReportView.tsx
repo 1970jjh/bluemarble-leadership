@@ -226,7 +226,7 @@ const ReportView: React.FC<ReportViewProps> = ({ teams, onClose, reportGeneratio
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Bluemable Gamification - 팀별 리포트</title>
+        <title>Blue Marble Gamification - 팀별 리포트</title>
         <meta charset="utf-8">
         <style>
           @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
@@ -418,7 +418,7 @@ const ReportView: React.FC<ReportViewProps> = ({ teams, onClose, reportGeneratio
                 </div>
 
                 <div ref={teamReportRef} className="space-y-8">
-                  <h1 className="text-2xl font-bold text-blue-900 border-b-2 border-blue-900 pb-2">Bluemable Gamification - 팀별 리포트</h1>
+                  <h1 className="text-2xl font-bold text-blue-900 border-b-2 border-blue-900 pb-2">Blue Marble Gamification - 팀별 리포트</h1>
 
                   {/* 팀 순서대로 표시 (1팀, 2팀, 3팀...) */}
                   {orderedTeams.map((team, idx) => {
