@@ -1712,12 +1712,12 @@ const App: React.FC = () => {
         return;
       }
 
-      // 다음 스텝 예약 (1.5초에 한 칸)
-      setTimeout(moveOneStep, 1500);
+      // 다음 스텝 예약 (1초에 한 칸)
+      setTimeout(moveOneStep, 1000);
     };
 
     // 첫 스텝 시작
-    setTimeout(moveOneStep, 1500);
+    setTimeout(moveOneStep, 1000);
   };
 
   // 이동 완료 후 처리
@@ -3439,7 +3439,6 @@ ${evaluationGuidelines}
                   diceValue={diceValue}
                   rolling={isRolling}
                   onManualRoll={handleManualRoll}
-                  onSkip={() => { nextTurn(); }}
                   onOpenReport={() => setShowReport(true)}
                   onReset={handleResetGame}
                   logs={gameLogs}

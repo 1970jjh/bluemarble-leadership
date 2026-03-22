@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { GamePhase, Team } from '../types';
 import Dice from './Dice';
-import { SkipForward, BarChart2, RefreshCcw, Terminal, Pause, PlayCircle } from 'lucide-react';
+import { BarChart2, RefreshCcw, Terminal, Pause, PlayCircle } from 'lucide-react';
 
 interface ControlPanelProps {
   currentTeam: Team;
@@ -10,7 +10,6 @@ interface ControlPanelProps {
   diceValue: [number, number];
   rolling: boolean;
   onManualRoll: (total: number, teamIndex: number) => void;  // 팀 인덱스 포함
-  onSkip: () => void;
   onOpenReport: () => void;
   onReset: () => void;
   logs: string[];
@@ -29,7 +28,6 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
   diceValue,
   rolling,
   onManualRoll,
-  onSkip,
   onOpenReport,
   onReset,
   logs,
@@ -182,15 +180,6 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
             </form>
           </div>
         </div>
-
-        {/* Skip Button - Moved Here */}
-        <button
-          onClick={onSkip}
-          className="w-full py-2 bg-white border-4 border-black text-black font-bold hover:bg-gray-200 shadow-hard-sm flex items-center justify-center gap-2"
-        >
-          <SkipForward size={20} strokeWidth={2.5} />
-          SKIP TURN
-        </button>
 
         {/* Game Log Terminal - 고정 높이 + 스크롤바 (3배 확대) */}
         <div id="game-log-terminal" className="h-[600px] max-h-[600px] bg-black border-4 border-gray-700 p-2 font-mono text-xs overflow-y-auto relative shadow-inner flex flex-col">
