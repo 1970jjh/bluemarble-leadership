@@ -80,6 +80,7 @@ const App: React.FC = () => {
   const [turnVersion, setTurnVersion] = useState(0);  // 턴 버전 (증가만 함 - 동기화 충돌 방지)
   const [gamePhase, setGamePhase] = useState<GamePhase>(GamePhase.WaitingToStart);
   const [diceValue, setDiceValue] = useState<[number, number]>([1, 1]);
+  const [lastMoveInfo, setLastMoveInfo] = useState<{ teamName: string; spaces: number } | null>(null);
   const [isRolling, setIsRolling] = useState(false);
   const [gameLogs, setGameLogs] = useState<string[]>([]);
   const [turnTimeLeft, setTurnTimeLeft] = useState(120);
@@ -1586,6 +1587,11 @@ const App: React.FC = () => {
     // 🎯 캡처된 팀 사용 (Firebase stale 데이터로 currentTurnIndex가 변경되어도 안전)
     const teamToMove = rollingTeamRef.current || currentTeam;
     console.log('[PerformMove] 이동할 팀:', teamToMove?.name);
+
+    // 최근 이동 정보 저장
+    if (teamToMove) {
+      setLastMoveInfo({ teamName: teamToMove.name, spaces: die1 + die2 });
+    }
 
     // 주의: 로컬 작업 플래그는 이동이 완전히 완료될 때까지 유지
     // (handleLandOnSquare 완료 또는 턴 전환 시점에 해제)
@@ -3441,6 +3447,7 @@ ${evaluationGuidelines}
                   onStartGame={handleStartGame}
                   onPauseGame={handlePauseGame}
                   onResumeGame={handleResumeGame}
+                  lastMoveInfo={lastMoveInfo}
                 />
              )}
           </div>
