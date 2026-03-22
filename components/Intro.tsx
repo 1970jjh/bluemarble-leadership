@@ -60,10 +60,19 @@ const Intro: React.FC<IntroProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-blue-900 flex flex-col items-center justify-center p-4">
+    <div
+      className="min-h-screen flex flex-col items-center justify-center p-4"
+      style={{
+        backgroundImage: 'url(https://i.ibb.co/3yhsLhWD/Infographic-5.png)',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+        backgroundColor: '#1e3a5f',
+      }}
+    >
       <div className="max-w-md w-full bg-white border-4 border-black shadow-[8px_8px_0_0_#000] p-8">
         <h1 className="text-4xl md:text-5xl font-black text-center mb-2 break-keep leading-tight">
-          Bluemable<br/>Gamification
+          Blue Marble<br/>Gamification
         </h1>
         <p className="text-center text-gray-500 font-bold mb-8 text-sm">
           리더십 교육 보드게임
@@ -165,6 +174,15 @@ const Intro: React.FC<IntroProps> = ({
             </div>
           </form>
         )}
+
+        {/* JJ Creative 교육연구소 로고 */}
+        <div className="mt-6 flex justify-center">
+          <img
+            src="https://i.ibb.co/tFytdkx/JJ-CREATIVE-CI-2.png"
+            alt="JJ CREATIVE 교육연구소"
+            className="h-12 object-contain"
+          />
+        </div>
       </div>
     </div>
   );

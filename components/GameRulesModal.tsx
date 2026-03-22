@@ -16,7 +16,7 @@ const GameRulesModal: React.FC<GameRulesModalProps> = ({
   if (!visible) return null;
 
   // 커스텀 모드 제목
-  const getModeTitle = () => 'Bluemable Gamification';
+  const getModeTitle = () => 'Blue Marble Gamification';
 
   // 커스텀 모드 설명
   const getModeDescription = () => '모든 팀이 동시에 상황에 응답하고, AI가 비교 분석하여 순위를 매기는 경쟁형 교육 시뮬레이션입니다. 31개의 상황 카드와 영토 시스템으로 전략적인 게임을 즐기세요.';
