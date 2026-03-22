@@ -154,7 +154,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
             >
               {teams.map((team, index) => (
                 <option key={team.id} value={index}>
-                  {index + 1}팀 - {team.name}
+                  {index + 1}팀
                 </option>
               ))}
             </select>
