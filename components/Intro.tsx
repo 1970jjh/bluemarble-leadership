@@ -75,7 +75,7 @@ const Intro: React.FC<IntroProps> = ({
           Blue Marble<br/>Gamification
         </h1>
         <p className="text-center text-gray-500 font-bold mb-8 text-sm">
-          리더십 교육 보드게임
+          핵심가치 교육 보드게임
         </p>
 
         {mode === 'main' && (
