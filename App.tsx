@@ -1712,12 +1712,12 @@ const App: React.FC = () => {
         return;
       }
 
-      // 다음 스텝 예약 (1초에 한 칸)
-      setTimeout(moveOneStep, 1000);
+      // 다음 스텝 예약 (0.8초에 한 칸)
+      setTimeout(moveOneStep, 800);
     };
 
     // 첫 스텝 시작
-    setTimeout(moveOneStep, 1000);
+    setTimeout(moveOneStep, 800);
   };
 
   // 이동 완료 후 처리
@@ -1970,8 +1970,8 @@ const App: React.FC = () => {
         return;
       }
 
-      // 다음 스텝 예약 (1.5초에 한 칸)
-      setTimeout(moveOneStep, 1500);
+      // 다음 스텝 예약 (0.8초에 한 칸)
+      setTimeout(moveOneStep, 800);
     };
 
     setTimeout(moveOneStep, 1500);
