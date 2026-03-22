@@ -19,6 +19,7 @@ interface ControlPanelProps {
   onStartGame: () => void;
   onPauseGame: () => void;
   onResumeGame: () => void;
+  lastMoveInfo?: { teamName: string; spaces: number } | null;
 }
 
 const ControlPanel: React.FC<ControlPanelProps> = ({
@@ -36,6 +37,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
   onStartGame,
   onPauseGame,
   onResumeGame,
+  lastMoveInfo,
 }) => {
   const [manualInput, setManualInput] = useState<string>('');
   const [selectedTeamIndex, setSelectedTeamIndex] = useState<number>(0);  // 선택된 팀 인덱스
@@ -57,10 +59,6 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
     }
   };
 
-  const currentMemberName = currentTeam.members.length > 0 
-    ? currentTeam.members[currentTeam.currentMemberIndex]?.name 
-    : 'Leader';
-
   return (
     <div className="h-full flex flex-col gap-6">
       {/* Title / Admin Section */}
@@ -77,22 +75,22 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
           </div>
         </div>
 
-        {/* Current Turn Status */}
+        {/* Recently Turn Status */}
         <div className="text-center bg-gray-100 border-2 border-black p-4">
-          <p className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-2">Current Turn</p>
-          <h3 className={`text-3xl font-black uppercase mb-2 truncate ${
-            currentTeam.color === 'Red' ? 'text-red-600' :
-            currentTeam.color === 'Blue' ? 'text-blue-600' :
-            currentTeam.color === 'Green' ? 'text-green-600' : 'text-yellow-600'
-          }`} style={{ color: currentTeam.color === 'Red' ? undefined : undefined }}>
-             {currentTeam.name}
-          </h3>
-          
-          <div className="my-2 p-2 bg-white border-2 border-black">
-             <p className="text-xs text-gray-400 font-bold uppercase">Roller</p>
-             <p className="text-xl font-bold text-black">{currentMemberName}</p>
-          </div>
-
+          <p className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-2">Recently Turn</p>
+          {lastMoveInfo ? (
+            <>
+              <h3 className="text-3xl font-black uppercase mb-2 truncate text-blue-700">
+                {lastMoveInfo.teamName}
+              </h3>
+              <div className="my-2 p-2 bg-white border-2 border-black">
+                <p className="text-xs text-gray-400 font-bold uppercase">이동 칸수</p>
+                <p className="text-2xl font-black text-black">{lastMoveInfo.spaces}칸</p>
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-gray-400 font-bold py-2">아직 이동 기록 없음</p>
+          )}
           <div className={`inline-block border-2 border-black px-4 py-1 text-sm font-bold uppercase ${
             phase === GamePhase.Decision ? 'bg-orange-400 text-white animate-pulse' : 'bg-black text-white'
           }`}>
