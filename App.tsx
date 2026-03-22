@@ -3386,7 +3386,6 @@ ${evaluationGuidelines}
           isSaving={isSaving}
           isGameStarted={isGameStarted}
           isAiProcessing={isAiProcessing}
-          onRollDice={() => handleTeamRollDice(participantTeamId)}
           teamNumber={(participantSession?.teams.findIndex(t => t.id === participantTeamId) ?? 0) + 1}
           onShowRules={() => setShowGameRules(true)}
           allTeams={participantSession?.teams || []}
@@ -3590,7 +3589,6 @@ ${evaluationGuidelines}
                  isSaving={isSaving}
                  isGameStarted={isGameStarted}
                  isAiProcessing={isAiProcessing}
-                 onRollDice={() => handleTeamRollDice(monitoredTeam.id)}
                  teamNumber={(teams.findIndex(t => t.id === monitoredTeam.id) ?? 0) + 1}
                  onShowRules={() => setShowGameRules(true)}
                  allTeams={teams}
