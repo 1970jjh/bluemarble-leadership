@@ -3439,7 +3439,6 @@ ${evaluationGuidelines}
                   diceValue={diceValue}
                   rolling={isRolling}
                   onManualRoll={handleManualRoll}
-                  onSkip={() => { nextTurn(); }}
                   onOpenReport={() => setShowReport(true)}
                   onReset={handleResetGame}
                   logs={gameLogs}
