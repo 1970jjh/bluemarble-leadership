@@ -147,6 +147,7 @@ export interface Session {
   customBoardImage?: string;  // 커스텀 모드용 게임판 배경 이미지 URL (optional)
   aiEvaluationGuidelines?: string;  // AI 평가 지침 (수정 가능)
   reportGenerationGuidelines?: string;  // 리포트 생성 지침 (수정 가능)
+  singlePieceMode?: boolean;  // 공통 말 모드 (말 1개로 모든 팀이 동시에 문제 풀기)
 }
 
 // ============================================================

@@ -20,6 +20,7 @@ interface GameBoardProps {
   customBoardImage?: string;  // 커스텀 모드용 배경 이미지 URL
   customCards?: GameCard[];   // 커스텀 카드 (보드 이름 표시용)
   territories?: { [squareIndex: string]: TerritoryInfo };  // 영토 소유권 정보
+  singlePieceMode?: boolean;  // 공통 말 모드 (말 1개만 표시)
 }
 
 // 팀별 캐릭터 이미지 (8개)
@@ -45,7 +46,7 @@ export const getSquareMultiplier = (index: number): number => {
   return 1;
 };
 
-const GameBoard: React.FC<GameBoardProps> = ({ teams, onSquareClick, gameMode, customBoardImage, customCards, territories = {} }) => {
+const GameBoard: React.FC<GameBoardProps> = ({ teams, onSquareClick, gameMode, customBoardImage, customCards, territories = {}, singlePieceMode = false }) => {
   // 팀 색상을 CSS 색상으로 변환
   const getTeamColorCSS = (color: string): string => {
     const colorMap: { [key: string]: string } = {
@@ -208,36 +209,58 @@ const GameBoard: React.FC<GameBoardProps> = ({ teams, onSquareClick, gameMode, c
 
             {/* Team Tokens (Character Images with Speech Bubbles) */}
             <div className="absolute inset-0 pointer-events-none flex flex-wrap items-center justify-center gap-1 p-1">
-              {teams.filter(t => t.position === square.index).map(team => {
-                 // Calculate Team Number (1-based index)
-                 const teamNumber = teams.findIndex(t => t.id === team.id) + 1;
-
-                 return (
-                  <div
-                    key={team.id}
-                    className="relative z-10 transform hover:scale-125 transition-transform"
-                    title={team.name}
-                  >
+              {singlePieceMode ? (
+                // 공통 말 모드: 하나의 공통 말만 표시
+                teams.length > 0 && teams[0].position === square.index && (
+                  <div className="relative z-10 transform hover:scale-125 transition-transform">
                     {/* Speech Bubble */}
-                    <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-white border-2 border-black rounded-full px-1.5 py-0.5 text-[8px] md:text-[10px] font-black whitespace-nowrap shadow-md z-20">
-                      {teamNumber}조
-                      {/* Speech Bubble Tail */}
+                    <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-yellow-300 border-2 border-black rounded-full px-1.5 py-0.5 text-[8px] md:text-[10px] font-black whitespace-nowrap shadow-md z-20">
+                      공통
                       <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[4px] border-r-[4px] border-t-[5px] border-l-transparent border-r-transparent border-t-black"></div>
-                      <div className="absolute -bottom-[3px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[3px] border-r-[3px] border-t-[4px] border-l-transparent border-r-transparent border-t-white"></div>
+                      <div className="absolute -bottom-[3px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[3px] border-r-[3px] border-t-[4px] border-l-transparent border-r-transparent border-t-yellow-300"></div>
                     </div>
-                    {/* Character Image */}
+                    {/* Shared Character Image */}
                     <img
-                      src={getCharacterImage(teamNumber)}
-                      alt={`${teamNumber}조`}
+                      src={getCharacterImage(1)}
+                      alt="공통 말"
                       className="w-10 h-10 md:w-[50px] md:h-[50px] object-contain drop-shadow-lg"
                       onError={(e) => {
-                        // Fallback to numbered circle if image fails
                         e.currentTarget.style.display = 'none';
                       }}
                     />
                   </div>
-                );
-              })}
+                )
+              ) : (
+                // 일반 모드: 팀별 말 표시
+                teams.filter(t => t.position === square.index).map(team => {
+                  const teamNumber = teams.findIndex(t => t.id === team.id) + 1;
+
+                  return (
+                    <div
+                      key={team.id}
+                      className="relative z-10 transform hover:scale-125 transition-transform"
+                      title={team.name}
+                    >
+                      {/* Speech Bubble */}
+                      <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-white border-2 border-black rounded-full px-1.5 py-0.5 text-[8px] md:text-[10px] font-black whitespace-nowrap shadow-md z-20">
+                        {teamNumber}조
+                        {/* Speech Bubble Tail */}
+                        <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[4px] border-r-[4px] border-t-[5px] border-l-transparent border-r-transparent border-t-black"></div>
+                        <div className="absolute -bottom-[3px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[3px] border-r-[3px] border-t-[4px] border-l-transparent border-r-transparent border-t-white"></div>
+                      </div>
+                      {/* Character Image */}
+                      <img
+                        src={getCharacterImage(teamNumber)}
+                        alt={`${teamNumber}조`}
+                        className="w-10 h-10 md:w-[50px] md:h-[50px] object-contain drop-shadow-lg"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
         );

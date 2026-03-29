@@ -686,7 +686,7 @@ const App: React.FC = () => {
 
   // --- Session Logic ---
 
-  const handleCreateSession = async (name: string, version: GameVersion, teamCount: number) => {
+  const handleCreateSession = async (name: string, version: GameVersion, teamCount: number, singlePieceMode?: boolean) => {
     const newSessionId = `sess_${Date.now()}`;
     const accessCode = Math.floor(100000 + Math.random() * 900000).toString();
 
@@ -719,7 +719,8 @@ const App: React.FC = () => {
       status: 'active',
       accessCode,
       createdAt: Date.now(),
-      teams: newTeams
+      teams: newTeams,
+      ...(singlePieceMode ? { singlePieceMode: true } : {})
     };
 
     // Firebase에 저장 (설정되어 있으면)
@@ -1393,10 +1394,23 @@ const App: React.FC = () => {
     // 1단계: 이미 푼 문제인지 확인 (영토 소유권 = 누군가 풀었음)
     // ============================================================
     const territory = territories[squareIndex.toString()];
+    const isSinglePiece = currentSession?.singlePieceMode === true;
 
     // City 칸이고 영토 소유자가 있는 경우 = 이미 푼 문제
     if (square.type === SquareType.City && territory) {
       console.log(`[LandOnSquare] 영토 소유자: ${territory.ownerTeamName}`);
+
+      // 공통 말 모드: 이미 풀린 칸이면 통행료 없이 바로 다음 턴
+      if (isSinglePiece) {
+        if (currentSession) {
+          const updatedTeams = currentSession.teams.map(t => {
+            return { ...t, position: squareIndex };
+          });
+          await updateTeamsInSession(updatedTeams);
+        }
+        setGamePhase(GamePhase.Idle);
+        return;
+      }
 
       // ===== 케이스 A: 다른 팀 소유 → 통행료 팝업 (버튼 클릭 시 지불) =====
       if (territory.ownerTeamId !== team.id && currentSession) {
@@ -1624,6 +1638,7 @@ const App: React.FC = () => {
 
   const moveTeamLogic = (teamToMove: Team, steps: number) => {
     setGamePhase(GamePhase.Moving);
+    const isSinglePiece = currentSession?.singlePieceMode === true;
     const startPos = teamToMove.position;
     let finalPos = startPos + steps;
     let passedStart = false;
@@ -1653,6 +1668,10 @@ const App: React.FC = () => {
         if (!session) return prevSessions;
 
         const updatedTeams = session.teams.map(t => {
+          // 공통 말 모드: 모든 팀 위치를 함께 이동
+          if (isSinglePiece) {
+            return { ...t, position: intermediatePos };
+          }
           if (t.id === teamToMove.id) {
             return { ...t, position: intermediatePos };
           }
@@ -1679,6 +1698,13 @@ const App: React.FC = () => {
       const justPassedStart = previousPos === BOARD_SIZE - 1 && intermediatePos === 0;
 
       if (justPassedStart && currentStep < steps) {
+        // 공통 말 모드: 한바퀴 보너스 없이 그냥 계속 이동
+        if (isSinglePiece) {
+          // 보너스 없이 다음 스텝으로 계속
+          setTimeout(moveOneStep, 800);
+          return;
+        }
+
         // 스타트 지점을 통과했고 아직 이동할 칸이 남아있음 → 보너스 팝업 표시
         const newLapCount = teamToMove.lapCount + 1;
 
@@ -1698,6 +1724,12 @@ const App: React.FC = () => {
       if (currentStep >= steps) {
         // 마지막 칸이 정확히 스타트 지점인 경우 (finalPos === 0이고 passedStart)
         if (passedStart && finalPos === 0) {
+          // 공통 말 모드: 한바퀴 보너스 없이 바로 이동 완료 처리
+          if (isSinglePiece) {
+            finishMove(teamToMove, finalPos);
+            return;
+          }
+
           const newLapCount = teamToMove.lapCount + 1;
 
           // 🎯 보너스는 버튼 클릭 시 지급 - 팝업만 표시
@@ -1928,6 +1960,7 @@ const App: React.FC = () => {
 
   // 남은 스텝 계속 이동
   const continueMove = (teamToMove: Team, remainingSteps: number, finalPos: number) => {
+    const isSinglePiece = currentSession?.singlePieceMode === true;
     let currentStep = 0;
     const startPos = teamToMove.position;
 
@@ -1943,6 +1976,10 @@ const App: React.FC = () => {
         if (!session) return prevSessions;
 
         const updatedTeams = session.teams.map(t => {
+          // 공통 말 모드: 모든 팀 위치를 함께 이동
+          if (isSinglePiece) {
+            return { ...t, position: intermediatePos };
+          }
           if (t.id === teamToMove.id) {
             return { ...t, position: intermediatePos };
           }
@@ -3458,6 +3495,7 @@ ${evaluationGuidelines}
               customBoardImage={currentSession?.customBoardImage}
               customCards={sessionCustomCards}
               territories={territories}
+              singlePieceMode={currentSession?.singlePieceMode}
             />
           </div>
           <div className="lg:col-span-3 order-3 h-full min-h-0 overflow-y-auto flex flex-col items-start gap-2 pl-1">
