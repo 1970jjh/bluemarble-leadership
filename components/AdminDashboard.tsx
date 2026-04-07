@@ -426,7 +426,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
 JSON만 응답하세요.`;
 
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent?key=${apiKey}`, {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

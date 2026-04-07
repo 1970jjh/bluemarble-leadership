@@ -97,7 +97,7 @@ const ReportView: React.FC<ReportViewProps> = ({ teams, onClose, reportGeneratio
       `;
 
       const response = await genAI.models.generateContent({
-        model: 'gemini-3.1-flash-lite-preview',
+        model: 'gemini-3-flash-preview',
         contents: {
           parts: [
             ...imageParts,
@@ -179,7 +179,7 @@ const ReportView: React.FC<ReportViewProps> = ({ teams, onClose, reportGeneratio
 
         try {
           const feedbackResponse = await genAI.models.generateContent({
-            model: 'gemini-3.1-flash-lite-preview',
+            model: 'gemini-3-flash-preview',
             contents: feedbackPrompt,
             config: { responseMimeType: "application/json" }
           });
